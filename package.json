@@ -1,0 +1,27 @@
+{
+  "name": "bplustree-ts",
+  "version": "1.0.0",
+  "description": "A reasonably fast in-memory B+ tree with a powerful API, similar to Map.",
+  "main": "index.js",
+  "scripts": {
+    "test": "ts-node tests.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qwertie/btree-typescript.git"
+  },
+  "keywords": [
+    "B+",
+    "tree",
+    "sorted",
+    "fast-cloning",
+    "copy-on-write",
+    "optimized"
+  ],
+  "author": "David Piepgrass",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/qwertie/btree-typescript/issues"
+  },
+  "homepage": "https://github.com/qwertie/btree-typescript#readme"
+}
