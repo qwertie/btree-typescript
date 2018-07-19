@@ -1,7 +1,7 @@
 // B+ tree by David Piepgrass. License: MIT
 
-type ForRangeResult = {stop?:boolean} | void;
-type EditRangeResult<V> = {value?:V, stop?:boolean, delete?:boolean} | void;
+export type ForRangeResult = {stop?:boolean} | void;
+export type EditRangeResult<V> = {value?:V, stop?:boolean, delete?:boolean} | void;
 type index = number;
 
 const Delete = {delete: true}, DeleteRange = () => Delete;
@@ -9,6 +9,8 @@ const Stop = {stop: true};
 const EmptyLeaf = (function() { 
   var n = new BNode<any,any>(); n.isShared = true; return n;
 })();
+const EmptyArray: any[] = [];
+const ReusedArray: any[] = []; // assumed thread-local
 
 // TODO: it's much simpler and maybe faster to a separate empty array per 
 //       node. Test perf of that. (Use shared empty array in shared nodes?)
@@ -23,7 +25,7 @@ var undefVals: any[] = [];
 function check(fact: boolean, ...args: any[]) {
   if (!fact) {
     args.unshift('B+ tree '); // at beginning of message
-    throw args.join(' ');
+    throw new Error(args.join(' '));
   }
 }
 
@@ -40,21 +42,61 @@ function check(fact: boolean, ...args: any[]) {
 // https://jsperf.com/detect-not-null-or-undefined (`x==null` slightly slower than `x===null||x===undefined` on all browsers)
 // Overall, microbenchmarks suggest Firefox is the fastest browser for JavaScript and Edge is the slowest.
 
+/** Read-only map interface (i.e. a source of key-value pairs). 
+ *  It is not desirable to demand a Symbol polyfill, so [Symbol.iterator] is left out. */
+export interface IMapSource<K=any, V=any>
+{
+  /** Returns the number of key/value pairs in the map object. */
+  size: number;
+  /** Returns the value associated to the key, or undefined if there is none. */
+  get(key: K): V|undefined;
+  /** Returns a boolean asserting whether the key exists in the map object or not. */
+  has(key: K): boolean;
+  /** Calls callbackFn once for each key-value pair present in the map object. */
+  forEach(callbackFn: (k:K, v:V) => void): void;
+  
+  // TypeScript compiler decided Symbol.iterator has type 'any'
+  //[Symbol.iterator](): IterableIterator<[K,V]>;
+  entries(): IterableIterator<[K,V]>;
+  keys(): IterableIterator<K>;
+  values(): IterableIterator<V>;
+}
+
+/** Write-only map interface (i.e. a drain into which key-value pairs can be "sunk") */
+export interface IMapSink<K=any, V=any>
+{
+  /** Returns true if an element in the map object existed and has been 
+   *  removed, or false if the element did not exist. */
+  delete(key: K): boolean;
+  /** Sets the value for the key in the map object (the return value is 
+   *  boolean in BTree but Map returns the Map itself.) */
+  set(key: K, value: V): void;
+  /** Removes all key/value pairs from the IMap object. */
+  clear(): void;
+}
+
+/** An interface compatible with ES6 Map and BTree. This interface does not
+ *  describe the complete interface of either class, but merely the common 
+ *  interface shared by both. */
+export interface IMap<K=any, V=any> extends IMapSource<K, V>, IMapSink<K, V> { }
+
 /**
- * A reasonably fast B+ tree with a powerful API based on the standard Map.
- * B+ trees are ordered collections of key-value pairs, sorted by key. They
- * tend to use memory more efficiently than hashtables such as the standard Map.
+ * A reasonably fast collection of key-value pairs, with a powerful API similar
+ * to the standard Map. BTree is a B+ tree data structure, so the collection is
+ * sorted by key. B+ trees tend to use memory more efficiently than hashtables
+ * such as the standard Map, especially when the collection contains a large
+ * number of items. However, maintaining the sort order makes them modestly
+ * slower: O(log size) rather than O(1). This B+ tree implementation supports 
+ * O(1) fast cloning. It also supports freeze(), which can be used to ensure 
+ * that a BTree is not changed accidentally.
  * 
  * @description
  * The "range" methods (`forEach, forRange, editRange`) will return the number
  * of elements that were scanned. In addition, the callback can return {stop:true}
- * to stop early. If you do this, the return value is the negation of the number of
- * elements that were found. For example, -2 means that two elements were found and
- * then a stop signal was received.
+ * to stop early.
  * 
  * - TODO: Test performance of preallocating values array at max size
  * - TODO: Add fast initialization when a sorted array is provided to constructor
- * - TODO: Unit tests
  * 
  * For more documentation see https://github.com/qwertie/btree-typescript
  *
@@ -63,7 +105,7 @@ function check(fact: boolean, ...args: any[]) {
  * 
  * @author David Piepgrass
  */
-export default class BTree<K=any, V=any>
+export default class BTree<K=any, V=any> implements IMap<K,V>
 {
   private _root: BNode<K, V> = EmptyLeaf as BNode<K,V>;
   _size: number = 0;
@@ -72,13 +114,20 @@ export default class BTree<K=any, V=any>
     
   /**
    * Initializes an empty B+ tree.
+   * @param compare Custom function to compare pairs of elements in the tree.
+   *   This is not required for numbers, strings and arrays of numbers/strings.
+   * @param entries A set of key-value pairs to initialize the tree
    * @param maxNodeSize Branching factor (maximum items or children per node)
    *   Must be in range 4..256. If undefined or <4 then default is used; if >256 then 256.
-   * @param compare Custom function to compare pairs of elements in the tree
    */
-  public constructor(maxNodeSize?: number, compare?: (a: K, b: K) => number, entries?: [K,V][]) {
-    this._maxNodeSize = maxNodeSize as number >= 4 ? Math.min(maxNodeSize!, 256) : 32;
-    this._compare = compare || ((a: any, b: any) => a - b);
+  public constructor(entries?: [K,V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) {
+    this._maxNodeSize = maxNodeSize! >= 4 ? Math.min(maxNodeSize!, 256) : 32;
+    this._compare = compare || function cmp(a: any, b: any) {
+      var c = a - b;
+      if (c === c) return c; // a & b are number
+      // For strings / arrays / incomparable things, c is NaN
+      return a < b ? -1 : a > b ? 1 : a == b ? 0 : c;   
+    };
     if (entries)
       this.setRange(entries);
   }
@@ -87,6 +136,7 @@ export default class BTree<K=any, V=any>
 
   /** Gets the number of key-value pairs in the tree. */
   get size() { return this._size; }
+  get length() { return this._size; }
   
   /** Releases the tree so that its size is 0. */
   clear() {
@@ -105,10 +155,13 @@ export default class BTree<K=any, V=any>
 
   /**
    * Finds a pair in the tree and returns the associated value.
-   * @returns the value, or undefined if the key was not found.
+   * @param defaultValue a value to return if the key was not found.
+   * @returns the value, or defaultValue if the key was not found.
    * @description Computational complexity: O(log size)
    */
-  get(key: K): V | undefined { return this._root.get(key, this); }
+  get(key: K, defaultValue?: V): V | undefined {
+    return this._root.get(key, defaultValue, this);
+  }
   
   /**
    * Adds or overwrites a key-value pair in the B+ tree.
@@ -132,7 +185,7 @@ export default class BTree<K=any, V=any>
     this._root = new BNodeInternal<K,V>([this._root, result]);
     return true;
   }
-  
+
   /**
    * Returns true if the key exists in the B+ tree, false if not.
    * Use get() for best performance; use has() if you need to
@@ -150,30 +203,88 @@ export default class BTree<K=any, V=any>
    * @returns true if a pair was found and removed, false otherwise.
    * @description Computational complexity: O(log size)
    */
-  delete(key: K) {
+  delete(key: K): boolean {
     return this.editRange(key, key, true, DeleteRange) !== 0;
   }
 
-  /** Gets all entries, sorted (currently returns an array, not an iterator) */
-  entries() { return this.toArray(); }
-  
-  /** Gets all keys, sorted (currently returns an array, not an iterator) */
-  keys() {
-    var results: K[] = [];
-    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this, 
-      (k,v) => { results.push(k); });
-    return results;
+  /** Iterates over the items in ascending order.
+   *  @param firstKey Key value at which to start iterating, or undefined to
+   *         start at minKey(). If the specified key doesn't exist then 
+   *         iteration starts at the next higher key.
+   *  @param reusedArray Optional array used repeatedly to store key-value
+   *         pairs, to avoid creating a new array on every iteration.
+   *  @description 
+   */
+  *entries(firstKey?: K, reusedArray?: [K,V]): IterableIterator<[K,V]> {
+    var root = this._root, height = this.height;
+    var nextnode = root;
+
+    // There is a "node queue" for each non-leaf level of the tree.
+    // Levels are numbered "bottom-up" so that level 0 is a list of leaf 
+    // nodes from a low-level non-leaf node. The queue at a given level L
+    // consists of nodequeue[L], the children of a single BNodeInternal, 
+    // and nodeindex[L], the current index within that child list 
+    // such that nodequeue[L] === nodequeue[L+1][nodeindex[L+1]]
+    var nodequeue: BNode<K,V>[][], nodeindex: number[];
+    if (height === 0) {
+      nodequeue = EmptyArray, nodeindex = EmptyArray;
+    } else {
+      nodequeue = new Array<BNode<K,V>[]>(height);
+      nodeindex = new Array<number>(height);
+      let h = height - 1;
+      nodequeue[h] = (root as BNodeInternal<K,V>).children;
+      nodeindex[h] = 0;
+      if (firstKey !== undefined)
+        if ((nodeindex[h] = root.indexOf(firstKey, 0, this._compare)) >= nodequeue[h].length)
+          return; // lowerBound > maxKey()
+      for (h = height - 1; h >= 0; h--) {
+        nodequeue[h] = (nextnode as BNodeInternal<K,V>).children;
+        nodeindex[h] = firstKey === undefined ? 0 : nextnode.indexOf(firstKey, 0, this._compare);
+        nextnode = nodequeue[h][nodeindex[h]] as BNodeInternal<K,V>;
+      }
+    }
+
+    var i = (firstKey === undefined ? 0 : nextnode.indexOf(firstKey, 0, this._compare));
+    for (var leaf = nextnode;; leaf = nodequeue[0][nodeindex[0]]) {
+      if (reusedArray)
+        for (; i < leaf.keys.length; i++) {
+          reusedArray[0] = leaf.keys[i];
+          reusedArray[1] = leaf.values[i];
+          yield reusedArray;
+        }
+      else
+        for (; i < leaf.keys.length; i++) {
+          yield [leaf.keys[i], leaf.values[i]];
+        }
+      
+      // Advance to the next leaf node
+      for (var level = -1;;) {
+        if (++level >= nodequeue.length)
+          return;
+        if (++nodeindex[level] < nodequeue[level].length)
+          break;
+      }
+      for (; level > 0; level--) {
+        nodequeue[level-1] = (nodequeue[level][nodeindex[level]] as BNodeInternal<K,V>).children;
+        nodeindex[level-1] = 0;
+      }
+    }
   }
   
-  /** Gets all values, sorted by key (currently returns an array, not an iterator) */
-  values() {
-    var results: V[] = [];
-    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this, 
-      (k,v) => { results.push(v); });
-    return results;
+  /** Returns a new iterator for iterating the keys of each pair in ascending order. */
+  *keys(firstKey?: K): IterableIterator<K> {
+    var it = this.entries(firstKey, ReusedArray as [K,V]), n;
+    while (!(n = it.next()).done)
+      yield n.value[0];
+  }
+  
+  /** Returns a new iterator for iterating the values of each pair in order by key. */
+  *values(firstKey?: K): IterableIterator<V> {
+    var it = this.entries(firstKey, ReusedArray as [K,V]), n;
+    while (!(n = it.next()).done)
+      yield n.value[1];
   }
 
-  
   // Additional methods /////////////////////////////////////////////////////
 
   /** Returns the maximum number of children/values before nodes will split. */
@@ -187,21 +298,41 @@ export default class BTree<K=any, V=any>
   /** Gets the highest key in the tree. Complexity: O(1) */
   maxKey(): K | undefined { return this._root.maxKey(); }
 
-  /** Quickly clones the tree by marking the root node as shared. */
-  clone() {
+  /** Quickly clones the tree by marking the root node as shared. 
+   *  Both copies remain editable. When you modify either copy, any
+   *  nodes that are shared (or potentially shared) between the two
+   *  copies are cloned so that the changes do not affect other copies.
+   *  This is known as copy-on-write behavior, or "lazy copying". */
+  clone(): BTree<K,V> {
     this._root.isShared = true;
-    var result = new BTree<K,V>(this._maxNodeSize, this._compare);
+    var result = new BTree<K,V>(undefined, this._compare, this._maxNodeSize);
     result._root = this._root;
     result._size = this._size;
     return result;
   }
 
-  /** Gets an array filled with the contents of the tree */
+  /** Gets an array filled with the contents of the tree, sorted by key */
   toArray(maxLength: number = 0x7FFFFFFF): [K,V][] {
     let min = this.minKey(), max = this.maxKey();
     if (min !== undefined)
       return this.getRange(min, max!, true, maxLength)
     return [];
+  }
+
+  /** Gets an array of all keys, sorted */
+  keysArray() {
+    var results: K[] = [];
+    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this, 
+      (k,v) => { results.push(k); });
+    return results;
+  }
+  
+  /** Gets an array of all values, sorted by key */
+  valuesArray() {
+    var results: V[] = [];
+    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this, 
+      (k,v) => { results.push(v); });
+    return results;
   }
 
   /** Gets a string representing the tree's data based on toArray(). */
@@ -215,6 +346,12 @@ export default class BTree<K=any, V=any>
   setIfNotPresent(key: K, value: V): boolean {
     return this.set(key, value, false);
   }
+
+  /** Returns the next key larger than the specified key */
+  /*nextHigherKey(key: K): K|undefined {
+    var it = this.entries(key, ReusedArray as [K,V]);
+    it.next();
+  }*/
 
   /** Edits the value associated with a key in the tree, if it already exists. 
    * @returns true if the key existed, false if not.
@@ -271,7 +408,7 @@ export default class BTree<K=any, V=any>
    *        `onFound` halted early, as explained in the class description.
    * @description Computational complexity: O(number of items scanned + log size)
    */
-  forRange(low: K, high: K, includeHigh: boolean, onFound: (k:K,v:V,tree?:BTree<K,V>) => ForRangeResult): number {
+  forRange(low: K, high: K, includeHigh: boolean, onFound?: (k:K,v:V,tree?:BTree<K,V>) => ForRangeResult): number {
     return this._root.forRange(low, high, includeHigh, false, this, onFound);
   }
 
@@ -321,6 +458,36 @@ export default class BTree<K=any, V=any>
     return this.editRange(low, high, includeHigh, DeleteRange);
   }
 
+  /** Gets the height of the tree: the number of internal nodes between the 
+   *  BTree object and its leaf nodes (zero if there are no internal nodes). */
+  get height(): number {
+    for (var node = this._root, h = -1; node != null; h++)
+      node = (node as any).children;
+    return h;
+  }
+
+  /** Makes the object read-only to ensure it is not accidentally modified.
+   *  Freezing does not have to be permanent; unfreeze() reverses the effect.
+   *  This is accomplished by replacing mutator functions with a function 
+   *  that throws an Error. Compared to using a property (e.g. this.isFrozen) 
+   *  this implementation gives better performance in non-frozen BTrees.
+   */
+  freeze() {
+    var t = this as any;
+    // Note: all other mutators ultimately call set() or editRange() 
+    //       so we don't need to override those others.
+    t.clear = t.set = t.editRange = function() {
+      throw new Error("Attempted to modify a frozen BTree");
+    };
+  }
+
+  /** Ensures mutations are allowed, reversing the effect of freeze(). */
+  unfreeze() {
+    delete this.clear;
+    delete this.set;
+    delete this.editRange;
+  }
+
   /** Scans the tree for signs of serious bugs (e.g. this.size doesn't match
    *  number of elements, internal nodes not caching max element properly...)
    *  Computational complexity: O(number of nodes), i.e. O(size). This method
@@ -332,11 +499,15 @@ export default class BTree<K=any, V=any>
   }
 }
 
+declare const Symbol: any;
+if (Symbol && Symbol.iterator) // iterator is equivalent to entries()
+  (BTree as any).prototype[Symbol.iterator] = BTree.prototype.entries;
+
 /** Leaf node / base class. **************************************************/
 class BNode<K,V> {
   // If this is an internal node, _keys[i] is the highest key in children[i].
   keys: K[];
-  protected values: V[];
+  values: V[];
   isShared: true | undefined = undefined;
   get isLeaf() { return (this as any).children === undefined; }
   
@@ -360,15 +531,18 @@ class BNode<K,V> {
     while(lo < hi) {
       var c = cmp(keys[mid], key);
       if (c < 0)
-        hi = mid;
-      else if (!(c <= 0)) // keys[mid] > key or c is NaN
         lo = mid + 1;
+      else if (!(c <= 0)) // keys[mid] > key or c is NaN
+        hi = mid;
       else if (c === 0)
         return mid;
-      else if (key === key) // c is NaN or otherwise invalid
-        return keys.length;
-      else
-        throw "BTree: NaN was used as a key";
+      else {
+        // c is NaN or otherwise invalid
+        if (key === key) // at least the search key is not NaN
+          return keys.length;
+        else
+          throw new Error("BTree: NaN was used as a key");
+      }
       mid = (lo + hi) >> 1;
     }
     return mid ^ failXor;
@@ -406,9 +580,9 @@ class BNode<K,V> {
     return new BNode<K,V>(this.keys.slice(0), v === undefVals ? v : v.slice(0));
   }
 
-  get(key: K, tree: BTree<K,V>): V | undefined {
+  get(key: K, defaultValue: V|undefined, tree: BTree<K,V>): V|undefined {
     var i = this.indexOf(key, -1, tree._compare);
-    return i < 0 ? undefined : this.values[i];
+    return i < 0 ? defaultValue : this.values[i];
   }
 
   checkValid(depth: number, tree: BTree<K,V>): number {
@@ -535,7 +709,7 @@ class BNode<K,V> {
         if (result !== undefined) {
           if (editMode === true) {
             if (key !== keys[i] || this.isShared === true)
-              throw "BTree illegally changed or cloned in editRange";
+              throw new Error("BTree illegally changed or cloned in editRange");
             if (result.delete) {
               this.keys.splice(i, 1);
               if (this.values !== undefVals)
@@ -596,9 +770,9 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     return this.children[0].minKey();
   }
 
-  get(key: K, tree: BTree<K,V>): V | undefined {
+  get(key: K, defaultValue: V|undefined, tree: BTree<K,V>): V|undefined {
     var i = this.indexOf(key, 0, tree._compare), children = this.children;
-    return i < children.length ? children[i].get(key, tree) : undefined;
+    return i < children.length ? children[i].get(key, defaultValue, tree) : undefined;
   }
 
   checkValid(depth: number, tree: BTree<K,V>) : number {

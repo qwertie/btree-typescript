@@ -1,10 +1,10 @@
 {
-  "name": "bplustree-ts",
+  "name": "btree",
   "version": "1.0.0",
-  "description": "A reasonably fast in-memory B+ tree with a powerful API, similar to Map.",
+  "description": "A list of key-value pairs kept sorted in a fast in-memory B+ tree with a powerful API, similar to Map.",
   "main": "index.js",
   "scripts": {
-    "test": "ts-node tests.ts"
+    "test": "jest"
   },
   "repository": {
     "type": "git",
@@ -13,9 +13,13 @@
   "keywords": [
     "B+",
     "tree",
+    "btree",
     "sorted",
+    "map",
+    "collection",
     "fast-cloning",
     "copy-on-write",
+    "lazy-copying",
     "optimized"
   ],
   "author": "David Piepgrass",
@@ -23,5 +27,14 @@
   "bugs": {
     "url": "https://github.com/qwertie/btree-typescript/issues"
   },
-  "homepage": "https://github.com/qwertie/btree-typescript#readme"
+  "homepage": "https://github.com/qwertie/btree-typescript#readme",
+  "devDependencies": {
+    "@types/jasmine": "^2.8.8",
+    "@types/mersenne-twister": "^1.1.2",
+    "jasmine": "^3.1.0",
+    "jest": "^23.1.0",
+    "mersenne-twister": "^1.1.0",
+    "ts-jest": "^22.4.6"
+  },
+  "dependencies": {}
 }
