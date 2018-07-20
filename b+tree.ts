@@ -1,33 +1,7 @@
 // B+ tree by David Piepgrass. License: MIT
 
-export type ForRangeResult = {stop?:boolean} | void;
-export type EditRangeResult<V> = {value?:V, stop?:boolean, delete?:boolean} | void;
+export type EditRangeResult<V,R=number> = {value?:V, break?:R, delete?:boolean};
 type index = number;
-
-const Delete = {delete: true}, DeleteRange = () => Delete;
-const Stop = {stop: true};
-const EmptyLeaf = (function() { 
-  var n = new BNode<any,any>(); n.isShared = true; return n;
-})();
-const EmptyArray: any[] = [];
-const ReusedArray: any[] = []; // assumed thread-local
-
-// TODO: it's much simpler and maybe faster to a separate empty array per 
-//       node. Test perf of that. (Use shared empty array in shared nodes?)
-// Optimization: this array of `undefined`s is used instead of a normal
-// array of values in nodes where `undefined` is the only value.
-// Its length is extended to max node size on first use; since it can
-// be shared between trees with different maximums, its length can only
-// increase, never decrease. Its type should be undefined[] but strangely
-// TypeScript won't allow the comparison V[] === undefined[]
-var undefVals: any[] = [];
-
-function check(fact: boolean, ...args: any[]) {
-  if (!fact) {
-    args.unshift('B+ tree '); // at beginning of message
-    throw new Error(args.join(' '));
-  }
-}
 
 // Informative microbenchmarks & stuff:
 // http://www.jayconrod.com/posts/52/a-tour-of-v8-object-representation (very educational)
@@ -52,8 +26,10 @@ export interface IMapSource<K=any, V=any>
   get(key: K): V|undefined;
   /** Returns a boolean asserting whether the key exists in the map object or not. */
   has(key: K): boolean;
-  /** Calls callbackFn once for each key-value pair present in the map object. */
-  forEach(callbackFn: (k:K, v:V) => void): void;
+  /** Calls callbackFn once for each key-value pair present in the map object.
+   *  The ES6 Map class sends the value to the callback before the key, so
+   *  this interface must do likewise. */
+  forEach(callbackFn: (v:V, k:K) => void): void;
   
   // TypeScript compiler decided Symbol.iterator has type 'any'
   //[Symbol.iterator](): IterableIterator<[K,V]>;
@@ -90,10 +66,47 @@ export interface IMap<K=any, V=any> extends IMapSource<K, V>, IMapSink<K, V> { }
  * O(1) fast cloning. It also supports freeze(), which can be used to ensure 
  * that a BTree is not changed accidentally.
  * 
+ * Confusingly, the ES6 Map.forEach(c) method calls c(value,key) instead of
+ * c(key,value), in contrast to other methods such as set() and entries()
+ * which put the key first. I can only assume that the order was reversed on 
+ * the theory that users would usually want to examine values and ignore keys.
+ * BTree's forEach() therefore works the same way, but a second method 
+ * `.forEachPair((key,value)=>{...})` is provided which sends you the key
+ * first and the value second; this method is slightly faster because it is 
+ * the "native" for-each method for this class.
+ * 
+ * Out of the box, BTree supports keys that are numbers, strings, arrays of 
+ * numbers/strings, Date, and objects that have a valueOf() method returning a 
+ * number or string. Other data types, such as arrays of Date or custom
+ * objects, require a custom comparator, which you must pass as the second 
+ * argument to the constructor (the first argument is an optional list of 
+ * initial items). Symbols cannot be used as keys because they are unordered
+ * (one Symbol is never "greater" or "less" than another).
+ * 
+ * @example
+ * Given a {name: string, age: number} object, you can create a tree sorted by
+ * name and then by age like this:
+ *   
+ *     var tree = new BTree(undefined, (a, b) => {
+ *       if (a.name > b.name)
+ *         return 1; // Return a number >0 when a > b
+ *       else if (a.name < b.name)
+ *         return -1; // Return a number <0 when a < b
+ *       else // names are equal (or incomparable)
+ *         return a.age - b.age; // Return >0 when a.age > b.age
+ *     });
+ * 
+ *     tree.set({name:"Bill", age:"17"}, "happy");
+ *     tree.set({name:"Fran", age:"40"}, "busy & stressed");
+ *     tree.set({name:"Bill", age:"55"}, "recently laid off");
+ *     tree.forEachPair((k, v) => {
+ *       console.log(`Name: ${k.name} Age: ${k.age} Status: ${v}`);
+ *     });
+ * 
  * @description
  * The "range" methods (`forEach, forRange, editRange`) will return the number
- * of elements that were scanned. In addition, the callback can return {stop:true}
- * to stop early.
+ * of elements that were scanned. In addition, the callback can return {break:R}
+ * to stop early and return R from the outer function.
  * 
  * - TODO: Test performance of preallocating values array at max size
  * - TODO: Add fast initialization when a sorted array is provided to constructor
@@ -125,7 +138,9 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
     this._compare = compare || function cmp(a: any, b: any) {
       var c = a - b;
       if (c === c) return c; // a & b are number
-      // For strings / arrays / incomparable things, c is NaN
+      // General case (c is NaN): string / arrays / Date / incomparable things
+      if (a) a = a.valueOf();
+      if (b) b = b.valueOf();
       return a < b ? -1 : a > b ? 1 : a == b ? 0 : c;   
     };
     if (entries)
@@ -145,12 +160,36 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
   }
 
   /** Runs a function for each key-value pair, in order from smallest to 
-   *  largest key.
-   * @returns the number of values in the tree, or a negative number if the
-   *  callback function halted early as explained in the class description. */
-  forEach(callback: (k:K, v:V) => ForRangeResult): number {
+   *  largest key. For compatibility with ES6 Map, the argument order to
+   *  the callback is backwards: value first, then key. Call forEachPair 
+   *  instead to receive the key as the first argument.
+   * @param thisArg If provided, this parameter is assigned as the `this`
+   *        value for each callback.
+   * @returns the number of values that were sent to the callback,
+   *        or the R value if the callback returned {break:R}. */
+  forEach<R=number,Any=any>(callback: (v:V, k:K, tree:BTree<K,V>) => {break?:R}|void, thisArg?: Any): R|number {
+    if (thisArg !== undefined)
+      callback = callback.bind(thisArg);
+    return this.forEachPair((k, v) => callback(v, k, this));
+  }
+
+  /** Runs a function for each key-value pair, in order from smallest to 
+   *  largest key. The callback can return {break:R} (where R is any value
+   *  except undefined) to stop immediately and return R from forEachPair.
+   * @param onFound A function that is called for each key-value pair. This 
+   *        function can return {break:R} to stop early with result R.
+   *        The reason that you must return {break:R} instead of simply R 
+   *        itself is for consistency with editRange(), which allows 
+   *        multiple actions, not just breaking.
+   * @param initialCounter This is the value of the third argument of 
+   *        `onFound` the first time it is called. The counter increases 
+   *        by one each time `onFound` is called. Default value: 0
+   * @returns the number of pairs sent to the callback (plus initialCounter,
+   *        if you provided one). If the callback returned {break:R} then
+   *        the R value is returned instead. */
+  forEachPair<R=number>(callback: (k:K, v:V, counter:number) => {break?:R}|void, initialCounter?: number): R|number {
     var low = this.minKey(), high = this.maxKey();
-    return this.forRange(low!, high!, true, callback);
+    return this.forRange(low!, high!, true, callback, initialCounter);
   }
 
   /**
@@ -207,45 +246,22 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
     return this.editRange(key, key, true, DeleteRange) !== 0;
   }
 
-  /** Iterates over the items in ascending order.
-   *  @param firstKey Key value at which to start iterating, or undefined to
-   *         start at minKey(). If the specified key doesn't exist then 
-   *         iteration starts at the next higher key.
+  // Iterator methods ///////////////////////////////////////////////////////
+
+  /** Returns an iterator that provides items in order (ascending order if
+   *  the collection's comparator uses ascending order, as is the default.)
+   *  @param lowestKey First key to be iterated, or undefined to start at
+   *         minKey(). If the specified key doesn't exist then iteration
+   *         starts at the next higher key (according to the comparator).
    *  @param reusedArray Optional array used repeatedly to store key-value
    *         pairs, to avoid creating a new array on every iteration.
-   *  @description 
    */
-  *entries(firstKey?: K, reusedArray?: [K,V]): IterableIterator<[K,V]> {
-    var root = this._root, height = this.height;
-    var nextnode = root;
-
-    // There is a "node queue" for each non-leaf level of the tree.
-    // Levels are numbered "bottom-up" so that level 0 is a list of leaf 
-    // nodes from a low-level non-leaf node. The queue at a given level L
-    // consists of nodequeue[L], the children of a single BNodeInternal, 
-    // and nodeindex[L], the current index within that child list 
-    // such that nodequeue[L] === nodequeue[L+1][nodeindex[L+1]]
-    var nodequeue: BNode<K,V>[][], nodeindex: number[];
-    if (height === 0) {
-      nodequeue = EmptyArray, nodeindex = EmptyArray;
-    } else {
-      nodequeue = new Array<BNode<K,V>[]>(height);
-      nodeindex = new Array<number>(height);
-      let h = height - 1;
-      nodequeue[h] = (root as BNodeInternal<K,V>).children;
-      nodeindex[h] = 0;
-      if (firstKey !== undefined)
-        if ((nodeindex[h] = root.indexOf(firstKey, 0, this._compare)) >= nodequeue[h].length)
-          return; // lowerBound > maxKey()
-      for (h = height - 1; h >= 0; h--) {
-        nodequeue[h] = (nextnode as BNodeInternal<K,V>).children;
-        nodeindex[h] = firstKey === undefined ? 0 : nextnode.indexOf(firstKey, 0, this._compare);
-        nextnode = nodequeue[h][nodeindex[h]] as BNodeInternal<K,V>;
-      }
-    }
-
-    var i = (firstKey === undefined ? 0 : nextnode.indexOf(firstKey, 0, this._compare));
-    for (var leaf = nextnode;; leaf = nodequeue[0][nodeindex[0]]) {
+  *entries(lowestKey?: K, reusedArray?: [K,V]): IterableIterator<[K,V]> {
+    var info = this.findPath(lowestKey);
+    if (info === undefined) return;
+    var {nodequeue,nodeindex,leaf} = info;
+    var i = (lowestKey === undefined ? 0 : leaf.indexOf(lowestKey, 0, this._compare));
+    for (;; leaf = nodequeue[0][nodeindex[0]]) {
       if (reusedArray)
         for (; i < leaf.keys.length; i++) {
           reusedArray[0] = leaf.keys[i];
@@ -270,7 +286,83 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
       }
     }
   }
-  
+
+  /** Returns an iterator that provides items in reversed order.
+   *  @param highestKey Key at which to start iterating, or undefined to 
+   *         start at minKey(). If the specified key doesn't exist then iteration
+   *         starts at the next lower key (according to the comparator).
+   *  @param reusedArray Optional array used repeatedly to store key-value
+   *         pairs, to avoid creating a new array on every iteration.
+   *  @param skipHighest Iff this flag is true and the highestKey exists in the
+   *         collection, the pair matching highestKey is skipped, not iterated.
+   */
+  *entriesReversed(highestKey?: K, reusedArray?: [K,V], skipHighest?: boolean): IterableIterator<[K,V]> {
+    if ((highestKey = highestKey || this.maxKey()) === undefined)
+      return; // collection is empty
+    var {nodequeue,nodeindex,leaf} = this.findPath(highestKey) || this.findPath(this.maxKey())!;
+    var i = leaf.indexOf(highestKey, 0, this._compare);
+    if (skipHighest || this._compare(leaf.keys[i], highestKey) > 0)
+      i--;
+    for (;; leaf = nodequeue[0][nodeindex[0]]) {
+      if (reusedArray)
+        for (; i >= 0; i--) {
+          reusedArray[0] = leaf.keys[i];
+          reusedArray[1] = leaf.values[i];
+          yield reusedArray;
+        }
+      else
+        for (; i >= 0; i--) {
+          yield [leaf.keys[i], leaf.values[i]];
+        }
+      
+      // Advance to the next leaf node
+      for (var level = -1;;) {
+        if (++level >= nodequeue.length)
+          return;
+        if (--nodeindex[level] >= 0)
+          break;
+      }
+      for (; level > 0; level--) {
+        nodequeue[level-1] = (nodequeue[level][nodeindex[level]] as BNodeInternal<K,V>).children;
+        nodeindex[level-1] = nodequeue[level-1].length-1;
+      }
+    }
+  }
+
+  /* Used by entries() and entriesReversed() to prepare to start iterating.
+   * It develops a "node queue" for each non-leaf level of the tree.
+   * Levels are numbered "bottom-up" so that level 0 is a list of leaf 
+   * nodes from a low-level non-leaf node. The queue at a given level L
+   * consists of nodequeue[L] which is the children of a BNodeInternal, 
+   * and nodeindex[L], the current index within that child list, such
+   * such that nodequeue[L-1] === nodequeue[L][nodeindex[L]].children.
+   */
+  protected findPath(key?: K): { nodequeue: BNode<K,V>[][], nodeindex: number[], leaf: BNode<K,V> } | undefined
+  {
+    var root = this._root, height = this.height;
+    var nextnode = root;
+
+    var nodequeue: BNode<K,V>[][], nodeindex: number[];
+    if (height === 0) {
+      nodequeue = EmptyArray, nodeindex = EmptyArray;
+    } else {
+      nodequeue = new Array<BNode<K,V>[]>(height);
+      nodeindex = new Array<number>(height);
+      let h = height - 1;
+      nodequeue[h] = (root as BNodeInternal<K,V>).children;
+      nodeindex[h] = 0;
+      if (key !== undefined)
+        if ((nodeindex[h] = root.indexOf(key, 0, this._compare)) >= nodequeue[h].length)
+          return; // lowerBound > maxKey()
+      for (h = height - 1; h >= 0; h--) {
+        nodequeue[h] = (nextnode as BNodeInternal<K,V>).children;
+        nodeindex[h] = key === undefined ? 0 : nextnode.indexOf(key, 0, this._compare);
+        nextnode = nodequeue[h][nodeindex[h]];
+      }
+    }
+    return {nodequeue, nodeindex, leaf:nextnode};
+  }
+
   /** Returns a new iterator for iterating the keys of each pair in ascending order. */
   *keys(firstKey?: K): IterableIterator<K> {
     var it = this.entries(firstKey, ReusedArray as [K,V]), n;
@@ -322,7 +414,7 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
   /** Gets an array of all keys, sorted */
   keysArray() {
     var results: K[] = [];
-    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this, 
+    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this, 0, 
       (k,v) => { results.push(k); });
     return results;
   }
@@ -330,7 +422,7 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
   /** Gets an array of all values, sorted by key */
   valuesArray() {
     var results: V[] = [];
-    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this, 
+    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this, 0,
       (k,v) => { results.push(v); });
     return results;
   }
@@ -350,6 +442,7 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
   /** Returns the next key larger than the specified key */
   /*nextHigherKey(key: K): K|undefined {
     var it = this.entries(key, ReusedArray as [K,V]);
+    it.next(); // advance to current key
     it.next();
   }*/
 
@@ -374,9 +467,9 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
    */
   getRange(low: K, high: K, includeHigh?: boolean, maxLength: number = 0x3FFFFFF): [K,V][] {
     var results: [K,V][] = [];
-    this._root.forRange(low, high, includeHigh, false, this, (k,v) => {
+    this._root.forRange(low, high, includeHigh, false, this, 0, (k,v) => {
       results.push([k,v])
-      return results.length > maxLength ? Stop : undefined;
+      return results.length > maxLength ? Break : undefined;
     });
     return results;
   }
@@ -403,42 +496,54 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
    * @param includeHigh If the `high` key is present, `onFound` is called for
    *        that final pair if and only if this parameter is true.
    * @param onFound A function that is called for each key-value pair. This 
-   *        function can return {stop:true} to stop early.
-   * @returns The number of values scanned, or a negative number if the
-   *        `onFound` halted early, as explained in the class description.
+   *        function can return {break:R} to stop early with result R.
+   * @param initialCounter Initial third argument of onFound. This value 
+   *        increases by one each time `onFound` is called. Default: 0
+   * @returns The number of values found, or R if the callback returned 
+   *        `{break:R}` to stop early.
    * @description Computational complexity: O(number of items scanned + log size)
    */
-  forRange(low: K, high: K, includeHigh: boolean, onFound?: (k:K,v:V,tree?:BTree<K,V>) => ForRangeResult): number {
-    return this._root.forRange(low, high, includeHigh, false, this, onFound);
+  forRange<R=number>(low: K, high: K, includeHigh: boolean, onFound?: (k:K,v:V,counter:number) => {break?:R}|void, initialCounter?: number): R|number {
+    var r = this._root.forRange(low, high, includeHigh, false, this, initialCounter || 0, onFound);
+    return typeof r === "number" ? r : r.break!;
   }
 
   /**
    * Scans and potentially modifies values for a subsequence of keys.
-   * Note: the callback `onFound` must not insert items, remove items or 
-   * clone() the collection. Doing so may cause an exception or may cause
-   * incorrect data to be sent to the callback afterward.
+   * Note: the callback `onFound` should ideally be a pure function. 
+   *   Specfically, it must not insert items, call clone(), or change 
+   *   the collection except via return value; out-of-band editing may
+   *   cause an exception or may cause incorrect data to be sent to
+   *   the callback (duplicate or missed items). It must not cause a 
+   *   clone() of the collection, otherwise the clone could be modified
+   *   by changes requested by the callback.
    * @param low The first key scanned will be greater than or equal to `low`.
    * @param high Scanning stops when a key larger than this is reached.
    * @param includeHigh If the `high` key is present, `onFound` is called for
    *        that final pair if and only if this parameter is true.
    * @param onFound A function that is called for each key-value pair. This 
-   *        function can return `{stop:true}` to stop early, `{value:v}` to 
-   *        change the value associated with the current key, or 
-   *        `{delete:true}` to delete the current pair.
-   * @returns The number of values scanned, or a negative number if the
-   *        `onFound` halted early, as explained in the class description.
+   *        function can return `{value:v}` to change the value associated 
+   *        with the current key, `{delete:true}` to delete the current pair,
+   *        `{break:R}` to stop early with result R, or it can return nothing
+   *        (undefined or {}) to cause no effect and continue iterating.
+   *        `{break:R}` can be combined with one of the other two commands.
+   *        The third argument `counter` is the number of items iterated 
+   *        previously; it equals 0 when `onFound` is called the first time.
+   * @returns The number of values scanned, or R if the callback returned 
+   *        `{break:R}` to stop early.
    * @description 
    *   Computational complexity: O(number of items scanned + log size)
    *   Note: if the tree has been cloned with clone(), any shared
    *   nodes are copied before `onFound` is called. This takes O(n) time 
    *   where n is proportional to the amount of shared data scanned.
    */
-  editRange(low: K, high: K, includeHigh: boolean, onFound: (k:K,v:V,tree?:BTree<K,V>) => EditRangeResult<V>): number {
+  editRange<R=V>(low: K, high: K, includeHigh: boolean, onFound: (k:K,v:V,counter:number) => EditRangeResult<V,R>|void, initialCounter?: number): R|number {
     var root = this._root;
     if (root.isShared)
       root = this._root = root.clone();
     try {
-      return root.forRange(low, high, includeHigh, true, this, onFound);
+      var r = root.forRange(low, high, includeHigh, true, this, initialCounter || 0, onFound);
+      return typeof r === "number" ? r : r.break!;
     } finally {
       while (root.keys.length <= 1 && !root.isLeaf)
         this._root = root.keys.length === 0 ? EmptyLeaf :
@@ -532,7 +637,7 @@ class BNode<K,V> {
       var c = cmp(keys[mid], key);
       if (c < 0)
         lo = mid + 1;
-      else if (!(c <= 0)) // keys[mid] > key or c is NaN
+      else if (c > 0) // key < keys[mid]
         hi = mid;
       else if (c === 0)
         return mid;
@@ -691,9 +796,8 @@ class BNode<K,V> {
 
   // Leaf Node: scanning & deletions //////////////////////////////////////////
 
-  forRange(low: K, high: K, includeHigh: boolean|undefined, editMode: boolean, tree: BTree<K,V>, 
-           onFound?: (k:K, v:V) => EditRangeResult<V>): number {
-    var count = 0;
+  forRange<R>(low: K, high: K, includeHigh: boolean|undefined, editMode: boolean, tree: BTree<K,V>, count: number,
+              onFound?: (k:K, v:V, counter:number) => EditRangeResult<V,R>|void): EditRangeResult<V,R>|number {
     var cmp = tree._compare;
     var iLow = this.indexOf(low, 0, cmp);
     var iHigh = high === low ? iLow : this.indexOf(high, -1, cmp);
@@ -705,7 +809,7 @@ class BNode<K,V> {
     if (onFound !== undefined) {
       for(var i = iLow; i < iHigh; i++) {
         var key = keys[i];
-        var result = onFound(key, values[i]);
+        var result = onFound(key, values[i], count++);
         if (result !== undefined) {
           if (editMode === true) {
             if (key !== keys[i] || this.isShared === true)
@@ -721,12 +825,12 @@ class BNode<K,V> {
               values![i] = result.value!;
             }
           }
-          if (result.stop)
-            return -1 - (i - iLow);
+          if (result.break !== undefined)
+            return result;
         }
       }
     }
-    return iHigh - iLow;
+    return count;
   }
 
   /** Adds entire contents of right-hand sibling (rhs is left unchanged) */
@@ -864,33 +968,30 @@ class BNodeInternal<K,V> extends BNode<K,V> {
 
   // Internal Node: scanning & deletions //////////////////////////////////////
 
-  forRange(low: K, high: K, includeHigh: boolean|undefined, editMode: boolean, tree: BTree<K,V>, 
-    onFound?: (k:K, v:V) => EditRangeResult<V>): number
+  forRange<R>(low: K, high: K, includeHigh: boolean|undefined, editMode: boolean, tree: BTree<K,V>, count: number,
+    onFound?: (k:K, v:V, counter:number) => EditRangeResult<V,R>|void): EditRangeResult<V,R>|number
   {
     var cmp = tree._compare;
     var iLow = this.indexOf(low, 0, cmp), i = iLow;
     var iHigh = Math.max(high === low ? iLow : this.indexOf(high, 0, cmp), this.keys.length-1);
     var keys = this.keys, children = this.children;
-    var count = 0, result = 0;
     if (!editMode) {
       // Simple case
       for(; i <= iHigh; i++) {
-        result = children[i].forRange(low, high, includeHigh, editMode, tree, onFound);
-        if (result < 0)
-          return result - count;
-        count += result;
+        var result = children[i].forRange(low, high, includeHigh, editMode, tree, count, onFound);
+        if (typeof result !== 'number')
+          return result;
+        count = result;
       }
     } else {
       try {
         for(; i <= iHigh; i++) {
           if (children[i].isShared)
             children[i] = children[i].clone();
-          result = children[i].forRange(low, high, includeHigh, editMode, tree, onFound);
-          if (result < 0) {
-            count -= result;
-            break;
-          }
-          count += result;
+          var result = children[i].forRange(low, high, includeHigh, editMode, tree, count, onFound);
+          if (typeof result !== 'number')
+            return result;
+          count = result;
         }
       } finally {
         // Deletions may have occurred, so look for opportunities to merge nodes.
@@ -903,8 +1004,6 @@ class BNodeInternal<K,V> extends BNode<K,V> {
           }
         }
       }
-      if (result < 0)
-        return -count;
     }
     return count;
   }
@@ -930,5 +1029,30 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     // assert !this.isShared;
     this.keys.push(... rhs.keys);
     this.children.push(... (rhs as any as BNodeInternal<K,V>).children);
+  }
+}
+
+const Delete = {delete: true}, DeleteRange = () => Delete;
+const Break = {break: true};
+const EmptyLeaf = (function() { 
+  var n = new BNode<any,any>(); n.isShared = true; return n;
+})();
+const EmptyArray: any[] = [];
+const ReusedArray: any[] = []; // assumed thread-local
+
+// TODO: it's much simpler and maybe faster to a separate empty array per 
+//       node. Test perf of that. (Use shared empty array in shared nodes?)
+// Optimization: this array of `undefined`s is used instead of a normal
+// array of values in nodes where `undefined` is the only value.
+// Its length is extended to max node size on first use; since it can
+// be shared between trees with different maximums, its length can only
+// increase, never decrease. Its type should be undefined[] but strangely
+// TypeScript won't allow the comparison V[] === undefined[]
+var undefVals: any[] = [];
+
+function check(fact: boolean, ...args: any[]) {
+  if (!fact) {
+    args.unshift('B+ tree '); // at beginning of message
+    throw new Error(args.join(' '));
   }
 }
