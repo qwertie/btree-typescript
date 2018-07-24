@@ -217,6 +217,8 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
    * has data that does not affect its sort order.
    */
   set(key: K, value: V, overwrite?: boolean): boolean { 
+    if (this._root.isShared)
+      this._root = this._root.clone();
     var result = this._root.set(key, value, overwrite, this);
     if (result === true || result === false)
       return result;
@@ -713,7 +715,7 @@ class BNode<K,V> {
       tree._size++;
       
       if (this.keys.length < tree._maxNodeSize) {
-        return this.insertL(i, key, value, tree);
+        return this.insertInLeaf(i, key, value, tree);
       } else {
         // This leaf node is full and must split
         var newRightSibling = this.splitOffRightSide(), target: BNode<K,V> = this;
@@ -721,7 +723,7 @@ class BNode<K,V> {
           i -= this.keys.length;
           target = newRightSibling;
         }
-        target.insertL(i, key, value, tree);
+        target.insertInLeaf(i, key, value, tree);
         return newRightSibling;
       }
     } else {
@@ -740,7 +742,7 @@ class BNode<K,V> {
     }
   }
 
-  insertL(i: index, key: K, value: V, tree: BTree<K,V>) {
+  insertInLeaf(i: index, key: K, value: V, tree: BTree<K,V>) {
     this.keys.splice(i, 0, key);
     if (this.values === undefVals) {
       if (value === undefined) {
@@ -904,8 +906,10 @@ class BNodeInternal<K,V> extends BNode<K,V> {
 
   set(key: K, value: V, overwrite: boolean|undefined, tree: BTree<K,V>): boolean|BNodeInternal<K,V> {
     var c = this.children, max = tree._maxNodeSize;
-    var i = Math.max(this.indexOf(key, 0, tree._compare), c.length - 1), child = c[i];
+    var i = Math.min(this.indexOf(key, 0, tree._compare), c.length - 1), child = c[i];
     
+    if (child.isShared)
+      c[i] = child = child.clone();
     if (child.keys.length >= max) {
       // child is full; we might not be able to insert anything else.
       // Shifting an item to the left or right sibling may avoid a split:
@@ -1032,14 +1036,6 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   }
 }
 
-const Delete = {delete: true}, DeleteRange = () => Delete;
-const Break = {break: true};
-const EmptyLeaf = (function() { 
-  var n = new BNode<any,any>(); n.isShared = true; return n;
-})();
-const EmptyArray: any[] = [];
-const ReusedArray: any[] = []; // assumed thread-local
-
 // TODO: it's much simpler and maybe faster to a separate empty array per 
 //       node. Test perf of that. (Use shared empty array in shared nodes?)
 // Optimization: this array of `undefined`s is used instead of a normal
@@ -1049,6 +1045,14 @@ const ReusedArray: any[] = []; // assumed thread-local
 // increase, never decrease. Its type should be undefined[] but strangely
 // TypeScript won't allow the comparison V[] === undefined[]
 var undefVals: any[] = [];
+
+const Delete = {delete: true}, DeleteRange = () => Delete;
+const Break = {break: true};
+const EmptyLeaf = (function() { 
+  var n = new BNode<any,any>(); n.isShared = true; return n;
+})();
+const EmptyArray: any[] = [];
+const ReusedArray: any[] = []; // assumed thread-local
 
 function check(fact: boolean, ...args: any[]) {
   if (!fact) {

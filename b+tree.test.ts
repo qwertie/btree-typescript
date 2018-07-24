@@ -10,8 +10,10 @@ export class SortedList<K=any, V=any> implements IMap<K,V>
   cmp: (a: K, b: K) => number;
 
   public constructor(entries?: [K,V][], compare?: (a: K, b: K) => number) {
-    this.a = entries || [];
     this.cmp = compare || ((a: any, b: any) => a - b);
+    this.a = [];
+    for (var e of entries)
+      this.set(e[0], e[1]);
   }
 
   get size() { return this.a.length; }
@@ -87,7 +89,7 @@ describe('Simple tests on leaf nodes', () =>
     var list = new SortedList(items, undefined);
     tree.checkValid();
     expect(tree.keysArray()).toEqual([1,2,3,4,5,6,7,8]);
-    expect(tree.toArray()).toEqual(list.toArray());
+    expectTreeEqualTo(tree, list);
   }
 
   {
