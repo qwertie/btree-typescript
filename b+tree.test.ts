@@ -10,10 +10,11 @@ export class SortedList<K=any, V=any> implements IMap<K,V>
   cmp: (a: K, b: K) => number;
 
   public constructor(entries?: [K,V][], compare?: (a: K, b: K) => number) {
-    this.cmp = compare || ((a: any, b: any) => a - b);
+    this.cmp = compare || ((a: any, b: any) => a < b ? -1 : a > b ? 1 : a === b ? 0 : a - b);
     this.a = [];
-    for (var e of entries)
-      this.set(e[0], e[1]);
+    if (entries !== undefined)
+      for (var e of entries)
+        this.set(e[0], e[1]);
   }
 
   get size() { return this.a.length; }
@@ -46,6 +47,7 @@ export class SortedList<K=any, V=any> implements IMap<K,V>
     this.a.forEach(pair => callbackFn(pair[1], pair[0]));
   }
 
+  // a.values() used to implement IMap<K,V> but it's not actually available in Node v10.4
   [Symbol.iterator](): IterableIterator<[K,V]> { return this.a.values(); }
   entries(): IterableIterator<[K,V]> { return this.a.values(); }
   keys():    IterableIterator<K> { return this.a.map(pair => pair[0]).values(); }
@@ -94,10 +96,10 @@ describe('Simple tests on leaf nodes', () =>
 
   {
     let tree = new BTree<number,string>([[0,""],[1,"1"],[2,"to"],[3,"tri"],[4,"four"],[5,"five!"]]);
-    function forExpector(k:number, v:string, counter:number, i:number) {
+    function forExpector(k:number, v:string, counter:number, i:number, first: number = 0) {
       expect(k).toEqual(v.length);
-      expect(k).toEqual(counter);
-      expect(k).toEqual(i);
+      expect(k - first).toEqual(counter);
+      expect(k - first).toEqual(i);
     }
     test('forEach', () => {
       let i = 0;
@@ -105,37 +107,41 @@ describe('Simple tests on leaf nodes', () =>
         expect(tree_).toBe(tree);
         expect(this.self).toBe("me");
         forExpector(k, v, i, i++);
-      }, {self:"me"})).toBe(4);
+      }, {self:"me"})).toBe(6);
     });
     test('forEachPair', () => {
       let i = 0;
       expect(tree.forEachPair(function(k,v,counter) {
         forExpector(k, v, counter - 10, i++);
-      }, 10)).toBe(14);
+      }, 10)).toBe(16);
     });
     test('forRange', () => {
       let i = 0;
       expect(tree.forRange(2, 4, false, function(k,v,counter) {
-        forExpector(k, v, counter - 10, i++);
+        forExpector(k, v, counter - 10, i++, 2);
       }, 10)).toBe(12);
       i = 0;
       expect(tree.forRange(2, 4, true, function(k,v,counter) {
-        forExpector(k, v, counter - 10, i++);
+        forExpector(k, v, counter - 10, i++, 2);
       }, 10)).toBe(13);
+      i = 0;
+      expect(tree.forRange(0, 4.5, true, function(k,v,counter) {
+        forExpector(k, v, counter - 10, i++);
+      }, 10)).toBe(15);
     });
     test('editRange', () => {
       let i = 0;
       expect(tree.editRange(1, 4, true, function(k,v,counter) {
-        forExpector(k, v, counter - 10, i++);
+        forExpector(k, v, counter - 10, i++, 1);
       }, 10)).toBe(14);
       i = 0;
       expect(tree.editRange(1, 9, true, function(k,v,counter) {
-        forExpector(k, v, counter - 10, i++);
-        if (k & 1) return {delete:true};
+        forExpector(k, v, counter - 10, i++, 1);
+        if (k & 1)  return {delete:true};
         if (k == 2) return {value:"TWO!"};
         if (k >= 4) return {break:"STOP"};
       }, 10)).toBe("STOP");
-      expect(tree.toArray()).toEqual([[0,""],[2,"TWO!"],[4,"four"],[4,"five!"]])
+      expect(tree.toArray()).toEqual([[0,""],[2,"TWO!"],[4,"four"],[5,"five!"]])
     });
   }
   {
@@ -156,9 +162,9 @@ describe('Simple tests on leaf nodes', () =>
       expect(tree.get("Z", 7)).toBe(7);
     });
     test('getRange() in a leaf node', () => {
-      expect(tree.getRange("#", "B", false)).toBe([["A",1]]);
-      expect(tree.getRange("#", "B", true)).toBe([["A",1],["B",2]]);
-      expect(tree.getRange("G", "S", true)).toBe([["G",7],["H",8]]);
+      expect(tree.getRange("#", "B", false)).toEqual([["A",1]]);
+      expect(tree.getRange("#", "B", true)).toEqual([["A",1],["B",2]]);
+      expect(tree.getRange("G", "S", true)).toEqual([["G",7],["H",8]]);
     });
     test('iterators work on leaf nodes', () => {
       expect(Array.from(tree.entries())).toEqual(items);
@@ -182,13 +188,13 @@ describe('Simple tests on leaf nodes', () =>
       expectTreeEqualTo(tree, new SortedList([["B",2],["D",4],["E",5],["F",6],["G",7]]));
     });
     test('editRange() - again', () => {
-      expect(tree.editRange(tree.minKey(), "F", false, (k,v) => {
+      expect(tree.editRange(tree.minKey(), "F", true, (k,v,counter) => {
         if (k == "D")
           return {value: 44};
         if (k == "E" || k == "G")
           return {delete: true};
         if (k >= "F")
-          return {stop: true};
+          return {stop: counter+1};
       })).toBe(4);
       expectTreeEqualTo(tree, new SortedList([["B",2],["D",44],["F",6],["G",7]]));
     });
@@ -229,21 +235,26 @@ describe('Simple tests on leaf nodes', () =>
       else // names are equal (or incomparable)
         return a.age - b.age; // Return >0 when a.age > b.age
     });
-    tree.set({name:"Bill", age:"17"}, "happy");
-    tree.set({name:"Rose", age:"40"}, "busy & stressed");
-    tree.set({name:"Bill", age:"55"}, "recently laid off");
-    tree.set({name:"Rose", age:"10"}, "rambunctious");
-    tree.set({name:"Chad", age:"18"}, "smooth");
+    tree.set({name:"Bill", age:17}, "happy");
+    tree.set({name:"Rose", age:40}, "busy & stressed");
+    tree.set({name:"Bill", age:55}, "recently laid off");
+    tree.set({name:"Rose", age:10}, "rambunctious");
+    tree.set({name:"Chad", age:18}, "smooth");
+    
+    // Try editing a key
+    tree.set({name: "Bill", age: 17, planet: "Earth"}, "happy");
+    
     var list: any[] = [];
     expect(tree.forEachPair((k, v) => {
       list.push(Object.assign({value: v}, k));
-    }, 10)).toBe(14);
+    }, 10)).toBe(15);
+
     expect(list).toEqual([
-      { name: "Bill", age: "17", value: "happy" },
-      { name: "Bill", age: "55", value: "recently laid off" },
-      { name: "Chad", age: "18", value: "smooth" },
-      { name: "Rose", age: "10", value: "rambunctious" },
-      { name: "Rose", age: "40", value: "busy & stressed" },
+      { name: "Bill", age: 17, planet: "Earth", value: "happy" },
+      { name: "Bill", age: 55, value: "recently laid off" },
+      { name: "Chad", age: 18, value: "smooth" },
+      { name: "Rose", age: 10, value: "rambunctious" },
+      { name: "Rose", age: 40, value: "busy & stressed" },
     ]);
   });
 });
@@ -254,27 +265,78 @@ describe('B+ tree with fanout 4',  testBTree.bind(null, 4));
 
 function testBTree(maxNodeSize: number)
 {
-  for (var size = 8; size <= 512; size *= 8) {
-    test(`Iterators [size ${size}]`, () => {
-      var tree = new BTree<number,number|undefined>(undefined, undefined, maxNodeSize);
-      var list = new SortedList<number,number|undefined>();
-      for (var i = 0; i < size; i++) {
+  for (let size of [8, 64, 512]) {
+    let tree = new BTree<number,number>(undefined, undefined, maxNodeSize);
+    let list = new SortedList<number,number>();
+    test(`Insert randomly & toArray [size ${size}]`, () => {
+      while (tree.size < size) {
         var key = randInt(size * 2);
         addToBoth(tree, list, key, key);
+        expect(tree.size).toEqual(list.size);
       }
       expectTreeEqualTo(tree, list);
+    });
 
-      for (var i = 0; i < size/4; i++) {
-        var key = randInt(size + 10);
-        var nextPair = list.toArray()[list.indexOf(key, 0)];
-        expect(tree)
+    test(`Iteration [size ${size}]`, () => {
+      expect(tree.size).toBe(size, "Wrong tree size (previous test failed?)");
+      var it = tree.entries();
+      var array = list.toArray(), i = 0;
+      for (let next = it.next(); !next.done; next = it.next(), i++) {
+        expect(next.value).toEqual(array[i]);
       }
+      expect(i).toBe(array.length);
+    });
+
+    test(`Reverse iteration [size ${size}]`, () => {
+      expect(tree.size).toBe(size, "Wrong tree size (previous test failed?)");
+      var it = tree.entriesReversed();
+      var array = list.toArray(), i = array.length-1;
+      for (let next = it.next(); !next.done; next = it.next(), i--) {
+        expect(next.value).toEqual(array[i]);
+      }
+      expect(i).toBe(-1);
+    });
+
+    test(`Insert with few values [size ${size}]`, () => {
+      let list = new SortedList<number,string|undefined>();
+      for (var i = 0; i < size; i++) {
+        var key = randInt(size * 2);
+        // Use a value only occasionally to stress out the no-values optimization
+        list.set(key, key % 10 == 0 ? key.toString() : undefined);
+      }
+      let tree = new BTree<number,string|undefined>(list.toArray(), undefined, maxNodeSize);
+      expectTreeEqualTo(tree, list);
     });
   }
 
-  for (var size = 5; size <= 125; size *= 5) {
+  for (let size of [6, 36, 216]) {
+    test(`setRange & deleteRange [size ${size}]`, () => {
+      // Store numbers in descending order
+      var reverseComparator = (a:number, b:number) => b - a;
+
+      // Prepare reference list
+      var list = new SortedList<number,string>([], reverseComparator);
+      for (var i = size-1; i >= 0; i--)
+        list.set(i, i.toString());
+  
+      // Add all to tree in the "wrong" order (ascending)
+      var tree = new BTree<number,string>(undefined, reverseComparator, maxNodeSize);
+      tree.setRange(list.toArray().slice(0).reverse());
+      expectTreeEqualTo(tree, list);
+
+      // Remove most of the items
+      expect(tree.deleteRange(size-2, 5, true)).toEqual(size-6);
+      expectTreeEqualTo(tree, new SortedList<number,string>([
+        [size-1, (size-1).toString()], [4,"4"], [3,"3"], [2,"2"], [1,"1"], [0,"0"]
+      ], reverseComparator));
+      expect(tree.deleteRange(size, 0, true)).toEqual(6);
+      expect(tree.toArray()).toEqual([]);
+    });
+  }
+
+  for (let size of [5, 25, 125]) {
     // Ensure standard operations work for various list sizes
-    test('Various operations [starting size ${size}]', () => {
+    test(`Various operations [starting size ${size}]`, () => {
       var tree = new BTree<number,number|undefined>(undefined, undefined, maxNodeSize);
       var list = new SortedList<number,number|undefined>();
     
@@ -295,14 +357,15 @@ function testBTree(maxNodeSize: number)
       expect(tree.get(0.5, 12345)).toBe(12345);
 
       // Try all the iterators...
-      expect(Array.from(tree.entries())).toEqual(Array.from(list.entries()));
-      expect(Array.from(tree.keys())).toEqual(Array.from(list.keys()));
-      expect(Array.from(tree.values())).toEqual(Array.from(list.values()));
+      expect(Array.from(tree.entries())).toEqual(list.toArray());
+      expect(Array.from(tree.keys())).toEqual(list.toArray().map(p => p[0]));
+      expect(Array.from(tree.values())).toEqual(list.toArray().map(p => p[1]));
       
       // Try iterating from past the end...
       expect(Array.from(tree.entries(tree.maxKey()!+1))).toEqual([]);
       expect(Array.from(tree.keys(tree.maxKey()!+1))).toEqual([]);
       expect(Array.from(tree.values(tree.maxKey()!+1))).toEqual([]);
+      expect(Array.from(tree.entriesReversed(tree.minKey()!-1))).toEqual([]);
       
       // Try some changes that should have no effect
       for (var i = size; i < size + size/8; i += 0.5) {
@@ -318,34 +381,10 @@ function testBTree(maxNodeSize: number)
         expect(has).toEqual(list.has(key));
         expect(has).toEqual(tree.delete(key));
         expect(has).toEqual(list.delete(key));
+        expectTreeEqualTo(tree, list);
       }
 
       expectTreeEqualTo(tree, list);
-    });
-  }
-
-  for (var size = 6; size <= 216; size *= 6) {
-    test(`setRange & deleteRange [size ${size}]`, () => {
-      // Store numbers in descending order
-      var reverseComparator = (a:number, b:number) => b - a;
-
-      // Prepare reference list
-      var list = new SortedList<number,string>([], reverseComparator);
-      for (var i = size-1; i >= 0; i--)
-        list.set(i, i.toString());
-  
-      // Add all to tree in the "wrong" order (ascending)
-      var tree = new BTree<number,string>(undefined, reverseComparator, maxNodeSize);
-      tree.setRange(list.toArray().slice(0).reverse());
-      expectTreeEqualTo(tree, list);
-
-      // Remove most of the items
-      expect(tree.deleteRange(size-2, 5, true)).toEqual(size-6);
-      expectTreeEqualTo(tree, new SortedList<number,string>([
-        [size-1, (size-1).toString()], [4,"4"], [3,"3"], [2,"2"], [1,"1"], [0,"0"]
-      ]));
-      expect(tree.deleteRange(size, 0, true)).toEqual(6);
-      expect(tree.toArray()).toEqual([]);
     });
   }
 }

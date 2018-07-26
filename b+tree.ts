@@ -6,6 +6,7 @@ type index = number;
 // Informative microbenchmarks & stuff:
 // http://www.jayconrod.com/posts/52/a-tour-of-v8-object-representation (very educational)
 // https://blog.mozilla.org/luke/2012/10/02/optimizing-javascript-variable-access/ (local vars are faster than properties)
+// http://benediktmeurer.de/2017/12/13/an-introduction-to-speculative-optimization-in-v8/ (other stuff)
 // https://jsperf.com/js-in-operator-vs-alternatives (avoid 'in' operator; `.p!==undefined` faster than `hasOwnProperty('p')` in all browsers)
 // https://jsperf.com/instanceof-vs-typeof-vs-constructor-vs-member (speed of type tests varies wildly across browsers)
 // https://jsperf.com/detecting-arrays-new (a.constructor===Array is best across browsers, assuming a is an object)
@@ -15,6 +16,13 @@ type index = number;
 // https://jsperf.com/array-vs-property-access-speed (v.x/v.y is faster than a[0]/a[1] in major browsers IF hidden class is constant)
 // https://jsperf.com/detect-not-null-or-undefined (`x==null` slightly slower than `x===null||x===undefined` on all browsers)
 // Overall, microbenchmarks suggest Firefox is the fastest browser for JavaScript and Edge is the slowest.
+// Lessons from https://v8project.blogspot.com/2017/09/elements-kinds-in-v8.html:
+//   - Avoid holes in arrays. Avoid `new Array(N)`, it will be "holey" permanently.
+//   - Don't read outside bounds of an array (it scans prototype chain).
+//   - Small integer arrays are stored differently from doubles
+//   - Add non-numbers to an array deoptimizes it permanently into a general array
+//   - Objects can be used like arrays (e.g. have length property) but are slower
+//   - V8 source (NewElementsCapacity in src/objects.h): arrays grow by 50% + 16 elements
 
 /** Read-only map interface (i.e. a source of key-value pairs). 
  *  It is not desirable to demand a Symbol polyfill, so [Symbol.iterator] is left out. */
@@ -152,7 +160,7 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
   /** Gets the number of key-value pairs in the tree. */
   get size() { return this._size; }
   get length() { return this._size; }
-  
+
   /** Releases the tree so that its size is 0. */
   clear() {
     this._root = EmptyLeaf as BNode<K,V>;
@@ -258,35 +266,49 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
    *  @param reusedArray Optional array used repeatedly to store key-value
    *         pairs, to avoid creating a new array on every iteration.
    */
-  *entries(lowestKey?: K, reusedArray?: [K,V]): IterableIterator<[K,V]> {
+  entries(lowestKey?: K, reusedArray?: [K,V]): IterableIterator<[K,V]> {
     var info = this.findPath(lowestKey);
-    if (info === undefined) return;
-    var {nodequeue,nodeindex,leaf} = info;
-    var i = (lowestKey === undefined ? 0 : leaf.indexOf(lowestKey, 0, this._compare));
-    for (;; leaf = nodequeue[0][nodeindex[0]]) {
-      if (reusedArray)
-        for (; i < leaf.keys.length; i++) {
-          reusedArray[0] = leaf.keys[i];
-          reusedArray[1] = leaf.values[i];
-          yield reusedArray;
+    if (info === undefined) return iterator<[K,V]>();
+    var {nodequeue, nodeindex, leaf} = info;
+    var state = reusedArray !== undefined ? 1 : 0;
+    var i = (lowestKey === undefined ? -1 : leaf.indexOf(lowestKey, 0, this._compare) - 1);
+
+    return iterator<[K,V]>(() => {
+      jump: for (;;) {
+        switch(state) {
+          case 0:
+            if (++i < leaf.keys.length)
+              return {done: false, value: [leaf.keys[i], leaf.values[i]]};
+            state = 2;
+            continue;
+          case 1:
+            if (++i < leaf.keys.length) {
+              reusedArray![0] = leaf.keys[i], reusedArray![1] = leaf.values[i];
+              return {done: false, value: reusedArray};
+            }
+            state = 2;
+          case 2:
+            // Advance to the next leaf node
+            for (var level = -1;;) {
+              if (++level >= nodequeue.length) {
+                state = 3; continue jump;
+              }
+              if (++nodeindex[level] < nodequeue[level].length)
+                break;
+            }
+            for (; level > 0; level--) {
+              nodequeue[level-1] = (nodequeue[level][nodeindex[level]] as BNodeInternal<K,V>).children;
+              nodeindex[level-1] = 0;
+            }
+            leaf = nodequeue[0][nodeindex[0]];
+            i = -1;
+            state = reusedArray !== undefined ? 1 : 0;
+            continue;
+          case 3:
+            return {done: true, value: undefined};
         }
-      else
-        for (; i < leaf.keys.length; i++) {
-          yield [leaf.keys[i], leaf.values[i]];
-        }
-      
-      // Advance to the next leaf node
-      for (var level = -1;;) {
-        if (++level >= nodequeue.length)
-          return;
-        if (++nodeindex[level] < nodequeue[level].length)
-          break;
       }
-      for (; level > 0; level--) {
-        nodequeue[level-1] = (nodequeue[level][nodeindex[level]] as BNodeInternal<K,V>).children;
-        nodeindex[level-1] = 0;
-      }
-    }
+    });
   }
 
   /** Returns an iterator that provides items in reversed order.
@@ -298,37 +320,52 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
    *  @param skipHighest Iff this flag is true and the highestKey exists in the
    *         collection, the pair matching highestKey is skipped, not iterated.
    */
-  *entriesReversed(highestKey?: K, reusedArray?: [K,V], skipHighest?: boolean): IterableIterator<[K,V]> {
+  entriesReversed(highestKey?: K, reusedArray?: [K,V], skipHighest?: boolean): IterableIterator<[K,V]> {
     if ((highestKey = highestKey || this.maxKey()) === undefined)
-      return; // collection is empty
+      return iterator<[K,V]>(); // collection is empty
     var {nodequeue,nodeindex,leaf} = this.findPath(highestKey) || this.findPath(this.maxKey())!;
+    check(!nodequeue[0] || leaf === nodequeue[0][nodeindex[0]], "wat!");
     var i = leaf.indexOf(highestKey, 0, this._compare);
-    if (skipHighest || this._compare(leaf.keys[i], highestKey) > 0)
-      i--;
-    for (;; leaf = nodequeue[0][nodeindex[0]]) {
-      if (reusedArray)
-        for (; i >= 0; i--) {
-          reusedArray[0] = leaf.keys[i];
-          reusedArray[1] = leaf.values[i];
-          yield reusedArray;
+    if (!(skipHighest || this._compare(leaf.keys[i], highestKey) > 0))
+      i++;
+    var state = reusedArray !== undefined ? 1 : 0;
+
+    return iterator<[K,V]>(() => {
+      jump: for (;;) {
+        switch(state) {
+          case 0:
+            if (--i >= 0)
+              return {done: false, value: [leaf.keys[i], leaf.values[i]]};
+            state = 2;
+            continue;
+          case 1:
+            if (--i >= 0) {
+              reusedArray![0] = leaf.keys[i], reusedArray![1] = leaf.values[i];
+              return {done: false, value: reusedArray};
+            }
+            state = 2;
+          case 2:
+            // Advance to the next leaf node
+            for (var level = -1;;) {
+              if (++level >= nodequeue.length) {
+                state = 3; continue jump;
+              }
+              if (--nodeindex[level] >= 0)
+                break;
+            }
+            for (; level > 0; level--) {
+              nodequeue[level-1] = (nodequeue[level][nodeindex[level]] as BNodeInternal<K,V>).children;
+              nodeindex[level-1] = nodequeue[level-1].length-1;
+            }
+            leaf = nodequeue[0][nodeindex[0]];
+            i = leaf.keys.length;
+            state = reusedArray !== undefined ? 1 : 0;
+            continue;
+          case 3:
+            return {done: true, value: undefined};
         }
-      else
-        for (; i >= 0; i--) {
-          yield [leaf.keys[i], leaf.values[i]];
-        }
-      
-      // Advance to the next leaf node
-      for (var level = -1;;) {
-        if (++level >= nodequeue.length)
-          return;
-        if (--nodeindex[level] >= 0)
-          break;
       }
-      for (; level > 0; level--) {
-        nodequeue[level-1] = (nodequeue[level][nodeindex[level]] as BNodeInternal<K,V>).children;
-        nodeindex[level-1] = nodequeue[level-1].length-1;
-      }
-    }
+    });
   }
 
   /* Used by entries() and entriesReversed() to prepare to start iterating.
@@ -338,45 +375,48 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
    * consists of nodequeue[L] which is the children of a BNodeInternal, 
    * and nodeindex[L], the current index within that child list, such
    * such that nodequeue[L-1] === nodequeue[L][nodeindex[L]].children.
+   * (However inside this function the order is reversed.)
    */
   protected findPath(key?: K): { nodequeue: BNode<K,V>[][], nodeindex: number[], leaf: BNode<K,V> } | undefined
   {
-    var root = this._root, height = this.height;
-    var nextnode = root;
-
+    var nextnode = this._root, height = this.height;
     var nodequeue: BNode<K,V>[][], nodeindex: number[];
-    if (height === 0) {
-      nodequeue = EmptyArray, nodeindex = EmptyArray;
+
+    if (nextnode.isLeaf) {
+      nodequeue = EmptyArray, nodeindex = EmptyArray; // avoid allocations
     } else {
-      nodequeue = new Array<BNode<K,V>[]>(height);
-      nodeindex = new Array<number>(height);
-      let h = height - 1;
-      nodequeue[h] = (root as BNodeInternal<K,V>).children;
-      nodeindex[h] = 0;
-      if (key !== undefined)
-        if ((nodeindex[h] = root.indexOf(key, 0, this._compare)) >= nodequeue[h].length)
-          return; // lowerBound > maxKey()
-      for (h = height - 1; h >= 0; h--) {
-        nodequeue[h] = (nextnode as BNodeInternal<K,V>).children;
-        nodeindex[h] = key === undefined ? 0 : nextnode.indexOf(key, 0, this._compare);
-        nextnode = nodequeue[h][nodeindex[h]];
+      nodequeue = [], nodeindex = [];
+      for (var d = 0; !nextnode.isLeaf; d++) {
+        nodequeue[d] = (nextnode as BNodeInternal<K,V>).children;
+        nodeindex[d] = key === undefined ? 0 : nextnode.indexOf(key, 0, this._compare);
+        if (nodeindex[d] >= nodequeue[d].length)
+          return; // first key > maxKey()
+        nextnode = nodequeue[d][nodeindex[d]];
       }
+      nodequeue.reverse();
+      nodeindex.reverse();
     }
     return {nodequeue, nodeindex, leaf:nextnode};
   }
 
   /** Returns a new iterator for iterating the keys of each pair in ascending order. */
-  *keys(firstKey?: K): IterableIterator<K> {
+  keys(firstKey?: K): IterableIterator<K> {
     var it = this.entries(firstKey, ReusedArray as [K,V]), n;
-    while (!(n = it.next()).done)
-      yield n.value[0];
+    return iterator<K>(() => {
+      var n: IteratorResult<any> = it.next();
+      if (n.value) n.value = n.value[0];
+      return n;
+    });
   }
   
   /** Returns a new iterator for iterating the values of each pair in order by key. */
-  *values(firstKey?: K): IterableIterator<V> {
+  values(firstKey?: K): IterableIterator<V> {
     var it = this.entries(firstKey, ReusedArray as [K,V]), n;
-    while (!(n = it.next()).done)
-      yield n.value[1];
+    return iterator<V>(() => {
+      var n: IteratorResult<any> = it.next();
+      if (n.value) n.value = n.value[1];
+      return n;
+    });
   }
 
   // Additional methods /////////////////////////////////////////////////////
@@ -542,13 +582,13 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
   editRange<R=V>(low: K, high: K, includeHigh: boolean, onFound: (k:K,v:V,counter:number) => EditRangeResult<V,R>|void, initialCounter?: number): R|number {
     var root = this._root;
     if (root.isShared)
-      root = this._root = root.clone();
+      this._root = root = root.clone();
     try {
       var r = root.forRange(low, high, includeHigh, true, this, initialCounter || 0, onFound);
       return typeof r === "number" ? r : r.break!;
     } finally {
       while (root.keys.length <= 1 && !root.isLeaf)
-        this._root = root.keys.length === 0 ? EmptyLeaf :
+        this._root = root = root.keys.length === 0 ? EmptyLeaf :
                     (root as any as BNodeInternal<K,V>).children[0];
     }
   }
@@ -610,17 +650,26 @@ declare const Symbol: any;
 if (Symbol && Symbol.iterator) // iterator is equivalent to entries()
   (BTree as any).prototype[Symbol.iterator] = BTree.prototype.entries;
 
+function iterator<T>(next: () => {done:boolean,value?:T} = (() => ({ done:true, value:undefined }))): IterableIterator<T> {
+  var result: any = { next };
+  if (Symbol && Symbol.iterator)
+    result[Symbol.iterator] = function() { return this; };
+  return result;
+}
+  
+
 /** Leaf node / base class. **************************************************/
 class BNode<K,V> {
   // If this is an internal node, _keys[i] is the highest key in children[i].
   keys: K[];
   values: V[];
-  isShared: true | undefined = undefined;
+  isShared: true | undefined;
   get isLeaf() { return (this as any).children === undefined; }
   
   constructor(keys: K[] = [], values?: V[]) {
     this.keys = keys;
     this.values = values || undefVals as any[];
+    this.isShared = undefined;
   }
 
   // Shared methods /////////////////////////////////////////////////////////
@@ -729,17 +778,20 @@ class BNode<K,V> {
     } else {
       // Key already exists
       if (overwrite !== false) {
-        if (this.values === undefVals) {
-          if (value === undefined)
-            return false;
-          this.values = this.values.slice(0, this.keys.length);
-        }
+        if (value !== undefined)
+          this.reifyValues();
         // usually this is a no-op, but some users may wish to edit the key
         this.keys[i] = key;
         this.values[i] = value;
       }
       return false;
     }
+  }
+
+  reifyValues() {
+    if (this.values === undefVals)
+      return this.values = this.values.slice(0, this.keys.length);
+    return this.values;
   }
 
   insertInLeaf(i: index, key: K, value: V, tree: BTree<K,V>) {
@@ -766,8 +818,7 @@ class BNode<K,V> {
       if (v !== undefVals)
         v.push(undefined as any);
     } else {
-      if (v === undefVals)
-        v = this.values = this.values.slice(0, this.keys.length);
+      v = this.reifyValues();
       v.push(rhs.values.shift()!);
     }
     this.keys.push(rhs.keys.shift()!);
@@ -782,8 +833,7 @@ class BNode<K,V> {
       if (v !== undefVals)
         v.unshift(undefined as any);
     } else {
-      if (v === undefVals)
-        v = this.values = this.values.slice(0, this.keys.length);
+      v = this.reifyValues();
       v.unshift(lhs.values.pop()!);
     }
     this.keys.unshift(lhs.keys.pop()!);
@@ -801,12 +851,21 @@ class BNode<K,V> {
   forRange<R>(low: K, high: K, includeHigh: boolean|undefined, editMode: boolean, tree: BTree<K,V>, count: number,
               onFound?: (k:K, v:V, counter:number) => EditRangeResult<V,R>|void): EditRangeResult<V,R>|number {
     var cmp = tree._compare;
-    var iLow = this.indexOf(low, 0, cmp);
-    var iHigh = high === low ? iLow : this.indexOf(high, -1, cmp);
-    if (iHigh < 0)
-      iHigh = ~iHigh;
-    else if (includeHigh === true)
-      iHigh++;
+    var iLow, iHigh;
+    if (high === low) {
+      if (!includeHigh)
+        return count;
+      iHigh = (iLow = this.indexOf(low, -1, cmp)) + 1;
+      if (iLow < 0)
+        return count;
+    } else {
+      iLow = this.indexOf(low, 0, cmp);
+      iHigh = this.indexOf(high, -1, cmp);
+      if (iHigh < 0)
+        iHigh = ~iHigh;
+      else if (includeHigh === true)
+        iHigh++;
+    }
     var keys = this.keys, values = this.values;
     if (onFound !== undefined) {
       for(var i = iLow; i < iHigh; i++) {
@@ -831,20 +890,20 @@ class BNode<K,V> {
             return result;
         }
       }
-    }
+    } else
+      count += iHigh - iLow;
     return count;
   }
 
   /** Adds entire contents of right-hand sibling (rhs is left unchanged) */
-  mergeSibling(rhs: BNode<K,V>) {
+  mergeSibling(rhs: BNode<K,V>, _: number) {
     this.keys.push(... rhs.keys);
     if (this.values === undefVals) {
       if (rhs.values === undefVals)
         return;
-      this.values = undefVals.slice(0, this.keys.length);
+      this.values = this.values.slice(0, this.keys.length);
     }
-    this.values.push(... rhs.values === undefVals ?
-                     rhs.values.slice(0, rhs.keys.length) : rhs.values);
+    this.values.push(... rhs.reifyValues());
   }
 }
 
@@ -896,8 +955,8 @@ class BNodeInternal<K,V> extends BNode<K,V> {
       if (!(i === 0 || tree._compare(k[i-1], k[i]) < 0))
         check(false, "sort violation at depth", depth, "index", i, "keys", k[i-1], k[i]);
     }
-    var toofew;
-    if ((toofew = childSize < (tree.maxNodeSize >> 1)*cL) || childSize > tree.maxNodeSize*cL)
+    var toofew = childSize < (tree.maxNodeSize >> 1)*cL;
+    if (toofew || childSize > tree.maxNodeSize*cL)
       check(false, toofew ? "too few" : "too many", "children (", childSize, size, ") at depth", depth, ", maxNodeSize:", tree.maxNodeSize, "children.length:", cL);
     return size;
   }
@@ -905,19 +964,26 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   // Internal Node: set & node splitting //////////////////////////////////////
 
   set(key: K, value: V, overwrite: boolean|undefined, tree: BTree<K,V>): boolean|BNodeInternal<K,V> {
-    var c = this.children, max = tree._maxNodeSize;
-    var i = Math.min(this.indexOf(key, 0, tree._compare), c.length - 1), child = c[i];
+    var c = this.children, max = tree._maxNodeSize, cmp = tree._compare;
+    var i = Math.min(this.indexOf(key, 0, cmp), c.length - 1), child = c[i];
     
     if (child.isShared)
       c[i] = child = child.clone();
     if (child.keys.length >= max) {
-      // child is full; we might not be able to insert anything else.
-      // Shifting an item to the left or right sibling may avoid a split:
-      if (i > 0 && c[i-1].keys.length < max) {
-        c[i-1].takeFromRight(child);
-        this.keys[i-1] = c[i-1].maxKey();
-      } else if (i+1 < c.length && c[i+1].keys.length < max) {
-        c[i+1].takeFromLeft(child);
+      // child is full; inserting anything else will cause a split.
+      // Shifting an item to the left or right sibling may avoid a split.
+      // We can do a shift if the adjacent node is not full and if the
+      // current key can still be placed in the same node after the shift.
+      var other: BNode<K,V>;
+      if (i > 0 && (other = c[i-1]).keys.length < max && cmp(child.keys[0], key) < 0) {
+        if (other.isShared)
+          c[i-1] = other = other.clone();
+        other.takeFromRight(child);
+        this.keys[i-1] = other.maxKey();
+      } else if ((other = c[i+1]) !== undefined && other.keys.length < max && cmp(child.maxKey(), key) < 0) {
+        if (other.isShared)
+          c[i+1] = other = other.clone();
+        other.takeFromLeft(child);
         this.keys[i] = c[i].maxKey();
       }
     }
@@ -931,15 +997,15 @@ class BNodeInternal<K,V> extends BNode<K,V> {
 
     // The child has split and `result` is a new right child... does it fit?
     if (this.keys.length < max) { // yes
-      this.insert(i, result);
+      this.insert(i+1, result);
       return true;
     } else { // no, we must split also
       var newRightSibling = this.splitOffRightSide(), target: BNodeInternal<K,V> = this;
-      if (tree._compare(result.maxKey(), this.maxKey()) > 0) {
+      if (cmp(result.maxKey(), this.maxKey()) > 0) {
         target = newRightSibling;
         i -= this.keys.length;
       }
-      target.insert(i, result);
+      target.insert(i+1, result);
       return newRightSibling;
     }
   }
@@ -977,7 +1043,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   {
     var cmp = tree._compare;
     var iLow = this.indexOf(low, 0, cmp), i = iLow;
-    var iHigh = Math.max(high === low ? iLow : this.indexOf(high, 0, cmp), this.keys.length-1);
+    var iHigh = Math.min(high === low ? iLow : this.indexOf(high, 0, cmp), this.keys.length-1);
     var keys = this.keys, children = this.children;
     if (!editMode) {
       // Simple case
@@ -987,12 +1053,13 @@ class BNodeInternal<K,V> extends BNode<K,V> {
           return result;
         count = result;
       }
-    } else {
+    } else if (i <= iHigh) {
       try {
         for(; i <= iHigh; i++) {
           if (children[i].isShared)
             children[i] = children[i].clone();
           var result = children[i].forRange(low, high, includeHigh, editMode, tree, count, onFound);
+          keys[i] = children[i].maxKey();
           if (typeof result !== 'number')
             return result;
           count = result;
@@ -1000,12 +1067,17 @@ class BNodeInternal<K,V> extends BNode<K,V> {
       } finally {
         // Deletions may have occurred, so look for opportunities to merge nodes.
         var half = tree._maxNodeSize >> 1;
-        for(i = iLow; i <= iHigh; i++) {
-          if (children[i].keys.length <= half) {
-            if (this.tryMerge(i-1, tree._maxNodeSize) || this.tryMerge(i, tree._maxNodeSize)) {
-              i--; iHigh--;
-            }
-          }
+        if (iLow > 0)
+          iLow--;
+        for(i = iHigh; i >= iLow; i--) {
+          if (children[i].keys.length <= half)
+            this.tryMerge(i, tree._maxNodeSize);
+        }
+        // Are we completely empty?
+        if (children[0].keys.length === 0) {
+          check(children.length === 1 && keys.length === 1, "emptiness bug");
+          children.shift();
+          keys.shift();
         }
       }
     }
@@ -1019,7 +1091,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
       if (children[i].keys.length + children[i+1].keys.length <= maxSize) {
         if (children[i].isShared) // cloned already UNLESS i is outside scan range
           children[i] = children[i].clone();
-        children[i].mergeSibling(children[i+1]);
+        children[i].mergeSibling(children[i+1], maxSize);
         children.splice(i + 1, 1);
         this.keys.splice(i + 1, 1);
         this.keys[i] = children[i].maxKey();
@@ -1029,10 +1101,15 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     return false;
   }
 
-  mergeSibling(rhs: BNode<K,V>) {
+  mergeSibling(rhs: BNode<K,V>, maxNodeSize: number) {
     // assert !this.isShared;
+    var oldLength = this.keys.length;
     this.keys.push(... rhs.keys);
     this.children.push(... (rhs as any as BNodeInternal<K,V>).children);
+    // If our children are themselves almost empty due to a mass-delete,
+    // they may need to be merged too (but only the oldLength-1 and its
+    // right sibling should need this).
+    this.tryMerge(oldLength-1, maxNodeSize);
   }
 }
 
