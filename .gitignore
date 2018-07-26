@@ -2,6 +2,8 @@
 *.js.map
 *.bundle.js
 *.out.js
+*.min.js
+.testpack/
 
 # Parcel generated folders
 .cache

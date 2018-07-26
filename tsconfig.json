@@ -14,8 +14,7 @@
     // Note: BTree does not rely on ES6 runtime APIs, just compile-time interfaces
     "lib": ["es6"],             // APIs expected to exist at runtime
     "downlevelIteration": true, // Allow yield statement in ES5
-    "outDir": "dist",
   },
-  "include": ["b+tree.ts"],
-  "exclude": ["node_modules", "dist", "tests"],
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "tests", "b+tree.test.ts"],
 }

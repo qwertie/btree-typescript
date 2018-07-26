@@ -11,7 +11,7 @@ type index = number;
 // https://jsperf.com/instanceof-vs-typeof-vs-constructor-vs-member (speed of type tests varies wildly across browsers)
 // https://jsperf.com/detecting-arrays-new (a.constructor===Array is best across browsers, assuming a is an object)
 // https://jsperf.com/shallow-cloning-methods (a constructor is faster than Object.create; hand-written clone faster than Object.assign)
-// https://jsperf.com/ways-to-fill-an-array (new Array(N) is usually best; slice-and-replace may be even faster)
+// https://jsperf.com/ways-to-fill-an-array (slice-and-replace is fastest)
 // https://jsperf.com/math-min-max-vs-ternary-vs-if (Math.min/max is slow on Edge)
 // https://jsperf.com/array-vs-property-access-speed (v.x/v.y is faster than a[0]/a[1] in major browsers IF hidden class is constant)
 // https://jsperf.com/detect-not-null-or-undefined (`x==null` slightly slower than `x===null||x===undefined` on all browsers)
@@ -65,14 +65,16 @@ export interface IMapSink<K=any, V=any>
 export interface IMap<K=any, V=any> extends IMapSource<K, V>, IMapSink<K, V> { }
 
 /**
- * A reasonably fast collection of key-value pairs, with a powerful API similar
- * to the standard Map. BTree is a B+ tree data structure, so the collection is
- * sorted by key. B+ trees tend to use memory more efficiently than hashtables
- * such as the standard Map, especially when the collection contains a large
- * number of items. However, maintaining the sort order makes them modestly
- * slower: O(log size) rather than O(1). This B+ tree implementation supports 
- * O(1) fast cloning. It also supports freeze(), which can be used to ensure 
- * that a BTree is not changed accidentally.
+ * A reasonably fast collection of key-value pairs with a powerful API. 
+ * Largely compatible with the standard Map. BTree is a B+ tree data structure,
+ * so the collection is sorted by key.
+ * 
+ * B+ trees tend to use memory more efficiently than hashtables such as the
+ * standard Map, especially when the collection contains a large number of 
+ * items. However, maintaining the sort order makes them modestly slower: 
+ * O(log size) rather than O(1). This B+ tree implementation supports O(1)
+ * fast cloning. It also supports freeze(), which can be used to ensure that
+ * a BTree is not changed accidentally.
  * 
  * Confusingly, the ES6 Map.forEach(c) method calls c(value,key) instead of
  * c(key,value), in contrast to other methods such as set() and entries()
@@ -104,9 +106,9 @@ export interface IMap<K=any, V=any> extends IMapSource<K, V>, IMapSink<K, V> { }
  *         return a.age - b.age; // Return >0 when a.age > b.age
  *     });
  * 
- *     tree.set({name:"Bill", age:"17"}, "happy");
- *     tree.set({name:"Fran", age:"40"}, "busy & stressed");
- *     tree.set({name:"Bill", age:"55"}, "recently laid off");
+ *     tree.set({name:"Bill", age:17}, "happy");
+ *     tree.set({name:"Fran", age:40}, "busy & stressed");
+ *     tree.set({name:"Bill", age:55}, "recently laid off");
  *     tree.forEachPair((k, v) => {
  *       console.log(`Name: ${k.name} Age: ${k.age} Status: ${v}`);
  *     });
@@ -379,7 +381,7 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
    */
   protected findPath(key?: K): { nodequeue: BNode<K,V>[][], nodeindex: number[], leaf: BNode<K,V> } | undefined
   {
-    var nextnode = this._root, height = this.height;
+    var nextnode = this._root;
     var nodequeue: BNode<K,V>[][], nodeindex: number[];
 
     if (nextnode.isLeaf) {
@@ -401,7 +403,7 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
 
   /** Returns a new iterator for iterating the keys of each pair in ascending order. */
   keys(firstKey?: K): IterableIterator<K> {
-    var it = this.entries(firstKey, ReusedArray as [K,V]), n;
+    var it = this.entries(firstKey, ReusedArray as [K,V]);
     return iterator<K>(() => {
       var n: IteratorResult<any> = it.next();
       if (n.value) n.value = n.value[0];
@@ -411,7 +413,7 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
   
   /** Returns a new iterator for iterating the values of each pair in order by key. */
   values(firstKey?: K): IterableIterator<V> {
-    var it = this.entries(firstKey, ReusedArray as [K,V]), n;
+    var it = this.entries(firstKey, ReusedArray as [K,V]);
     return iterator<V>(() => {
       var n: IteratorResult<any> = it.next();
       if (n.value) n.value = n.value[1];
@@ -797,12 +799,12 @@ class BNode<K,V> {
   insertInLeaf(i: index, key: K, value: V, tree: BTree<K,V>) {
     this.keys.splice(i, 0, key);
     if (this.values === undefVals) {
+      while (undefVals.length < tree._maxNodeSize)
+        undefVals.push(undefined);
       if (value === undefined) {
-        while (undefVals.length < tree._maxNodeSize)
-          undefVals.push(undefined);
         return true;
       } else {
-        this.values = new Array<V>(this.keys.length - 1);
+        this.values = undefVals.slice(0, this.keys.length - 1);
       }
     }
     this.values.splice(i, 0, value);
@@ -916,8 +918,8 @@ class BNodeInternal<K,V> extends BNode<K,V> {
 
   constructor(children: BNode<K,V>[], keys?: K[]) {
     if (!keys) {
-      keys = new Array<K>(children.length);
-      for (var i = 0; i < keys.length; i++)
+      keys = [];
+      for (var i = 0; i < children.length; i++)
         keys[i] = children[i].maxKey();
     }
     super(keys);
