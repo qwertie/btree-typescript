@@ -1,81 +1,14 @@
 import BTree, {IMap} from './b+tree';
+import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
 
 var test: (name:string,f:()=>void)=>void = it;
 
-/** A super-inefficient sorted list for testing purposes */
-export class SortedList<K=any, V=any> implements IMap<K,V>
-{
-  a: [K,V][];
-  cmp: (a: K, b: K) => number;
-
-  public constructor(entries?: [K,V][], compare?: (a: K, b: K) => number) {
-    this.cmp = compare || ((a: any, b: any) => a < b ? -1 : a > b ? 1 : a === b ? 0 : a - b);
-    this.a = [];
-    if (entries !== undefined)
-      for (var e of entries)
-        this.set(e[0], e[1]);
-  }
-
-  get size() { return this.a.length; }
-  get(key: K, defaultValue?: V): V | undefined {
-    var pair = this.a[this.indexOf(key, -1)];
-    return pair === undefined ? defaultValue : pair[1];
-  }
-  set(key: K, value: V, overwrite?: boolean): boolean { 
-    var i = this.indexOf(key, -1);
-    if (i <= -1)
-      this.a.splice(~i, 0, [key, value]);
-    else
-      this.a[i] = [key, value];
-    return i <= -1;
-  }
-  has(key: K): boolean { 
-    return this.indexOf(key, -1) >= 0;
-  }
-  delete(key: K): boolean {
-    var i = this.indexOf(key, -1);
-    if (i > -1)
-      this.a.splice(i, 1);
-    return i > -1;
-  }
-  clear() { this.a = []; }
-  toArray() { return this.a; }
-  minKey(): K | undefined { return this.a[0][0]; }
-  maxKey(): K | undefined { return this.a[this.a.length-1][0]; }
-  forEach(callbackFn: (v:V, k:K) => void) {
-    this.a.forEach(pair => callbackFn(pair[1], pair[0]));
-  }
-
-  // a.values() used to implement IMap<K,V> but it's not actually available in Node v10.4
-  [Symbol.iterator](): IterableIterator<[K,V]> { return this.a.values(); }
-  entries(): IterableIterator<[K,V]> { return this.a.values(); }
-  keys():    IterableIterator<K> { return this.a.map(pair => pair[0]).values(); }
-  values():  IterableIterator<V> { return this.a.map(pair => pair[1]).values(); }
-
-  indexOf(key: K, failXor: number): number {
-    var lo = 0, hi = this.a.length, mid = hi >> 1;
-    while(lo < hi) {
-      var c = this.cmp(this.a[mid][0], key);
-      if (c < 0)
-        lo = mid + 1;
-      else if (c > 0) // keys[mid] > key
-        hi = mid;
-      else if (c === 0)
-        return mid;
-      else
-        throw new Error("Problem: compare failed");
-      mid = (lo + hi) >> 1;
-    }
-    return mid ^ failXor;
-  }
-}
-
 var rand: any = new MersenneTwister(1234);
 function randInt(max: number) { return rand.random_int() % max; }
-function expectTreeEqualTo(a: BTree, b: SortedList) {
+function expectTreeEqualTo(a: BTree, b: SortedArray) {
   a.checkValid();
-  expect(a.toArray()).toEqual(b.toArray());
+  expect(a.toArray()).toEqual(b.getArray());
 }
 function addToBoth<K,V>(a: IMap<K,V>, b: IMap<K,V>, k: K, v: V) {
   expect(a.set(k,v)).toEqual(b.set(k,v));
@@ -88,19 +21,19 @@ describe('Simple tests on leaf nodes', () =>
   function insert8(maxNodeSize: number) {
     var items: [number,any][] = [[6,"six"],[7,7],[5,5],[2,"two"],[4,4],[1,"one"],[3,3],[8,8]];
     var tree = new BTree<number>(items, undefined, maxNodeSize);
-    var list = new SortedList(items, undefined);
+    var list = new SortedArray(items, undefined);
     tree.checkValid();
     expect(tree.keysArray()).toEqual([1,2,3,4,5,6,7,8]);
     expectTreeEqualTo(tree, list);
   }
 
+  function forExpector(k:number, v:string, counter:number, i:number, first: number = 0) {
+    expect(k).toEqual(v.length);
+    expect(k - first).toEqual(counter);
+    expect(k - first).toEqual(i);
+  }
   {
     let tree = new BTree<number,string>([[0,""],[1,"1"],[2,"to"],[3,"tri"],[4,"four"],[5,"five!"]]);
-    function forExpector(k:number, v:string, counter:number, i:number, first: number = 0) {
-      expect(k).toEqual(v.length);
-      expect(k - first).toEqual(counter);
-      expect(k - first).toEqual(i);
-    }
     test('forEach', () => {
       let i = 0;
       expect(tree.forEach(function(v,k,tree_) {
@@ -185,7 +118,7 @@ describe('Simple tests on leaf nodes', () =>
       expect(tree.delete("H")).toBe(false);
       expect(tree.deleteRange(" ","A",false)).toBe(0);
       expect(tree.deleteRange(" ","A",true)).toBe(1);
-      expectTreeEqualTo(tree, new SortedList([["B",2],["D",4],["E",5],["F",6],["G",7]]));
+      expectTreeEqualTo(tree, new SortedArray([["B",2],["D",4],["E",5],["F",6],["G",7]]));
     });
     test('editRange() - again', () => {
       expect(tree.editRange(tree.minKey(), "F", true, (k,v,counter) => {
@@ -196,15 +129,15 @@ describe('Simple tests on leaf nodes', () =>
         if (k >= "F")
           return {stop: counter+1};
       })).toBe(4);
-      expectTreeEqualTo(tree, new SortedList([["B",2],["D",44],["F",6],["G",7]]));
+      expectTreeEqualTo(tree, new SortedArray([["B",2],["D",44],["F",6],["G",7]]));
     });
     test("A clone is independent", () => {
       var tree2 = tree.clone();
       expect(tree.delete("G")).toBe(true);
       expect(tree2.deleteRange("A", "F", false)).toBe(2);
       expect(tree2.deleteRange("A", "F", true)).toBe(1);
-      expectTreeEqualTo(tree, new SortedList([["B",2],["D",44],["F",6]]));
-      expectTreeEqualTo(tree2, new SortedList([["G",7]]));
+      expectTreeEqualTo(tree, new SortedArray([["B",2],["D",44],["F",6]]));
+      expectTreeEqualTo(tree2, new SortedArray([["G",7]]));
     });
   }
 
@@ -267,7 +200,7 @@ function testBTree(maxNodeSize: number)
 {
   for (let size of [8, 64, 512]) {
     let tree = new BTree<number,number>(undefined, undefined, maxNodeSize);
-    let list = new SortedList<number,number>();
+    let list = new SortedArray<number,number>();
     test(`Insert randomly & toArray [size ${size}]`, () => {
       while (tree.size < size) {
         var key = randInt(size * 2);
@@ -278,9 +211,9 @@ function testBTree(maxNodeSize: number)
     });
 
     test(`Iteration [size ${size}]`, () => {
-      expect(tree.size).toBe(size, "Wrong tree size (previous test failed?)");
+      expect(tree.size).toBe(size);
       var it = tree.entries();
-      var array = list.toArray(), i = 0;
+      var array = list.getArray(), i = 0;
       for (let next = it.next(); !next.done; next = it.next(), i++) {
         expect(next.value).toEqual(array[i]);
       }
@@ -288,9 +221,9 @@ function testBTree(maxNodeSize: number)
     });
 
     test(`Reverse iteration [size ${size}]`, () => {
-      expect(tree.size).toBe(size, "Wrong tree size (previous test failed?)");
+      expect(tree.size).toBe(size);
       var it = tree.entriesReversed();
-      var array = list.toArray(), i = array.length-1;
+      var array = list.getArray(), i = array.length-1;
       for (let next = it.next(); !next.done; next = it.next(), i--) {
         expect(next.value).toEqual(array[i]);
       }
@@ -298,13 +231,13 @@ function testBTree(maxNodeSize: number)
     });
 
     test(`Insert with few values [size ${size}]`, () => {
-      let list = new SortedList<number,string|undefined>();
+      let list = new SortedArray<number,string|undefined>();
       for (var i = 0; i < size; i++) {
         var key = randInt(size * 2);
         // Use a value only occasionally to stress out the no-values optimization
         list.set(key, key % 10 == 0 ? key.toString() : undefined);
       }
-      let tree = new BTree<number,string|undefined>(list.toArray(), undefined, maxNodeSize);
+      let tree = new BTree<number,string|undefined>(list.getArray(), undefined, maxNodeSize);
       expectTreeEqualTo(tree, list);
     });
   }
@@ -315,18 +248,18 @@ function testBTree(maxNodeSize: number)
       var reverseComparator = (a:number, b:number) => b - a;
 
       // Prepare reference list
-      var list = new SortedList<number,string>([], reverseComparator);
+      var list = new SortedArray<number,string>([], reverseComparator);
       for (var i = size-1; i >= 0; i--)
         list.set(i, i.toString());
   
       // Add all to tree in the "wrong" order (ascending)
       var tree = new BTree<number,string>(undefined, reverseComparator, maxNodeSize);
-      tree.setRange(list.toArray().slice(0).reverse());
+      tree.setRange(list.getArray().slice(0).reverse());
       expectTreeEqualTo(tree, list);
 
       // Remove most of the items
       expect(tree.deleteRange(size-2, 5, true)).toEqual(size-6);
-      expectTreeEqualTo(tree, new SortedList<number,string>([
+      expectTreeEqualTo(tree, new SortedArray<number,string>([
         [size-1, (size-1).toString()], [4,"4"], [3,"3"], [2,"2"], [1,"1"], [0,"0"]
       ], reverseComparator));
       expect(tree.deleteRange(size, 0, true)).toEqual(6);
@@ -338,7 +271,7 @@ function testBTree(maxNodeSize: number)
     // Ensure standard operations work for various list sizes
     test(`Various operations [starting size ${size}]`, () => {
       var tree = new BTree<number,number|undefined>(undefined, undefined, maxNodeSize);
-      var list = new SortedList<number,number|undefined>();
+      var list = new SortedArray<number,number|undefined>();
     
       var i = 0, key;
       for (var i = 0; tree.size < size; i++) {
@@ -357,9 +290,9 @@ function testBTree(maxNodeSize: number)
       expect(tree.get(0.5, 12345)).toBe(12345);
 
       // Try all the iterators...
-      expect(Array.from(tree.entries())).toEqual(list.toArray());
-      expect(Array.from(tree.keys())).toEqual(list.toArray().map(p => p[0]));
-      expect(Array.from(tree.values())).toEqual(list.toArray().map(p => p[1]));
+      expect(Array.from(tree.entries())).toEqual(list.getArray());
+      expect(Array.from(tree.keys())).toEqual(list.getArray().map(p => p[0]));
+      expect(Array.from(tree.values())).toEqual(list.getArray().map(p => p[1]));
       
       // Try iterating from past the end...
       expect(Array.from(tree.entries(tree.maxKey()!+1))).toEqual([]);
