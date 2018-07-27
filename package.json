@@ -1,6 +1,6 @@
 {
   "name": "sorted-btree",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "A sorted list of key-value pairs in a fast, typed in-memory B+ tree with a powerful API.",
   "main": "b+tree.js",
   "scripts": {
@@ -42,11 +42,11 @@
   },
   "homepage": "https://github.com/qwertie/btree-typescript#readme",
   "devDependencies": {
+    "@types/bintrees": "^1.0.2",
     "@types/collections": "^5.0.0",
     "@types/jasmine": "^2.8.8",
     "@types/mersenne-twister": "^1.1.2",
     "@types/node": "^10.5.3",
-    "@types/bintrees": "^1.0.2",
     "babel-core": "^6.26.3",
     "bintrees": "^1.0.2",
     "collections": "^5.1.5",
@@ -55,6 +55,7 @@
     "mersenne-twister": "^1.1.0",
     "testpack-cli": "^1.1.2",
     "ts-jest": "^22.4.6",
+    "ts-node": "^7.0.0",
     "typescript": "^2.9.2",
     "uglifyjs": "^2.4.11"
   },

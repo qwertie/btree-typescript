@@ -99,6 +99,99 @@ for (let size of [1000, 10000, 100000, 1000000]) {
 }
 
 console.log();
+console.log("### Insert in order, delete: sorted-btree vs the competition ###");
+
+for (let size of [1000, 10000, 100000, 1000000]) {
+  console.log();
+  var keys = makeArray(size, false), i;
+
+  let btree = measure(tree => `Insert ${tree.size} sorted pairs in B+ tree`, () => {
+    let tree = new BTree();
+    for (let k of keys)
+      tree.set(k, k * 10);
+    return tree;
+  });
+  let btreeSet = measure(tree => `Insert ${tree.size} sorted keys in B+ tree (no values)`, () => {
+    let tree = new BTree();
+    for (let k of keys)
+      tree.set(k, undefined);
+    return tree;
+  });
+  // Another tree for the bulk-delete test
+  let btreeSet2 = new BTree();
+  for (let k of keys)
+    btreeSet2.set(k, undefined);
+
+  let sMap = measure(map => `Insert ${map.length} sorted pairs in collections' SortedMap`, () => {
+    let map = new SortedMap();
+    for (let k of keys)
+      map.set(k, k * 10);
+    return map;
+  });
+  let sSet = measure(set => `Insert ${set.length} sorted keys in collections' SortedSet (no values)`, () => {
+    let set = new SortedSet();
+    for (let k of keys)
+      set.push(k);
+    return set;
+  });
+  let fTree = measure(map => `Insert ${map.length} sorted pairs in functional-red-black-tree`, () => {
+    let map = functionalTree();
+    for (let k of keys)
+      map = map.insert(k, k * 10);
+    return map;
+  });
+  let rbTree = measure(set => `Insert ${set.size} sorted keys in bintrees' RBTree (no values)`, () => {
+    let set = new RBTree((a: any, b: any) => a - b);
+    for (let k of keys)
+      set.insert(k);
+    return set;
+  });
+  //let binTree = measure(set => `Insert ${set.size} sorted keys in bintrees' BinTree (no values)`, () => {
+  //  let set = new BinTree((a: any, b: any) => a - b);
+  //  for (let k of keys)
+  //    set.insert(k);
+  //  return set;
+  //});
+
+  // Bug fix: can't use measure() for deletions because the 
+  //          trees aren't the same on the second iteration
+  var log = console.log;
+  var timer = new Timer();
+  
+  for (i = 0; i < keys.length; i += 2)
+    btree.delete(keys[i]);
+  log(`${timer.restart()}\tDelete every second item in B+ tree`);
+
+  for (i = 0; i < keys.length; i += 2)
+    btreeSet.delete(keys[i]);
+  log(`${timer.restart()}\tDelete every second item in B+ tree set`);
+
+  var left = 0; // sanity check, I got 0 milliseconds on the first try
+  btreeSet2.editRange(btreeSet2.minKey(), btreeSet2.maxKey(), true, (k,v,i) => {
+    if ((i & 1) === 0) return {delete:true};
+    left++;
+  });
+  log(`${timer.restart()}\tBulk-delete every second item in B+ tree set`);
+  if (left !== btreeSet2.size) console.log("Unexpected count: "+left);
+
+  for (i = 0; i < keys.length; i += 2)
+    sMap.delete(keys[i]);
+  log(`${timer.restart()}\tDelete every second item in collections' SortedMap`);
+
+  for (i = 0; i < keys.length; i += 2)
+    sSet.delete(keys[i]);
+  log(`${timer.restart()}\tDelete every second item in collections' SortedSet`);
+
+  for (i = 0; i < keys.length; i += 2)
+    fTree = fTree.remove(keys[i]);
+  log(`${timer.restart()}\tDelete every second item in functional-red-black-tree`);
+
+  for (i = 0; i < keys.length; i += 2)
+    rbTree.remove(keys[i]);
+  log(`${timer.restart()}\tDelete every second item in bintrees' RBTree`);
+}
+
+console.log();
 console.log("### Insertions at random locations: sorted-btree vs Array vs Map ###");
 
 for (let size of [9999, 1000, 10000, 100000, 1000000]) {
@@ -134,87 +227,7 @@ for (let size of [9999, 1000, 10000, 100000, 1000000]) {
 }
 
 console.log();
-console.log("### Insert in order, delete: sorted-btree vs the competition ###");
-
-for (let size of [1000, 10000, 100000, 1000000]) {
-  console.log();
-  var keys = makeArray(size, false), i;
-
-  let btree = measure(tree => `Insert ${tree.size} sorted pairs in B+ tree`, () => {
-    let tree = new BTree();
-    for (let k of keys)
-      tree.set(k, k * 10);
-    return tree;
-  });
-  let btreeSet = measure(tree => `Insert ${tree.size} sorted keys in B+ tree (no values)`, () => {
-    let tree = new BTree();
-    for (let k of keys)
-      tree.set(k, k * 10);
-    return tree;
-  });
-  let sMap = measure(map => `Insert ${map.length} sorted pairs in collections' SortedMap`, () => {
-    let map = new SortedMap();
-    for (let k of keys)
-      map.set(k, k * 10);
-    return map;
-  });
-  let sSet = measure(set => `Insert ${set.length} sorted keys in collections' SortedSet (no values)`, () => {
-    let set = new SortedSet();
-    for (let k of keys)
-      set.push(k);
-    return set;
-  });
-  let fTree = measure(set => `Insert ${set.length} sorted pairs in functional-red-black-tree`, () => {
-    let set = functionalTree();
-    for (let k of keys)
-      set = set.insert(k, k * 10);
-    return set;
-  });
-  let rbTree = measure(set => `Insert ${set.size} sorted keys in bintrees' RBTree (no values)`, () => {
-    let set = new RBTree((a: any, b: any) => a - b);
-    for (let k of keys)
-      set.insert(k);
-    return set;
-  });
-  //let binTree = measure(set => `Insert ${set.size} sorted keys in bintrees' BinTree (no values)`, () => {
-  //  let set = new BinTree((a: any, b: any) => a - b);
-  //  for (let k of keys)
-  //    set.insert(k);
-  //  return set;
-  //});
-
-  measure(() => `Delete every second item in B+ tree`, () => {
-    for (i = 0; i < keys.length; i += 2)
-      btree.delete(keys[i]);
-  });
-  measure(() => `Delete every second item in B+ tree set`, () => {
-    for (i = 0; i < keys.length; i += 2)
-      btreeSet.delete(keys[i]);
-  });
-  measure(() => `Delete every second item in collections' SortedMap`, () => {
-    for (i = 0; i < keys.length; i += 2)
-      sMap.delete(keys[i]);
-  });
-  measure(() => `Delete every second item in collections' SortedSet`, () => {
-    for (i = 0; i < keys.length; i += 2)
-      sSet.delete(keys[i]);
-  });
-  measure(() => `Delete every second item in functional-red-black-tree`, () => {
-    for (i = 0; i < keys.length; i += 2)
-      fTree = fTree.remove(keys[i]);
-  });
-  measure(() => `Delete every second item in bintrees' RBTree`, () => {
-    for (i = 0; i < keys.length; i += 2)
-      rbTree.remove(keys[i]);
-  });
-  //measure(() => `Delete every second item in bintrees' BinTree`, () => {
-  //  for (i = 0; i < keys.length; i += 2)
-  //    binTree.remove(keys[i]);
-  //});
-}
-
-console.log();
-console.log("### Insert in order, scan, delete: sorted-btree vs the competition ###");
+console.log("### Insert in order, scan, delete: sorted-btree vs Array vs Map ###");
 
 for (let size of [1000, 10000, 100000, 1000000]) {
   console.log();
@@ -282,7 +295,7 @@ for (let size of [1000, 10000, 100000, 1000000]) {
 }
 
 console.log();
-console.log("### Test #4: measure effect of max node size ###");
+console.log("### Measure effect of max node size ###");
 {
   console.log();
   var keys = makeArray(100000, true);
