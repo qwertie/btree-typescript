@@ -37,6 +37,11 @@ export interface IMapSink<K = any, V = any> {
  *  interface shared by both. */
 export interface IMap<K = any, V = any> extends IMapSource<K, V>, IMapSink<K, V> {
 }
+/** Compares two numbers, strings, arrays of numbers/strings, Dates,
+ *  or objects that have a valueOf() method returning a number or string.
+ *  Optimized for numbers. Returns 1 if a>b, -1 if a<b, and 0 if a===b.
+ */
+export declare function defaultComparator(a: any, b: any): number;
 /**
  * A reasonably fast collection of key-value pairs with a powerful API.
  * Largely compatible with the standard Map. BTree is a B+ tree data structure,

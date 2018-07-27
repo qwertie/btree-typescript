@@ -40,6 +40,23 @@ var __spread = (this && this.__spread) || function () {
 })(function (require, exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
+    /** Compares two numbers, strings, arrays of numbers/strings, Dates,
+     *  or objects that have a valueOf() method returning a number or string.
+     *  Optimized for numbers. Returns 1 if a>b, -1 if a<b, and 0 if a===b.
+     */
+    function defaultComparator(a, b) {
+        var c = a - b;
+        if (c === c)
+            return c; // a & b are number
+        // General case (c is NaN): string / arrays / Date / incomparable things
+        if (a)
+            a = a.valueOf();
+        if (b)
+            b = b.valueOf();
+        return a < b ? -1 : a > b ? 1 : a == b ? 0 : c;
+    }
+    exports.defaultComparator = defaultComparator;
+    ;
     /**
      * A reasonably fast collection of key-value pairs with a powerful API.
      * Largely compatible with the standard Map. BTree is a B+ tree data structure,
@@ -117,17 +134,7 @@ var __spread = (this && this.__spread) || function () {
             this._root = EmptyLeaf;
             this._size = 0;
             this._maxNodeSize = maxNodeSize >= 4 ? Math.min(maxNodeSize, 256) : 32;
-            this._compare = compare || function cmp(a, b) {
-                var c = a - b;
-                if (c === c)
-                    return c; // a & b are number
-                // General case (c is NaN): string / arrays / Date / incomparable things
-                if (a)
-                    a = a.valueOf();
-                if (b)
-                    b = b.valueOf();
-                return a < b ? -1 : a > b ? 1 : a == b ? 0 : c;
-            };
+            this._compare = compare || defaultComparator;
             if (entries)
                 this.setRange(entries);
         }

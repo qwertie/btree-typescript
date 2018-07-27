@@ -1,7 +1,7 @@
 {
   "name": "sorted-btree",
-  "version": "1.0.2",
-  "description": "A list of key-value pairs kept sorted in a fast in-memory B+ tree with a powerful API, similar to Map.",
+  "version": "1.0.5",
+  "description": "A sorted list of key-value pairs in a fast, typed in-memory B+ tree with a powerful API.",
   "main": "b+tree.js",
   "scripts": {
     "test": "tsc && jest",
@@ -14,6 +14,8 @@
     "b+tree.js",
     "b+tree.d.ts",
     "b+tree.min.js",
+    "sorted-array.js",
+    "sorted-array.d.ts",
     "readme.md"
   ],
   "repository": {
@@ -25,11 +27,12 @@
     "tree",
     "btree",
     "sorted",
+    "set",
     "map",
+    "list",
     "collection",
     "fast-cloning",
     "copy-on-write",
-    "lazy-copying",
     "optimized"
   ],
   "author": "David Piepgrass",
@@ -39,9 +42,15 @@
   },
   "homepage": "https://github.com/qwertie/btree-typescript#readme",
   "devDependencies": {
+    "@types/collections": "^5.0.0",
     "@types/jasmine": "^2.8.8",
     "@types/mersenne-twister": "^1.1.2",
+    "@types/node": "^10.5.3",
+    "@types/bintrees": "^1.0.2",
     "babel-core": "^6.26.3",
+    "bintrees": "^1.0.2",
+    "collections": "^5.1.5",
+    "functional-red-black-tree": "^1.0.1",
     "jest": "^23.4.1",
     "mersenne-twister": "^1.1.0",
     "testpack-cli": "^1.1.2",

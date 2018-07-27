@@ -64,6 +64,19 @@ export interface IMapSink<K=any, V=any>
  *  interface shared by both. */
 export interface IMap<K=any, V=any> extends IMapSource<K, V>, IMapSink<K, V> { }
 
+/** Compares two numbers, strings, arrays of numbers/strings, Dates,
+ *  or objects that have a valueOf() method returning a number or string. 
+ *  Optimized for numbers. Returns 1 if a>b, -1 if a<b, and 0 if a===b.
+ */
+export function defaultComparator(a: any, b: any) {
+  var c = a - b;
+  if (c === c) return c; // a & b are number
+  // General case (c is NaN): string / arrays / Date / incomparable things
+  if (a) a = a.valueOf();
+  if (b) b = b.valueOf();
+  return a < b ? -1 : a > b ? 1 : a == b ? 0 : c;   
+};
+
 /**
  * A reasonably fast collection of key-value pairs with a powerful API. 
  * Largely compatible with the standard Map. BTree is a B+ tree data structure,
@@ -134,7 +147,7 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
   _size: number = 0;
   _maxNodeSize: number;
   _compare: (a:K, b:K) => number;
-    
+  
   /**
    * Initializes an empty B+ tree.
    * @param compare Custom function to compare pairs of elements in the tree.
@@ -145,14 +158,7 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
    */
   public constructor(entries?: [K,V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) {
     this._maxNodeSize = maxNodeSize! >= 4 ? Math.min(maxNodeSize!, 256) : 32;
-    this._compare = compare || function cmp(a: any, b: any) {
-      var c = a - b;
-      if (c === c) return c; // a & b are number
-      // General case (c is NaN): string / arrays / Date / incomparable things
-      if (a) a = a.valueOf();
-      if (b) b = b.valueOf();
-      return a < b ? -1 : a > b ? 1 : a == b ? 0 : c;   
-    };
+    this._compare = compare || defaultComparator;
     if (entries)
       this.setRange(entries);
   }
