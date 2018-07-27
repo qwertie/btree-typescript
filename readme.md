@@ -263,3 +263,5 @@ Endnote
 
 Are you a C# developer? You might like the similar data structures I made for C#: 
 BDictionary, BList, etc. See http://core.loyc.net/collections/
+
+You might think that the package name "sorted btree" is overly redundant, but I _did_ make a data structure similar to B+ Tree that is _not_ sorted. I called it the [A-List](http://core.loyc.net/collections/alists-part1) (C#). But yeah, the names `btree` and `bplustree` were already taken, so what was I supposed to do, right?

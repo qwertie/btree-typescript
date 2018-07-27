@@ -690,7 +690,7 @@ class BNode<K,V> {
   // Callers that don't care whether there was a match will set failXor=0.
   indexOf(key: K, failXor: number, cmp: (a:K, b:K) => number): index {
     // TODO: benchmark multiple search strategies
-    var keys = this.keys;
+    const keys = this.keys;
     var lo = 0, hi = keys.length, mid = hi >> 1;
     while(lo < hi) {
       var c = cmp(keys[mid], key);
@@ -711,26 +711,50 @@ class BNode<K,V> {
     }
     return mid ^ failXor;
 
-    /*var i = 1;
+    // Unrolled version: benchmarks show same speed, not worth using
+    /*var i = 1, c: number = 0, sum = 0;
     if (keys.length >= 4) {
-      i = 7;
-      if (keys.length >= 16) {
-        i = 31;
-        if (keys.length >= 64) {
-          i = 127;
-          i += i < keys.length && cmp(keys[i], key) < 0 ? 64 : -64;
-          i += i < keys.length && cmp(keys[i], key) < 0 ? 32 : -32;
+      i = 3;
+      if (keys.length >= 8) {
+        i = 7;
+        if (keys.length >= 16) {
+          i = 15;
+          if (keys.length >= 32) {
+            i = 31;
+            if (keys.length >= 64) {
+              i = 127;
+              i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 64 : -64;
+              sum += c;
+              i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 32 : -32;
+              sum += c;
+            }
+            i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 16 : -16;
+            sum += c;
+          }
+          i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 8 : -8;
+          sum += c;
         }
-        i += i < keys.length && cmp(keys[i], key) < 0 ? 16 : -16;
-        i += i < keys.length && cmp(keys[i], key) < 0 ? 8 : -8;
+        i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 4 : -4;
+        sum += c;
       }
-      i += i < keys.length && cmp(keys[i], key) < 0 ? 4 : -4;
-      i += i < keys.length && cmp(keys[i], key) < 0 ? 2 : -2;
+      i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 2 : -2;
+      sum += c;
     }
-    i += (i < keys.length && cmp(keys[i], key) < 0 ? 1 : -1);
-    if (i < keys.length && cmp(keys[i], key) < 0)
+    i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 1 : -1;
+    c = i < keys.length ? cmp(keys[i], key) : 1;
+    sum += c;
+    if (c < 0) {
       ++i;
-    return i;*/
+      c = i < keys.length ? cmp(keys[i], key) : 1;
+      sum += c;
+    }
+    if (sum !== sum) {
+      if (key === key) // at least the search key is not NaN
+        return keys.length ^ failXor;
+      else
+        throw new Error("BTree: NaN was used as a key");
+    }
+    return c === 0 ? i : i ^ failXor;*/
   }
 
   // Leaf Node: misc //////////////////////////////////////////////////////////
