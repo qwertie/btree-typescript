@@ -1093,13 +1093,13 @@ class BNode<K,V> {
 
   /** Adds entire contents of right-hand sibling (rhs is left unchanged) */
   mergeSibling(rhs: BNode<K,V>, _: number) {
-    this.keys.push(... rhs.keys);
+    this.keys.push.apply(this.keys, rhs.keys);
     if (this.values === undefVals) {
       if (rhs.values === undefVals)
         return;
       this.values = this.values.slice(0, this.keys.length);
     }
-    this.values.push(... rhs.reifyValues());
+    this.values.push.apply(this.values, rhs.reifyValues());
   }
 }
 
@@ -1309,8 +1309,8 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   mergeSibling(rhs: BNode<K,V>, maxNodeSize: number) {
     // assert !this.isShared;
     var oldLength = this.keys.length;
-    this.keys.push(... rhs.keys);
-    this.children.push(... (rhs as any as BNodeInternal<K,V>).children);
+    this.keys.push.apply(this.keys, rhs.keys);
+    this.children.push.apply(this.children, (rhs as any as BNodeInternal<K,V>).children);
     // If our children are themselves almost empty due to a mass-delete,
     // they may need to be merged too (but only the oldLength-1 and its
     // right sibling should need this).

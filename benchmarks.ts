@@ -34,7 +34,7 @@ function makeArray(size: number, randomOrder: boolean, spacing = 10) {
   return keys;
 }
 
-function measure<T=void>(message: (t:T) => string, callback: () => T, minMillisec: number = 500, log = console.log) {
+function measure<T=void>(message: (t:T) => string, callback: () => T, minMillisec: number = 600, log = console.log) {
   var timer = new Timer(), counter = 0, ms;
   do {
     var result = callback();
@@ -102,8 +102,9 @@ for (let size of [1000, 10000, 100000, 1000000]) {
 console.log();
 console.log("### Insert in order, delete: sorted-btree vs the competition ###");
 
-for (let size of [1000, 10000, 100000, 1000000]) {
-  console.log();
+for (let size of [9999, 1000, 10000, 100000, 1000000]) {
+  var log = (size === 9999 ? () => {} : console.log);
+  log();
   var keys = makeArray(size, false), i;
 
   let btree = measure(tree => `Insert ${tree.size} sorted pairs in B+ tree`, () => {
@@ -111,42 +112,40 @@ for (let size of [1000, 10000, 100000, 1000000]) {
     for (let k of keys)
       tree.set(k, k * 10);
     return tree;
-  });
-  let btreeSet = measure(tree => `Insert ${tree.size} sorted keys in B+ tree (no values)`, () => {
+  }, 600, log);
+  let btreeSet = measure(tree => `Insert ${tree.size} sorted keys in B+ tree set (no values)`, () => {
     let tree = new BTree();
     for (let k of keys)
       tree.set(k, undefined);
     return tree;
-  });
+  }, 600, log);
   // Another tree for the bulk-delete test
-  let btreeSet2 = new BTree();
-  for (let k of keys)
-    btreeSet2.set(k, undefined);
+  let btreeSet2 = btreeSet.greedyClone();
 
   let sMap = measure(map => `Insert ${map.length} sorted pairs in collections' SortedMap`, () => {
     let map = new SortedMap();
     for (let k of keys)
       map.set(k, k * 10);
     return map;
-  });
+  }, 600, log);
   let sSet = measure(set => `Insert ${set.length} sorted keys in collections' SortedSet (no values)`, () => {
     let set = new SortedSet();
     for (let k of keys)
       set.push(k);
     return set;
-  });
+  }, 600, log);
   let fTree = measure(map => `Insert ${map.length} sorted pairs in functional-red-black-tree`, () => {
     let map = functionalTree();
     for (let k of keys)
       map = map.insert(k, k * 10);
     return map;
-  });
+  }, 600, log);
   let rbTree = measure(set => `Insert ${set.size} sorted keys in bintrees' RBTree (no values)`, () => {
     let set = new RBTree((a: any, b: any) => a - b);
     for (let k of keys)
       set.insert(k);
     return set;
-  });
+  }, 600, log);
   //let binTree = measure(set => `Insert ${set.size} sorted keys in bintrees' BinTree (no values)`, () => {
   //  let set = new BinTree((a: any, b: any) => a - b);
   //  for (let k of keys)
@@ -156,7 +155,6 @@ for (let size of [1000, 10000, 100000, 1000000]) {
 
   // Bug fix: can't use measure() for deletions because the 
   //          trees aren't the same on the second iteration
-  var log = console.log;
   var timer = new Timer();
   
   for (i = 0; i < keys.length; i += 2)
@@ -167,13 +165,10 @@ for (let size of [1000, 10000, 100000, 1000000]) {
     btreeSet.delete(keys[i]);
   log(`${timer.restart()}\tDelete every second item in B+ tree set`);
 
-  var left = 0; // sanity check, I got 0 milliseconds on the first try
   btreeSet2.editRange(btreeSet2.minKey(), btreeSet2.maxKey(), true, (k,v,i) => {
     if ((i & 1) === 0) return {delete:true};
-    left++;
   });
   log(`${timer.restart()}\tBulk-delete every second item in B+ tree set`);
-  if (left !== btreeSet2.size) console.log("Unexpected count: "+left);
 
   for (i = 0; i < keys.length; i += 2)
     sMap.delete(keys[i]);
@@ -207,7 +202,7 @@ for (let size of [9999, 1000, 10000, 100000, 1000000]) {
       for (let k of keys)
         list.set(k, k);
       return list;
-    }, 500, log);
+    }, 600, log);
   } else {
     log(`SLOW!\tInsert ${size} pairs in sorted array`);
   }
@@ -217,14 +212,14 @@ for (let size of [9999, 1000, 10000, 100000, 1000000]) {
     for (let k of keys)
       tree.set(k, k);
     return tree;
-  }, 500, log);
+  }, 600, log);
 
   measure(map => `Insert ${map.size} pairs in ES6 Map (hashtable)`, () => {
     let map = new Map();
     for (let k of keys)
       map.set(k, k);
     return map;
-  }, 500, log);
+  }, 600, log);
 }
 
 console.log();

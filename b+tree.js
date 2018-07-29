@@ -9,26 +9,6 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
-var __read = (this && this.__read) || function (o, n) {
-    var m = typeof Symbol === "function" && o[Symbol.iterator];
-    if (!m) return o;
-    var i = m.call(o), r, ar = [], e;
-    try {
-        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-    }
-    catch (error) { e = { error: error }; }
-    finally {
-        try {
-            if (r && !r.done && (m = i["return"])) m.call(i);
-        }
-        finally { if (e) throw e.error; }
-    }
-    return ar;
-};
-var __spread = (this && this.__spread) || function () {
-    for (var ar = [], i = 0; i < arguments.length; i++) ar = ar.concat(__read(arguments[i]));
-    return ar;
-};
 (function (factory) {
     if (typeof module === "object" && typeof module.exports === "object") {
         var v = factory(require, exports);
@@ -1008,14 +988,13 @@ var __spread = (this && this.__spread) || function () {
         };
         /** Adds entire contents of right-hand sibling (rhs is left unchanged) */
         BNode.prototype.mergeSibling = function (rhs, _) {
-            var _a, _b;
-            (_a = this.keys).push.apply(_a, __spread(rhs.keys));
+            this.keys.push.apply(this.keys, rhs.keys);
             if (this.values === undefVals) {
                 if (rhs.values === undefVals)
                     return;
                 this.values = this.values.slice(0, this.keys.length);
             }
-            (_b = this.values).push.apply(_b, __spread(rhs.reifyValues()));
+            this.values.push.apply(this.values, rhs.reifyValues());
         };
         return BNode;
     }());
@@ -1205,11 +1184,10 @@ var __spread = (this && this.__spread) || function () {
             return false;
         };
         BNodeInternal.prototype.mergeSibling = function (rhs, maxNodeSize) {
-            var _a, _b;
             // assert !this.isShared;
             var oldLength = this.keys.length;
-            (_a = this.keys).push.apply(_a, __spread(rhs.keys));
-            (_b = this.children).push.apply(_b, __spread(rhs.children));
+            this.keys.push.apply(this.keys, rhs.keys);
+            this.children.push.apply(this.children, rhs.children);
             // If our children are themselves almost empty due to a mass-delete,
             // they may need to be merged too (but only the oldLength-1 and its
             // right sibling should need this).
