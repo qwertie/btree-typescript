@@ -1,3 +1,4 @@
+#!/usr/bin/env ts-node
 import BTree, {IMap} from '.';
 import SortedArray from './sorted-array';
 // Note: The `bintrees` package also includes a `BinTree` type which turned
@@ -267,6 +268,13 @@ for (let size of [1000, 10000, 100000, 1000000]) {
   measure(sum => `Sum of all values with forEach in B+ tree: ${sum}`, () => {
     var sum = 0;
     tree.forEach(v => sum += v);
+    return sum;
+  });
+  measure(sum => `Sum of all values with iterator in B+ tree: ${sum}`, () => {
+    var sum = 0;
+    // entries() (instead of values()) with reused pair should be fastest
+    for (var p of tree.entries(undefined, []))
+      sum += p[1];
     return sum;
   });
   measure(sum => `Sum of all values with forEach in Map: ${sum}`, () => {
