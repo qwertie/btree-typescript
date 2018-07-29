@@ -122,7 +122,10 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
     constructor(entries?: [K, V][], compare?: (a: K, b: K) => number, maxNodeSize?: number);
     /** Gets the number of key-value pairs in the tree. */
     readonly size: number;
+    /** Gets the number of key-value pairs in the tree. */
     readonly length: number;
+    /** Returns true iff the tree contains no key-value pairs. */
+    readonly isEmpty: boolean;
     /** Releases the tree so that its size is 0. */
     clear(): void;
     /** Runs a function for each key-value pair, in order from smallest to
@@ -190,6 +193,53 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
      * @description Computational complexity: O(log size)
      */
     delete(key: K): boolean;
+    /** Returns a copy of the tree with the specified key-value pair set. */
+    with<V2>(key: K, value: V2): BTree<K, V | V2>;
+    /** Returns a copy of the tree with the specified key-value pair set. */
+    withPairs<V2>(pairs: [K, V | V2][], overwrite: boolean): BTree<K, V | V2>;
+    /** Returns a copy of the tree with the specified keys present.
+     *  @param keys The keys to add. If a key is already present in the tree,
+     *         neither the existing key nor the existing value is modified.
+     *  @param returnThisIfUnchanged if true, returns this if all keys already
+     *  existed. Performance note: due to the architecture of this class, all
+     *  node(s) leading to existing keys are cloned even if the collection is
+     *  ultimately unchanged.
+    */
+    withKeys(keys: K[], returnThisIfUnchanged?: boolean): BTree<K, V | undefined>;
+    /** Returns a copy of the tree with the specified key removed.
+     * @param returnThisIfUnchanged if true, returns this if the key didn't exist.
+     *  Performance note: due to the architecture of this class, node(s) leading
+     *  to where the key would have been stored are cloned even when the key
+     *  turns out not to exist and the collection is unchanged.
+     */
+    without(key: K, returnThisIfUnchanged?: boolean): BTree<K, V>;
+    /** Returns a copy of the tree with the specified keys removed.
+     * @param returnThisIfUnchanged if true, returns this if none of the keys
+     *  existed. Performance note: due to the architecture of this class,
+     *  node(s) leading to where the key would have been stored are cloned
+     *  even when the key turns out not to exist.
+     */
+    withoutKeys(keys: K[], returnThisIfUnchanged?: boolean): BTree<K, V>;
+    /** Returns a copy of the tree with the specified range of keys removed. */
+    withoutRange(low: K, high: K, includeHigh: boolean, returnThisIfUnchanged?: boolean): BTree<K, V>;
+    /** Returns a copy of the tree with pairs removed whenever the callback
+     *  function returns false. `where()` is a synonym for this method. */
+    filter(callback: (k: K, v: V, counter: number) => boolean, returnThisIfUnchanged?: boolean): BTree<K, V>;
+    /** Returns a copy of the tree with all values altered by a callback function. */
+    mapValues<R>(callback: (v: V, k: K, counter: number) => R): BTree<K, R>;
+    /** Performs a reduce operation like the `reduce` method of `Array`.
+     *  It is used to combine all pairs into a single value, or perform
+     *  conversions. `reduce` is best understood by example. For example,
+     *  `tree.reduce((P, pair) => P * pair[0], 1)` multiplies all keys
+     *  together. It means "start with P=1, and for each pair multiply
+     *  it by the key in pair[0]". Another example would be converting
+     *  the tree to a Map (in this example, note that M.set returns M):
+     *
+     *  var M = tree.reduce((M, pair) => M.set(pair[0],pair[1]), new Map())
+     *
+     *  **Note**: the same array is sent to the callback on every iteration.
+     */
+    reduce<R>(callback: (previous: R, currentPair: [K, V], counter: number) => R, initialValue: R): R;
     /** Returns an iterator that provides items in order (ascending order if
      *  the collection's comparator uses ascending order, as is the default.)
      *  @param lowestKey First key to be iterated, or undefined to start at
@@ -198,7 +248,7 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
      *  @param reusedArray Optional array used repeatedly to store key-value
      *         pairs, to avoid creating a new array on every iteration.
      */
-    entries(lowestKey?: K, reusedArray?: [K, V]): IterableIterator<[K, V]>;
+    entries(lowestKey?: K, reusedArray?: (K | V)[]): IterableIterator<[K, V]>;
     /** Returns an iterator that provides items in reversed order.
      *  @param highestKey Key at which to start iterating, or undefined to
      *         start at minKey(). If the specified key doesn't exist then iteration
@@ -208,7 +258,7 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
      *  @param skipHighest Iff this flag is true and the highestKey exists in the
      *         collection, the pair matching highestKey is skipped, not iterated.
      */
-    entriesReversed(highestKey?: K, reusedArray?: [K, V], skipHighest?: boolean): IterableIterator<[K, V]>;
+    entriesReversed(highestKey?: K, reusedArray?: (K | V)[], skipHighest?: boolean): IterableIterator<[K, V]>;
     protected findPath(key?: K): {
         nodequeue: BNode<K, V>[][];
         nodeindex: number[];
@@ -230,6 +280,12 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
      *  copies are cloned so that the changes do not affect other copies.
      *  This is known as copy-on-write behavior, or "lazy copying". */
     clone(): BTree<K, V>;
+    /** Performs a greedy clone, immediately duplicating any nodes that are
+     *  not currently marked as shared, in order to avoid marking any nodes
+     *  as shared.
+     *  @param force Clone all nodes, even shared ones.
+     */
+    greedyClone(force?: boolean): BTree<K, V>;
     /** Gets an array filled with the contents of the tree, sorted by key */
     toArray(maxLength?: number): [K, V][];
     /** Gets an array of all keys, sorted */
@@ -242,7 +298,14 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
      * @returns true if a new key was added
     */
     setIfNotPresent(key: K, value: V): boolean;
-    /** Returns the next key larger than the specified key */
+    /** Returns the next pair whose key is larger than the specified key (or undefined if there is none) */
+    nextHigherPair(key: K): [K, V] | undefined;
+    /** Returns the next key larger than the specified key (or undefined if there is none) */
+    nextHigherKey(key: K): K | undefined;
+    /** Returns the next pair whose key is larger than the specified key (or undefined if there is none) */
+    nextLowerPair(key: K): [K, V] | undefined;
+    /** Returns the next key larger than the specified key (or undefined if there is none) */
+    nextLowerKey(key: K): K | undefined;
     /** Edits the value associated with a key in the tree, if it already exists.
      * @returns true if the key existed, false if not.
     */
@@ -262,11 +325,14 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
     getRange(low: K, high: K, includeHigh?: boolean, maxLength?: number): [K, V][];
     /** Adds all pairs from a list of key-value pairs.
      * @param pairs Pairs to add to this tree. If there are duplicate keys,
-     * later pairs currently overwrite earlier ones (e.g. [[0,1],[0,7]]
-     * associates 0 with 7.)
+     *        later pairs currently overwrite earlier ones (e.g. [[0,1],[0,7]]
+     *        associates 0 with 7.)
+     * @param overwrite Whether to overwrite pairs that already exist (if false,
+     *        pairs[i] is ignored when the key pairs[i][0] already exists.)
+     * @returns The number of pairs added to the collection.
      * @description Computational complexity: O(pairs.length * log(size + pairs.length))
      */
-    setRange(pairs: [K, V][]): this;
+    setPairs(pairs: [K, V][], overwrite?: boolean): number;
     /**
      * Scans the specified range of keys, in ascending order by key.
      * Note: the callback `onFound` must not insert or remove items in the
@@ -317,6 +383,8 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
      *   where n is proportional to the amount of shared data scanned.
      */
     editRange<R = V>(low: K, high: K, includeHigh: boolean, onFound: (k: K, v: V, counter: number) => EditRangeResult<V, R> | void, initialCounter?: number): R | number;
+    /** Same as `editRange` except that the callback is called for all pairs. */
+    editAll<R = V>(onFound: (k: K, v: V, counter: number) => EditRangeResult<V, R> | void, initialCounter?: number): R | number;
     /**
      * Removes a range of key-value pairs from the B+ tree.
      * @param low The first key scanned will be greater than or equal to `low`.
@@ -326,6 +394,8 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
      * @description Computational complexity: O(log size + number of items deleted)
      */
     deleteRange(low: K, high: K, includeHigh: boolean): number;
+    /** Deletes a series of keys from the collection. */
+    deleteKeys(keys: K[]): number;
     /** Gets the height of the tree: the number of internal nodes between the
      *  BTree object and its leaf nodes (zero if there are no internal nodes). */
     readonly height: number;
@@ -356,6 +426,7 @@ declare class BNode<K, V> {
     indexOf(key: K, failXor: number, cmp: (a: K, b: K) => number): index;
     minKey(): K;
     clone(): BNode<K, V>;
+    greedyClone(force?: boolean): BNode<K, V>;
     get(key: K, defaultValue: V | undefined, tree: BTree<K, V>): V | undefined;
     checkValid(depth: number, tree: BTree<K, V>): number;
     set(key: K, value: V, overwrite: boolean | undefined, tree: BTree<K, V>): boolean | BNode<K, V>;
@@ -368,4 +439,6 @@ declare class BNode<K, V> {
     /** Adds entire contents of right-hand sibling (rhs is left unchanged) */
     mergeSibling(rhs: BNode<K, V>, _: number): void;
 }
+/** A BTree frozen in the empty state. */
+export declare const EmptyBTree: BTree<any, any>;
 export {};

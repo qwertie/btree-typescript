@@ -136,7 +136,7 @@ var __spread = (this && this.__spread) || function () {
             this._maxNodeSize = maxNodeSize >= 4 ? Math.min(maxNodeSize, 256) : 32;
             this._compare = compare || defaultComparator;
             if (entries)
-                this.setRange(entries);
+                this.setPairs(entries);
         }
         Object.defineProperty(BTree.prototype, "size", {
             // ES6 Map<K,V> methods ///////////////////////////////////////////////////
@@ -146,7 +146,14 @@ var __spread = (this && this.__spread) || function () {
             configurable: true
         });
         Object.defineProperty(BTree.prototype, "length", {
+            /** Gets the number of key-value pairs in the tree. */
             get: function () { return this._size; },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(BTree.prototype, "isEmpty", {
+            /** Returns true iff the tree contains no key-value pairs. */
+            get: function () { return this._size === 0; },
             enumerable: true,
             configurable: true
         });
@@ -238,6 +245,85 @@ var __spread = (this && this.__spread) || function () {
          */
         BTree.prototype.delete = function (key) {
             return this.editRange(key, key, true, DeleteRange) !== 0;
+        };
+        /** Returns a copy of the tree with the specified key set (the value is undefined). */
+        BTree.prototype.with = function (key, value, overwrite) {
+            var nu = this.clone();
+            return nu.set(key, value, overwrite) || overwrite ? nu : this;
+        };
+        /** Returns a copy of the tree with the specified key-value pair set. */
+        BTree.prototype.withPairs = function (pairs, overwrite) {
+            var nu = this.clone();
+            return nu.setPairs(pairs, overwrite) !== 0 || overwrite ? nu : this;
+        };
+        /** Returns a copy of the tree with the specified keys present.
+         *  @param keys The keys to add. If a key is already present in the tree,
+         *         neither the existing key nor the existing value is modified.
+         *  @param returnThisIfUnchanged if true, returns this if all keys already
+         *  existed. Performance note: due to the architecture of this class, all
+         *  node(s) leading to existing keys are cloned even if the collection is
+         *  ultimately unchanged.
+        */
+        BTree.prototype.withKeys = function (keys, returnThisIfUnchanged) {
+            var nu = this.clone(), changed = false;
+            for (var i = 0; i < keys.length; i++)
+                changed = nu.set(keys[i], undefined, false) || changed;
+            return returnThisIfUnchanged && !changed ? this : nu;
+        };
+        /** Returns a copy of the tree with the specified key removed.
+         * @param returnThisIfUnchanged if true, returns this if the key didn't exist.
+         *  Performance note: due to the architecture of this class, node(s) leading
+         *  to where the key would have been stored are cloned even when the key
+         *  turns out not to exist and the collection is unchanged.
+         */
+        BTree.prototype.without = function (key, returnThisIfUnchanged) {
+            return this.withoutRange(key, key, true, returnThisIfUnchanged);
+        };
+        /** Returns a copy of the tree with the specified keys removed.
+         * @param returnThisIfUnchanged if true, returns this if none of the keys
+         *  existed. Performance note: due to the architecture of this class,
+         *  node(s) leading to where the key would have been stored are cloned
+         *  even when the key turns out not to exist.
+         */
+        BTree.prototype.withoutKeys = function (keys, returnThisIfUnchanged) {
+            var nu = this.clone();
+            return nu.deleteKeys(keys) || !returnThisIfUnchanged ? nu : this;
+        };
+        /** Returns a copy of the tree with the specified range of keys removed. */
+        BTree.prototype.withoutRange = function (low, high, includeHigh, returnThisIfUnchanged) {
+            var nu = this.clone();
+            if (nu.deleteRange(low, high, includeHigh) === 0 && returnThisIfUnchanged)
+                return this;
+            return nu;
+        };
+        /** Returns a copy of the tree with pairs removed whenever the callback
+         *  function returns false. `where()` is a synonym for this method. */
+        BTree.prototype.filter = function (callback, returnThisIfUnchanged) {
+            var nu = this.greedyClone();
+            var del;
+            nu.editAll(function (k, v, i) {
+                if (!callback(k, v, i))
+                    return del = Delete;
+            });
+            if (!del && returnThisIfUnchanged)
+                return this;
+            return nu;
+        };
+        /** Returns a copy of the tree with all values altered by a callback function. */
+        BTree.prototype.mapValues = function (callback) {
+            var tmp = {};
+            var nu = this.greedyClone();
+            nu.editAll(function (k, v, i) {
+                return tmp.value = callback(v, k, i), tmp;
+            });
+            return nu;
+        };
+        BTree.prototype.reduce = function (callback, initialValue) {
+            var i = 0, p = initialValue;
+            var it = this.entries(this.minKey(), ReusedArray), next;
+            while (!(next = it.next()).done)
+                p = callback(p, next.value, i++, this);
+            return p;
         };
         // Iterator methods ///////////////////////////////////////////////////////
         /** Returns an iterator that provides items in order (ascending order if
@@ -423,6 +509,17 @@ var __spread = (this && this.__spread) || function () {
             result._size = this._size;
             return result;
         };
+        /** Performs a greedy clone, immediately duplicating any nodes that are
+         *  not currently marked as shared, in order to avoid marking any nodes
+         *  as shared.
+         *  @param force Clone all nodes, even shared ones.
+         */
+        BTree.prototype.greedyClone = function (force) {
+            var result = new BTree(undefined, this._compare, this._maxNodeSize);
+            result._root = this._root.greedyClone(force);
+            result._size = this._size;
+            return result;
+        };
         /** Gets an array filled with the contents of the tree, sorted by key */
         BTree.prototype.toArray = function (maxLength) {
             if (maxLength === void 0) { maxLength = 0x7FFFFFFF; }
@@ -453,12 +550,29 @@ var __spread = (this && this.__spread) || function () {
         BTree.prototype.setIfNotPresent = function (key, value) {
             return this.set(key, value, false);
         };
-        /** Returns the next key larger than the specified key */
-        /*nextHigherKey(key: K): K|undefined {
-          var it = this.entries(key, ReusedArray as [K,V]);
-          it.next(); // advance to current key
-          it.next();
-        }*/
+        /** Returns the next pair whose key is larger than the specified key (or undefined if there is none) */
+        BTree.prototype.nextHigherPair = function (key) {
+            var it = this.entries(key, ReusedArray);
+            var r = it.next();
+            if (!r.done && this._compare(r.value[0], key) <= 0)
+                r = it.next();
+            return r.value;
+        };
+        /** Returns the next key larger than the specified key (or undefined if there is none) */
+        BTree.prototype.nextHigherKey = function (key) {
+            var p = this.nextHigherPair(key);
+            return p ? p[0] : p;
+        };
+        /** Returns the next pair whose key is larger than the specified key (or undefined if there is none) */
+        BTree.prototype.nextLowerPair = function (key) {
+            var it = this.entriesReversed(key, ReusedArray, true);
+            return it.next().value;
+        };
+        /** Returns the next key larger than the specified key (or undefined if there is none) */
+        BTree.prototype.nextLowerKey = function (key) {
+            var p = this.nextLowerPair(key);
+            return p ? p[0] : p;
+        };
         /** Edits the value associated with a key in the tree, if it already exists.
          * @returns true if the key existed, false if not.
         */
@@ -488,14 +602,19 @@ var __spread = (this && this.__spread) || function () {
         };
         /** Adds all pairs from a list of key-value pairs.
          * @param pairs Pairs to add to this tree. If there are duplicate keys,
-         * later pairs currently overwrite earlier ones (e.g. [[0,1],[0,7]]
-         * associates 0 with 7.)
+         *        later pairs currently overwrite earlier ones (e.g. [[0,1],[0,7]]
+         *        associates 0 with 7.)
+         * @param overwrite Whether to overwrite pairs that already exist (if false,
+         *        pairs[i] is ignored when the key pairs[i][0] already exists.)
+         * @returns The number of pairs added to the collection.
          * @description Computational complexity: O(pairs.length * log(size + pairs.length))
          */
-        BTree.prototype.setRange = function (pairs) {
+        BTree.prototype.setPairs = function (pairs, overwrite) {
+            var added = 0;
             for (var i = 0; i < pairs.length; i++)
-                this.set(pairs[i][0], pairs[i][1]);
-            return this;
+                if (this.set(pairs[i][0], pairs[i][1], overwrite))
+                    added++;
+            return added;
         };
         /**
          * Scans the specified range of keys, in ascending order by key.
@@ -561,6 +680,10 @@ var __spread = (this && this.__spread) || function () {
                         root.children[0];
             }
         };
+        /** Same as `editRange` except that the callback is called for all pairs. */
+        BTree.prototype.editAll = function (onFound, initialCounter) {
+            return this.editRange(this.minKey(), this.maxKey(), true, onFound, initialCounter);
+        };
         /**
          * Removes a range of key-value pairs from the B+ tree.
          * @param low The first key scanned will be greater than or equal to `low`.
@@ -571,6 +694,13 @@ var __spread = (this && this.__spread) || function () {
          */
         BTree.prototype.deleteRange = function (low, high, includeHigh) {
             return this.editRange(low, high, includeHigh, DeleteRange);
+        };
+        /** Deletes a series of keys from the collection. */
+        BTree.prototype.deleteKeys = function (keys) {
+            for (var i = 0, r = 0; i < keys.length; i++)
+                if (this.delete(keys[i]))
+                    r++;
+            return r;
         };
         Object.defineProperty(BTree.prototype, "height", {
             /** Gets the height of the tree: the number of internal nodes between the
@@ -617,6 +747,8 @@ var __spread = (this && this.__spread) || function () {
     exports.default = BTree;
     if (Symbol && Symbol.iterator) // iterator is equivalent to entries()
         BTree.prototype[Symbol.iterator] = BTree.prototype.entries;
+    BTree.prototype.where = BTree.prototype.filter;
+    BTree.prototype.setRange = BTree.prototype.setPairs;
     function iterator(next) {
         if (next === void 0) { next = (function () { return ({ done: true, value: undefined }); }); }
         var result = { next: next };
@@ -665,26 +797,50 @@ var __spread = (this && this.__spread) || function () {
                 mid = (lo + hi) >> 1;
             }
             return mid ^ failXor;
-            /*var i = 1;
+            // Unrolled version: benchmarks show same speed, not worth using
+            /*var i = 1, c: number = 0, sum = 0;
             if (keys.length >= 4) {
-              i = 7;
-              if (keys.length >= 16) {
-                i = 31;
-                if (keys.length >= 64) {
-                  i = 127;
-                  i += i < keys.length && cmp(keys[i], key) < 0 ? 64 : -64;
-                  i += i < keys.length && cmp(keys[i], key) < 0 ? 32 : -32;
+              i = 3;
+              if (keys.length >= 8) {
+                i = 7;
+                if (keys.length >= 16) {
+                  i = 15;
+                  if (keys.length >= 32) {
+                    i = 31;
+                    if (keys.length >= 64) {
+                      i = 127;
+                      i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 64 : -64;
+                      sum += c;
+                      i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 32 : -32;
+                      sum += c;
+                    }
+                    i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 16 : -16;
+                    sum += c;
+                  }
+                  i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 8 : -8;
+                  sum += c;
                 }
-                i += i < keys.length && cmp(keys[i], key) < 0 ? 16 : -16;
-                i += i < keys.length && cmp(keys[i], key) < 0 ? 8 : -8;
+                i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 4 : -4;
+                sum += c;
               }
-              i += i < keys.length && cmp(keys[i], key) < 0 ? 4 : -4;
-              i += i < keys.length && cmp(keys[i], key) < 0 ? 2 : -2;
+              i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 2 : -2;
+              sum += c;
             }
-            i += (i < keys.length && cmp(keys[i], key) < 0 ? 1 : -1);
-            if (i < keys.length && cmp(keys[i], key) < 0)
+            i += (c = i < keys.length ? cmp(keys[i], key) : 1) < 0 ? 1 : -1;
+            c = i < keys.length ? cmp(keys[i], key) : 1;
+            sum += c;
+            if (c < 0) {
               ++i;
-            return i;*/
+              c = i < keys.length ? cmp(keys[i], key) : 1;
+              sum += c;
+            }
+            if (sum !== sum) {
+              if (key === key) // at least the search key is not NaN
+                return keys.length ^ failXor;
+              else
+                throw new Error("BTree: NaN was used as a key");
+            }
+            return c === 0 ? i : i ^ failXor;*/
         };
         // Leaf Node: misc //////////////////////////////////////////////////////////
         BNode.prototype.minKey = function () {
@@ -693,6 +849,9 @@ var __spread = (this && this.__spread) || function () {
         BNode.prototype.clone = function () {
             var v = this.values;
             return new BNode(this.keys.slice(0), v === undefVals ? v : v.slice(0));
+        };
+        BNode.prototype.greedyClone = function (force) {
+            return this.isShared && !force ? this : this.clone();
         };
         BNode.prototype.get = function (key, defaultValue, tree) {
             var i = this.indexOf(key, -1, tree._compare);
@@ -879,6 +1038,14 @@ var __spread = (this && this.__spread) || function () {
             for (var i = 0; i < children.length; i++)
                 children[i].isShared = true;
             return new BNodeInternal(children, this.keys.slice(0));
+        };
+        BNodeInternal.prototype.greedyClone = function (force) {
+            if (this.isShared && !force)
+                return this;
+            var nu = new BNodeInternal(this.children.slice(0), this.keys.slice(0));
+            for (var i = 0; i < nu.children.length; i++)
+                nu.children[i] = nu.children[i].greedyClone();
+            return nu;
         };
         BNodeInternal.prototype.minKey = function () {
             return this.children[0].minKey();
@@ -1078,4 +1245,6 @@ var __spread = (this && this.__spread) || function () {
             throw new Error(args.join(' '));
         }
     }
+    /** A BTree frozen in the empty state. */
+    exports.EmptyBTree = (function () { var t = new BTree(); t.freeze(); return t; })();
 });

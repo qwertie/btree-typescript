@@ -22,6 +22,11 @@ Features
 - Supports O(1) fast cloning with subtree sharing. This works by marking the
   root node as "shared between instances". This makes the tree read-only 
   with copy-on-edit behavior; both copies of the tree remain mutable.
+  I call this category of data structure "semi-persistent" because AFAIK no
+  one else has given it a name; it walks the line between mutating and 
+  [persistent](https://en.wikipedia.org/wiki/Persistent_data_structure).
+- Includes persistent methods such as `with` and `without`, which return a
+  modified tree without changing the original (in O(log(size)) time).
 - When a node fills up, items are shifted to siblings when possible to 
   keep nodes near their capacity, to improve memory utilization.
 - Efficiently supports sets (keys without values). The collection does
@@ -29,9 +34,9 @@ Features
   with all keys in a given node.
 - Includes neat stuff such as `Range` methods for batch operations
 - Throws an exception if you try to use `NaN` as a key, but infinity is allowed.
-- No dependencies. Under 14K minified.
+- No dependencies. 15.3K minified.
 
-Additional operations supported on this B+ tree:
+### Additional operations supported on this B+ tree ###
 
 - Set a value only if the key does not already exist: `t.setIfNotPresent(k,v)`
 - Set a value only if the key already exists: `t.changeIfPresent(k,v)`
@@ -41,9 +46,11 @@ Additional operations supported on this B+ tree:
 - Get pairs for a range of keys ([K,V][]): `t.getRange(loK, hiK, includeHi)`
 - Delete a range of keys and their values: `t.deleteRange(loK, hiK, includeHi)`
 - Scan all items: `t.forEachPair((key, value, index) => {...})`
-- Scan a range of items: `t.forRange(lowKey, highKey, includeHighFlag, (k,v) => {...})`
+- Scan a range of items: `t.forRange(lowKey, highKey, includeHiFlag, (k,v) => {...})`
 - Count the number of keys in a range: `c = t.forRange(loK, hiK, includeHi, undefined)`
 - Get smallest or largest key: `t.minKey()`, `t.maxKey()`
+- Get next larger key/pair than `k`: `t.nextHigherKey(k)`, `t.nextHigherPair(k)`
+- Get largest key/pair that is lower than `k`: `t.nextLowerKey(k)`, `t.nextLowerPair(k)`
 - Freeze to prevent modifications: `t.freeze()` (you can also `t.unfreeze()`)
 - Fast clone: `t.clone()`
 - For more information, **see [full documentation](https://github.com/qwertie/btree-typescript/blob/master/b%2Btree.ts) in the source code.**
@@ -53,6 +60,23 @@ Additional operations supported on this B+ tree:
 **Note:** Duplicate keys are not allowed (supporting duplicates properly is complex).
 
 The "scanning" methods (`forEach, forRange, editRange, deleteRange`) will normally return the number of elements that were scanned. However, the callback can return `{break:R}` to stop iterating early and return a value `R` from the scanning method.
+
+#### Functional methods
+
+- Get a copy of the tree including only items fitting a criteria: `t.filter((k,v) => k.fitsCriteria())`
+- Get a copy of the tree with all values modified: `t.mapValues((v,k) => v.toString())`
+- Reduce a tree (see below): `t.reduce((acc, pair) => acc+pair[1], 0)`
+
+#### Persistent methods
+
+- Get a new tree with one pair changed: `t.with(key, value)`
+- Get a new tree with multiple pairs changed: `t.withPairs([[k1,v1], [k2,v2]])`
+- Ensure that specified keys exist in a new tree: `t.withKeys([k1,k2])`
+- Get a new tree with one pair removed: `t.without(key)`
+- Get a new tree with specific pairs removed: `t.withoutKeys(keys)`
+- Get a new tree with a range of keys removed: `t.withoutRange(low, high, includeHi)`
+
+**Things to keep in mind:** I ran a test which suggested `t.with` is three times slower than `t.set`. These methods do not return a frozen tree even if the original tree was frozen (for performance reasons, e.g. frozen trees use slightly more memory.)
 
 Examples
 --------
@@ -80,6 +104,24 @@ Given a set of `{name: string, age: number}` objects, you can create a tree sort
   });
 ~~~
 
+### reduce ###
+
+The `reduce` method performs a reduction operation, like the `reduce` method of `Array`. It is used to combine all keys, values or pairs into a single value, or to perform type conversions conversions. `reduce` is best understood by example. So here's how you can multiply all the keys in a tree together:
+
+    var product = tree.reduce((p, pair) => p * pair[0], 1)
+
+It means "start with `p=1`, and for each pair change `p` to `p * pair[0]`" (`pair[0]` is the key). You may be thinking "hey, wouldn't it make more sense if the `1` argument came _first_?" Yes it would, but in `Array` the parameter is second, so it must also be second in `BTree` for consistency.
+
+Here's a similar example that adds all values together:
+
+    var total = tree.reduce((sum, pair) => sum + pair[1], 0)
+
+This final example converts the tree to a Map:
+
+    var map = tree.reduce((m, pair) => m.set(pair[0], pair[1]), new Map())`
+
+Remember that `m.set` returns `m`, which is different from `BTree` where `tree.set` returns a boolean indicating whether a new key was added.
+
 ### editRange ###
 
 You can scan a range of items and selectively delete or change some of them using `t.editRange`. For example, the following code adds an exclamation mark to each non-boring value and deletes key number 4:
@@ -97,10 +139,10 @@ t.editRange(t.minKey(), t.maxKey(), true, (k, v) => {
 Benchmarks (in milliseconds for integer keys/values)
 ----------------------------------------------------
 
-- These benchmark results were gathered on my PC in Node v10.4.1
+- These benchmark results were gathered on my PC in Node v10.4.1, July 2018
 - `BTree` is 3 to 5 times faster than `SortedMap` and `SortedSet` in the `collections` package
 - `BTree` has similar speed to `RBTree` at smaller sizes, but is faster at very large sizes and uses less memory because it packs many keys into one array instead of allocating an extra heap object for every key.
-- If you need a persistent tree, `functional-red-black-tree` is faster than I expected, but `BTree` should require less memory.
+- If you need [functional persistence](https://en.wikipedia.org/wiki/Persistent_data_structure), `functional-red-black-tree` is remarkably fast for a persistent tree, but `BTree` should require less memory _unless_ you frequently use `clone/with/without` and are saving snapshots of the old tree to prevent garbage collection.
 - B+ trees normally use less memory than hashtables (such as the standard `Map`), although in JavaScript this is not guaranteed because the B+ tree's memory efficiency depends on avoiding wasted space in the arrays for each node, and JavaScript provides no way to detect or control the capacity of an array's underlying memory area. Also, `Map` should be faster because it does not sort its keys.
 - "Sorted array" refers to `SortedArray<K,V>`, a wrapper class for an array of `[K,V]` pairs. Benchmark results were not gathered for sorted arrays with one million elements (it takes too long)
 
@@ -256,8 +298,27 @@ Benchmarks (in milliseconds for integer keys/values)
     516     Delete every second item in B+ tree
     101.4   Delete every second item in Map hashtable
 
-Endnote
--------
+Version history
+---------------
+
+### v1.1 ###
+
+- Added `isEmpty` property getter
+- Added `nextHigherPair`, `nextHigherKey`, `nextLowerPair`, `nextLowerKey` methods
+- Added `editAll`, which is like `editRange` but touches all keys
+- Added `deleteKeys` for deleting a sequence of keys (iterable)
+- Added persistent methods `with`, `withPairs`, `withKeys`, `without`, `withoutKeys`, `withoutRange`
+- Added functional methods `filter`, `reduce`, `mapValues`
+- Added `greedyClone` for cloning nodes immediately, to avoid marking the original tree as shared which slows it down.
+- Relaxed type constraint on second parameter of `entries`/`entriesReversed`
+- Renamed `setRange` to `setPairs` for logical consistency with `withoutPairs` and `withoutRange`. The old name is deprecated but added to the `prototype` as a synonym. `setPairs` returns the number of pairs added instead of `this`.
+- Added export `EmptyBTree`, a frozen empty tree
+
+### v1.0: Initial version ###
+
+- With fast cloning and all that good stuff
+
+### Endnote ###
 
 ♥ This package was made to help people [learn TypeScript & React](http://typescript-react-primer.loyc.net/).
 

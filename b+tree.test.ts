@@ -1,4 +1,4 @@
-import BTree, {IMap} from './b+tree';
+import BTree, {IMap, EmptyBTree} from './b+tree';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
 
@@ -145,7 +145,7 @@ describe('Simple tests on leaf nodes', () =>
     var tree = new BTree([[1,"one"]]);
     tree.freeze();
     expect(() => tree.set(2, "two")).toThrowError(/frozen/);
-    expect(() => tree.setRange([[2, "two"]])).toThrowError(/frozen/);
+    expect(() => tree.setPairs([[2, "two"]])).toThrowError(/frozen/);
     expect(() => tree.clear()).toThrowError(/frozen/);
     expect(() => tree.delete(1)).toThrowError(/frozen/);
     expect(() => tree.editRange(0,10,true, ()=>{return {delete:true};})).toThrowError(/frozen/);
@@ -243,7 +243,7 @@ function testBTree(maxNodeSize: number)
   }
 
   for (let size of [6, 36, 216]) {
-    test(`setRange & deleteRange [size ${size}]`, () => {
+    test(`setPairs & deleteRange [size ${size}]`, () => {
       // Store numbers in descending order
       var reverseComparator = (a:number, b:number) => b - a;
 
@@ -254,7 +254,7 @@ function testBTree(maxNodeSize: number)
   
       // Add all to tree in the "wrong" order (ascending)
       var tree = new BTree<number,string>(undefined, reverseComparator, maxNodeSize);
-      tree.setRange(list.getArray().slice(0).reverse());
+      tree.setPairs(list.getArray().slice(0).reverse());
       expectTreeEqualTo(tree, list);
 
       // Remove most of the items
@@ -320,4 +320,67 @@ function testBTree(maxNodeSize: number)
       expectTreeEqualTo(tree, list);
     });
   }
+
+  test('persistent and functional operations', () => {
+    var tree = new BTree<number,number|undefined>(undefined, undefined, maxNodeSize);
+    var list = new SortedArray<number,number|undefined>();
+    
+    // Add keys 10 to 5000, step 10
+    for (var i = 1; i <= 500; i++)
+      addToBoth(tree, list, i*10, i);
+    
+    // Test reduce()
+    expect(tree.reduce((sum, pair) => sum + pair[1], 0)).toBe(501*250);
+    
+    // Test mapValues()
+    tree.mapValues(v => v*10).forEachPair((k, v) => { expect(v).toBe(k) });
+
+    // Perform various kinds of no-ops
+    var t1 = tree;
+    expect(t1.withKeys([10,20,30], true)           ).toBe(tree);
+    expect(t1.withKeys([10,20,30], false)          ).not.toBe(tree);
+    expect(t1.withoutKeys([5,105,205], true)       ).toBe(tree);
+    expect(t1.without(666, true)                   ).toBe(tree);
+    expect(t1.withoutRange(1001, 1010, false, true)).toBe(tree);
+    expect(t1.filter(() => true, true)             ).toBe(tree);
+
+    // Make a series of modifications in persistent mode
+    var t2 = t1.with(5,5).with(999,999);
+    var t3 = t2.without(777).without(7);
+    var t4 = t3.withPairs([[60,66],[6,6.6]], false);
+    var t5 = t4.withKeys([199,299,399], true);
+    var t6 = t4.without(200).without(300).without(400);
+    var t7 = t6.withoutKeys([10,20,30], true);
+    var t8 = t7.withoutRange(100, 200, false, true);
+
+    // Check that it all worked as expected
+    expectTreeEqualTo(t1, list);
+    list.set(5, 5);
+    list.set(999, 999);
+    expectTreeEqualTo(t2, list);
+    list.delete(777);
+    list.delete(7);
+    expectTreeEqualTo(t3, list);
+    list.set(6, 6.6);
+    expectTreeEqualTo(t4, list);
+    list.set(199, undefined);
+    list.set(299, undefined);
+    list.set(399, undefined);
+    expectTreeEqualTo(t5, list);
+    for(var k of [199, 299, 399, 200, 300, 400])
+      list.delete(k);
+    expectTreeEqualTo(t6, list);
+    for(var k of [10, 20, 30])
+      list.delete(k);
+    expectTreeEqualTo(t7, list);
+    for(var i = 100; i < 200; i++)
+      list.delete(i);
+    expectTreeEqualTo(t8, list);
+
+    // Filter out all hundreds
+    var t9 = t8.filter(k => k % 100 !== 0, true);
+    for (let k = 0; k <= tree.maxKey(); k += 100)
+      list.delete(k);
+    expectTreeEqualTo(t9, list);
+  });
 }
