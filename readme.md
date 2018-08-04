@@ -148,159 +148,159 @@ Benchmarks (in milliseconds for integer keys/values)
 
 ### Insertions at random locations: sorted-btree vs the competition ###
 
-0.8     Insert 1000 pairs in sorted-btree's BTree
-0.4     Insert 1000 pairs in sorted-btree's BTree set (no values)
-2.5     Insert 1000 pairs in collections' SortedMap
-1.6     Insert 1000 pairs in collections' SortedSet (no values)
-0.7     Insert 1000 pairs in functional-red-black-tree
-0.5     Insert 1000 pairs in bintrees' RBTree (no values)
+    0.8     Insert 1000 pairs in sorted-btree's BTree
+    0.4     Insert 1000 pairs in sorted-btree's BTree set (no values)
+    2.5     Insert 1000 pairs in collections' SortedMap
+    1.6     Insert 1000 pairs in collections' SortedSet (no values)
+    0.7     Insert 1000 pairs in functional-red-black-tree
+    0.5     Insert 1000 pairs in bintrees' RBTree (no values)
 
-8.6     Insert 10000 pairs in sorted-btree's BTree
-5.1     Insert 10000 pairs in sorted-btree's BTree set (no values)
-37.8    Insert 10000 pairs in collections' SortedMap
-25.8    Insert 10000 pairs in collections' SortedSet (no values)
-8.7     Insert 10000 pairs in functional-red-black-tree
-5.4     Insert 10000 pairs in bintrees' RBTree (no values)
+    8.6     Insert 10000 pairs in sorted-btree's BTree
+    5.1     Insert 10000 pairs in sorted-btree's BTree set (no values)
+    37.8    Insert 10000 pairs in collections' SortedMap
+    25.8    Insert 10000 pairs in collections' SortedSet (no values)
+    8.7     Insert 10000 pairs in functional-red-black-tree
+    5.4     Insert 10000 pairs in bintrees' RBTree (no values)
 
-95.9    Insert 100000 pairs in sorted-btree's BTree
-69.1    Insert 100000 pairs in sorted-btree's BTree set (no values)
-564     Insert 100000 pairs in collections' SortedMap
-366.5   Insert 100000 pairs in collections' SortedSet (no values)
-192.5   Insert 100000 pairs in functional-red-black-tree
-107.3   Insert 100000 pairs in bintrees' RBTree (no values)
+    95.9    Insert 100000 pairs in sorted-btree's BTree
+    69.1    Insert 100000 pairs in sorted-btree's BTree set (no values)
+    564     Insert 100000 pairs in collections' SortedMap
+    366.5   Insert 100000 pairs in collections' SortedSet (no values)
+    192.5   Insert 100000 pairs in functional-red-black-tree
+    107.3   Insert 100000 pairs in bintrees' RBTree (no values)
 
-1363    Insert 1000000 pairs in sorted-btree's BTree
-909     Insert 1000000 pairs in sorted-btree's BTree set (no values)
-8783    Insert 1000000 pairs in collections' SortedMap
-5443    Insert 1000000 pairs in collections' SortedSet (no values)
-3356    Insert 1000000 pairs in functional-red-black-tree
-1581    Insert 1000000 pairs in bintrees' RBTree (no values)
+    1363    Insert 1000000 pairs in sorted-btree's BTree
+    909     Insert 1000000 pairs in sorted-btree's BTree set (no values)
+    8783    Insert 1000000 pairs in collections' SortedMap
+    5443    Insert 1000000 pairs in collections' SortedSet (no values)
+    3356    Insert 1000000 pairs in functional-red-black-tree
+    1581    Insert 1000000 pairs in bintrees' RBTree (no values)
 
 ### Insert in order, delete: sorted-btree vs the competition ###
 
-0.6     Insert 1000 sorted pairs in B+ tree
-0.4     Insert 1000 sorted keys in B+ tree set (no values)
-0.6     Insert 1000 sorted pairs in collections' SortedMap
-0.4     Insert 1000 sorted keys in collections' SortedSet (no values)
-0.7     Insert 1000 sorted pairs in functional-red-black-tree
-0.5     Insert 1000 sorted keys in bintrees' RBTree (no values)
-1       Delete every second item in B+ tree
-3       Delete every second item in B+ tree set
-1       Bulk-delete every second item in B+ tree set
-1       Delete every second item in collections' SortedMap
-1       Delete every second item in collections' SortedSet
-5       Delete every second item in functional-red-black-tree
-10      Delete every second item in bintrees' RBTree
+    0.6     Insert 1000 sorted pairs in B+ tree
+    0.4     Insert 1000 sorted keys in B+ tree set (no values)
+    0.6     Insert 1000 sorted pairs in collections' SortedMap
+    0.4     Insert 1000 sorted keys in collections' SortedSet (no values)
+    0.7     Insert 1000 sorted pairs in functional-red-black-tree
+    0.5     Insert 1000 sorted keys in bintrees' RBTree (no values)
+    1       Delete every second item in B+ tree
+    3       Delete every second item in B+ tree set
+    1       Bulk-delete every second item in B+ tree set
+    1       Delete every second item in collections' SortedMap
+    1       Delete every second item in collections' SortedSet
+    5       Delete every second item in functional-red-black-tree
+    10      Delete every second item in bintrees' RBTree
 
-6.5     Insert 10000 sorted pairs in B+ tree
-3.9     Insert 10000 sorted keys in B+ tree set (no values)
-6.5     Insert 10000 sorted pairs in collections' SortedMap
-3.9     Insert 10000 sorted keys in collections' SortedSet (no values)
-12.4    Insert 10000 sorted pairs in functional-red-black-tree
-5.8     Insert 10000 sorted keys in bintrees' RBTree (no values)
-4       Delete every second item in B+ tree
-4       Delete every second item in B+ tree set
-3       Bulk-delete every second item in B+ tree set
-13      Delete every second item in collections' SortedMap
-7       Delete every second item in collections' SortedSet
-8       Delete every second item in functional-red-black-tree
-6       Delete every second item in bintrees' RBTree
+    6.5     Insert 10000 sorted pairs in B+ tree
+    3.9     Insert 10000 sorted keys in B+ tree set (no values)
+    6.5     Insert 10000 sorted pairs in collections' SortedMap
+    3.9     Insert 10000 sorted keys in collections' SortedSet (no values)
+    12.4    Insert 10000 sorted pairs in functional-red-black-tree
+    5.8     Insert 10000 sorted keys in bintrees' RBTree (no values)
+    4       Delete every second item in B+ tree
+    4       Delete every second item in B+ tree set
+    3       Bulk-delete every second item in B+ tree set
+    13      Delete every second item in collections' SortedMap
+    7       Delete every second item in collections' SortedSet
+    8       Delete every second item in functional-red-black-tree
+    6       Delete every second item in bintrees' RBTree
 
-75.9    Insert 100000 sorted pairs in B+ tree
-45      Insert 100000 sorted keys in B+ tree set (no values)
-98.7    Insert 100000 sorted pairs in collections' SortedMap
-61.4    Insert 100000 sorted keys in collections' SortedSet (no values)
-145.8   Insert 100000 sorted pairs in functional-red-black-tree
-82.6    Insert 100000 sorted keys in bintrees' RBTree (no values)
-79      Delete every second item in B+ tree
-52      Delete every second item in B+ tree set
-18      Bulk-delete every second item in B+ tree set
-166     Delete every second item in collections' SortedMap
-58      Delete every second item in collections' SortedSet
-64      Delete every second item in functional-red-black-tree
-74      Delete every second item in bintrees' RBTree
+    75.9    Insert 100000 sorted pairs in B+ tree
+    45      Insert 100000 sorted keys in B+ tree set (no values)
+    98.7    Insert 100000 sorted pairs in collections' SortedMap
+    61.4    Insert 100000 sorted keys in collections' SortedSet (no values)
+    145.8   Insert 100000 sorted pairs in functional-red-black-tree
+    82.6    Insert 100000 sorted keys in bintrees' RBTree (no values)
+    79      Delete every second item in B+ tree
+    52      Delete every second item in B+ tree set
+    18      Bulk-delete every second item in B+ tree set
+    166     Delete every second item in collections' SortedMap
+    58      Delete every second item in collections' SortedSet
+    64      Delete every second item in functional-red-black-tree
+    74      Delete every second item in bintrees' RBTree
 
-700     Insert 1000000 sorted pairs in B+ tree
-452.5   Insert 1000000 sorted keys in B+ tree set (no values)
-1069    Insert 1000000 sorted pairs in collections' SortedMap
-864     Insert 1000000 sorted keys in collections' SortedSet (no values)
-1531    Insert 1000000 sorted pairs in functional-red-black-tree
-966     Insert 1000000 sorted keys in bintrees' RBTree (no values)
-435     Delete every second item in B+ tree
-291     Delete every second item in B+ tree set
-159     Bulk-delete every second item in B+ tree set
-1447    Delete every second item in collections' SortedMap
-796     Delete every second item in collections' SortedSet
-573     Delete every second item in functional-red-black-tree
-537     Delete every second item in bintrees' RBTree
+    700     Insert 1000000 sorted pairs in B+ tree
+    452.5   Insert 1000000 sorted keys in B+ tree set (no values)
+    1069    Insert 1000000 sorted pairs in collections' SortedMap
+    864     Insert 1000000 sorted keys in collections' SortedSet (no values)
+    1531    Insert 1000000 sorted pairs in functional-red-black-tree
+    966     Insert 1000000 sorted keys in bintrees' RBTree (no values)
+    435     Delete every second item in B+ tree
+    291     Delete every second item in B+ tree set
+    159     Bulk-delete every second item in B+ tree set
+    1447    Delete every second item in collections' SortedMap
+    796     Delete every second item in collections' SortedSet
+    573     Delete every second item in functional-red-black-tree
+    537     Delete every second item in bintrees' RBTree
 
 ### Insertions at random locations: sorted-btree vs Array vs Map ###
 
-0.5     Insert 1000 pairs in sorted array
-0.6     Insert 1000 pairs in B+ tree
-0.1     Insert 1000 pairs in ES6 Map (hashtable)
+    0.5     Insert 1000 pairs in sorted array
+    0.6     Insert 1000 pairs in B+ tree
+    0.1     Insert 1000 pairs in ES6 Map (hashtable)
 
-13.2    Insert 10000 pairs in sorted array
-7.2     Insert 10000 pairs in B+ tree
-1.3     Insert 10000 pairs in ES6 Map (hashtable)
+    13.2    Insert 10000 pairs in sorted array
+    7.2     Insert 10000 pairs in B+ tree
+    1.3     Insert 10000 pairs in ES6 Map (hashtable)
 
-56980   Insert 100000 pairs in sorted array
-122     Insert 100000 pairs in B+ tree
-17.7    Insert 100000 pairs in ES6 Map (hashtable)
+    56980   Insert 100000 pairs in sorted array
+    122     Insert 100000 pairs in B+ tree
+    17.7    Insert 100000 pairs in ES6 Map (hashtable)
 
-SLOW!   Insert 1000000 pairs in sorted array
-1354    Insert 1000000 pairs in B+ tree
-304.5   Insert 1000000 pairs in ES6 Map (hashtable)
+    SLOW!   Insert 1000000 pairs in sorted array
+    1354    Insert 1000000 pairs in B+ tree
+    304.5   Insert 1000000 pairs in ES6 Map (hashtable)
 
 ### Insert in order, scan, delete: sorted-btree vs Array vs Map ###
 
-0.4     Insert 1000 sorted pairs in array
-0.6     Insert 1000 sorted pairs in B+ tree
-0.1     Insert 1000 sorted pairs in Map hashtable
-0       Sum of all values with forEach in sorted array: 27350180
-0       Sum of all values with forEachPair in B+ tree: 27350180
-0       Sum of all values with forEach in B+ tree: 27350180
-0       Sum of all values with iterator in B+ tree: 27350180
-0       Sum of all values with forEach in Map: 27350180
-0.1     Delete every second item in sorted array
-0.1     Delete every second item in B+ tree
-0       Delete every second item in Map hashtable
+    0.4     Insert 1000 sorted pairs in array
+    0.6     Insert 1000 sorted pairs in B+ tree
+    0.1     Insert 1000 sorted pairs in Map hashtable
+    0       Sum of all values with forEach in sorted array: 27350180
+    0       Sum of all values with forEachPair in B+ tree: 27350180
+    0       Sum of all values with forEach in B+ tree: 27350180
+    0       Sum of all values with iterator in B+ tree: 27350180
+    0       Sum of all values with forEach in Map: 27350180
+    0.1     Delete every second item in sorted array
+    0.1     Delete every second item in B+ tree
+    0       Delete every second item in Map hashtable
 
-3.9     Insert 10000 sorted pairs in array
-6.7     Insert 10000 sorted pairs in B+ tree
-1.3     Insert 10000 sorted pairs in Map hashtable
-0.2     Sum of all values with forEach in sorted array: 2716659330
-0.3     Sum of all values with forEachPair in B+ tree: 2716659330
-0.4     Sum of all values with forEach in B+ tree: 2716659330
-0.3     Sum of all values with iterator in B+ tree: 2716659330
-0.2     Sum of all values with forEach in Map: 2716659330
-1.2     Delete every second item in sorted array
-1.1     Delete every second item in B+ tree
-0.3     Delete every second item in Map hashtable
+    3.9     Insert 10000 sorted pairs in array
+    6.7     Insert 10000 sorted pairs in B+ tree
+    1.3     Insert 10000 sorted pairs in Map hashtable
+    0.2     Sum of all values with forEach in sorted array: 2716659330
+    0.3     Sum of all values with forEachPair in B+ tree: 2716659330
+    0.4     Sum of all values with forEach in B+ tree: 2716659330
+    0.3     Sum of all values with iterator in B+ tree: 2716659330
+    0.2     Sum of all values with forEach in Map: 2716659330
+    1.2     Delete every second item in sorted array
+    1.1     Delete every second item in B+ tree
+    0.3     Delete every second item in Map hashtable
 
-68.4    Insert 100000 sorted pairs in array
-72.7    Insert 100000 sorted pairs in B+ tree
-18.4    Insert 100000 sorted pairs in Map hashtable
-2.5     Sum of all values with forEach in sorted array: 275653049020
-3.3     Sum of all values with forEachPair in B+ tree: 275653049020
-4.5     Sum of all values with forEach in B+ tree: 275653049020
-2.8     Sum of all values with iterator in B+ tree: 275653049020
-2.2     Sum of all values with forEach in Map: 275653049020
-2420    Delete every second item in sorted array
-14.4    Delete every second item in B+ tree
-3.7     Delete every second item in Map hashtable
+    68.4    Insert 100000 sorted pairs in array
+    72.7    Insert 100000 sorted pairs in B+ tree
+    18.4    Insert 100000 sorted pairs in Map hashtable
+    2.5     Sum of all values with forEach in sorted array: 275653049020
+    3.3     Sum of all values with forEachPair in B+ tree: 275653049020
+    4.5     Sum of all values with forEach in B+ tree: 275653049020
+    2.8     Sum of all values with iterator in B+ tree: 275653049020
+    2.2     Sum of all values with forEach in Map: 275653049020
+    2420    Delete every second item in sorted array
+    14.4    Delete every second item in B+ tree
+    3.7     Delete every second item in Map hashtable
 
-969     Insert 1000000 sorted pairs in array
-773     Insert 1000000 sorted pairs in B+ tree
-305.5   Insert 1000000 sorted pairs in Map hashtable
-25.3    Sum of all values with forEach in sorted array: 27510295368690
-32.4    Sum of all values with forEachPair in B+ tree: 27510295368690
-46.1    Sum of all values with forEach in B+ tree: 27510295368690
-29.9    Sum of all values with iterator in B+ tree: 27510295368690
-22      Sum of all values with forEach in Map: 27510295368690
-SLOW!   Delete every second item in sorted array
-305.5   Delete every second item in B+ tree
-95.6    Delete every second item in Map hashtable
+    969     Insert 1000000 sorted pairs in array
+    773     Insert 1000000 sorted pairs in B+ tree
+    305.5   Insert 1000000 sorted pairs in Map hashtable
+    25.3    Sum of all values with forEach in sorted array: 27510295368690
+    32.4    Sum of all values with forEachPair in B+ tree: 27510295368690
+    46.1    Sum of all values with forEach in B+ tree: 27510295368690
+    29.9    Sum of all values with iterator in B+ tree: 27510295368690
+    22      Sum of all values with forEach in Map: 27510295368690
+    SLOW!   Delete every second item in sorted array
+    305.5   Delete every second item in B+ tree
+    95.6    Delete every second item in Map hashtable
 
 Version history
 ---------------
