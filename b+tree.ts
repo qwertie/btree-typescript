@@ -1,6 +1,12 @@
 // B+ tree by David Piepgrass. License: MIT
+import { ISortedMap, ISortedMapF } from './interfaces';
+export {
+  ISetSource, ISetSink, ISet, ISetF, ISortedSetSource, ISortedSet, ISortedSetF,
+  IMapSource, IMapSink, IMap, IMapF, ISortedMapSource, ISortedMap, ISortedMapF
+} from './interfaces';
 
 export type EditRangeResult<V,R=number> = {value?:V, break?:R, delete?:boolean};
+
 type index = number;
 
 // Informative microbenchmarks & stuff:
@@ -20,49 +26,9 @@ type index = number;
 //   - Avoid holes in arrays. Avoid `new Array(N)`, it will be "holey" permanently.
 //   - Don't read outside bounds of an array (it scans prototype chain).
 //   - Small integer arrays are stored differently from doubles
-//   - Add non-numbers to an array deoptimizes it permanently into a general array
+//   - Adding non-numbers to an array deoptimizes it permanently into a general array
 //   - Objects can be used like arrays (e.g. have length property) but are slower
 //   - V8 source (NewElementsCapacity in src/objects.h): arrays grow by 50% + 16 elements
-
-/** Read-only map interface (i.e. a source of key-value pairs). 
- *  It is not desirable to demand a Symbol polyfill, so [Symbol.iterator] is left out. */
-export interface IMapSource<K=any, V=any>
-{
-  /** Returns the number of key/value pairs in the map object. */
-  size: number;
-  /** Returns the value associated to the key, or undefined if there is none. */
-  get(key: K): V|undefined;
-  /** Returns a boolean asserting whether the key exists in the map object or not. */
-  has(key: K): boolean;
-  /** Calls callbackFn once for each key-value pair present in the map object.
-   *  The ES6 Map class sends the value to the callback before the key, so
-   *  this interface must do likewise. */
-  forEach(callbackFn: (v:V, k:K) => void): void;
-  
-  // TypeScript compiler decided Symbol.iterator has type 'any'
-  //[Symbol.iterator](): IterableIterator<[K,V]>;
-  entries(): IterableIterator<[K,V]>;
-  keys(): IterableIterator<K>;
-  values(): IterableIterator<V>;
-}
-
-/** Write-only map interface (i.e. a drain into which key-value pairs can be "sunk") */
-export interface IMapSink<K=any, V=any>
-{
-  /** Returns true if an element in the map object existed and has been 
-   *  removed, or false if the element did not exist. */
-  delete(key: K): boolean;
-  /** Sets the value for the key in the map object (the return value is 
-   *  boolean in BTree but Map returns the Map itself.) */
-  set(key: K, value: V): void;
-  /** Removes all key/value pairs from the IMap object. */
-  clear(): void;
-}
-
-/** An interface compatible with ES6 Map and BTree. This interface does not
- *  describe the complete interface of either class, but merely the common 
- *  interface shared by both. */
-export interface IMap<K=any, V=any> extends IMapSource<K, V>, IMapSink<K, V> { }
 
 /** Compares two numbers, strings, arrays of numbers/strings, Dates,
  *  or objects that have a valueOf() method returning a number or string. 
@@ -141,7 +107,7 @@ export function defaultComparator(a: any, b: any) {
  * 
  * @author David Piepgrass
  */
-export default class BTree<K=any, V=any> implements IMap<K,V>
+export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap<K,V>
 {
   private _root: BNode<K, V> = EmptyLeaf as BNode<K,V>;
   _size: number = 0;
@@ -178,6 +144,8 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
     this._size = 0;
   }
 
+  forEach(callback: (v:V, k:K, tree:BTree<K,V>) => void, thisArg?: any): number;
+
   /** Runs a function for each key-value pair, in order from smallest to 
    *  largest key. For compatibility with ES6 Map, the argument order to
    *  the callback is backwards: value first, then key. Call forEachPair 
@@ -186,7 +154,7 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
    *        value for each callback.
    * @returns the number of values that were sent to the callback,
    *        or the R value if the callback returned {break:R}. */
-  forEach<R=number,Any=any>(callback: (v:V, k:K, tree:BTree<K,V>) => {break?:R}|void, thisArg?: Any): R|number {
+  forEach<R=number>(callback: (v:V, k:K, tree:BTree<K,V>) => {break?:R}|void, thisArg?: any): R|number {
     if (thisArg !== undefined)
       callback = callback.bind(thisArg);
     return this.forEachPair((k, v) => callback(v, k, this));
@@ -269,16 +237,16 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
 
   // Clone-mutators /////////////////////////////////////////////////////////
 
-  /** Returns a copy of the tree with the specified key-value pair set. */
-  with<V2>(key: K, value: V2): BTree<K,V|V2>;
-  
   /** Returns a copy of the tree with the specified key set (the value is undefined). */
+  with(key: K): BTree<K,V|undefined>;
+  /** Returns a copy of the tree with the specified key-value pair set. */
+  with<V2>(key: K, value: V2, overwrite?: boolean): BTree<K,V|V2>;
   with<V2>(key: K, value?: V2, overwrite?: boolean): BTree<K,V|V2|undefined> {
     let nu = this.clone() as BTree<K,V|V2|undefined>;
     return nu.set(key, value, overwrite) || overwrite ? nu : this;
   }
 
-  /** Returns a copy of the tree with the specified key-value pair set. */
+  /** Returns a copy of the tree with the specified key-value pairs set. */
   withPairs<V2>(pairs: [K,V|V2][], overwrite: boolean): BTree<K,V|V2> {
     let nu = this.clone() as BTree<K,V|V2>;
     return nu.setPairs(pairs, overwrite) !== 0 || overwrite ? nu : this;
@@ -363,7 +331,8 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
    *  
    *  **Note**: the same array is sent to the callback on every iteration.
    */
-  reduce<R>(callback: (previous:R,currentPair:[K,V],counter:number) => R, initialValue: R): R;
+  reduce<R>(callback: (previous:R,currentPair:[K,V],counter:number,tree:BTree<K,V>) => R, initialValue: R): R;
+  reduce<R>(callback: (previous:R|undefined,currentPair:[K,V],counter:number,tree:BTree<K,V>) => R): R|undefined;
   reduce<R>(callback: (previous:R|undefined,currentPair:[K,V],counter:number,tree:BTree<K,V>) => R, initialValue?: R): R|undefined {
     let i = 0, p = initialValue;
     var it = this.entries(this.minKey(), ReusedArray), next;
@@ -493,7 +462,7 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
    * such that nodequeue[L-1] === nodequeue[L][nodeindex[L]].children.
    * (However inside this function the order is reversed.)
    */
-  protected findPath(key?: K): { nodequeue: BNode<K,V>[][], nodeindex: number[], leaf: BNode<K,V> } | undefined
+  private findPath(key?: K): { nodequeue: BNode<K,V>[][], nodeindex: number[], leaf: BNode<K,V> } | undefined
   {
     var nextnode = this._root;
     var nodequeue: BNode<K,V>[][], nodeindex: number[];
@@ -515,7 +484,8 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
     return {nodequeue, nodeindex, leaf:nextnode};
   }
 
-  /** Returns a new iterator for iterating the keys of each pair in ascending order. */
+  /** Returns a new iterator for iterating the keys of each pair in ascending order. 
+   *  @param firstKey: Minimum key to include in the output. */
   keys(firstKey?: K): IterableIterator<K> {
     var it = this.entries(firstKey, ReusedArray);
     return iterator<K>(() => {
@@ -525,7 +495,8 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
     });
   }
   
-  /** Returns a new iterator for iterating the values of each pair in order by key. */
+  /** Returns a new iterator for iterating the values of each pair in order by key. 
+   *  @param firstKey: Minimum key whose associated value is included in the output. */
   values(firstKey?: K): IterableIterator<V> {
     var it = this.entries(firstKey, ReusedArray);
     return iterator<V>(() => {
@@ -624,13 +595,13 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
     return p ? p[0] : p;
   }
 
-  /** Returns the next pair whose key is larger than the specified key (or undefined if there is none) */
+  /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none) */
   nextLowerPair(key: K): [K,V]|undefined {
     var it = this.entriesReversed(key, ReusedArray, true);
     return it.next().value;
   }
   
-  /** Returns the next key larger than the specified key (or undefined if there is none) */
+  /** Returns the next key smaller than the specified key (or undefined if there is none) */
   nextLowerKey(key: K): K|undefined {
     var p = this.nextLowerPair(key);
     return p ? p[0] : p;
@@ -680,6 +651,8 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
         added++;
     return added;
   }
+
+  forRange(low: K, high: K, includeHigh: boolean, onFound?: (k:K,v:V,counter:number) => void, initialCounter?: number): number;
 
   /**
    * Scans the specified range of keys, in ascending order by key.
@@ -801,6 +774,11 @@ export default class BTree<K=any, V=any> implements IMap<K,V>
     delete this.editRange;
   }
 
+  /** Returns true if the tree appears to be frozen. */
+  get isFrozen() {
+    return this.hasOwnProperty('editRange');
+  }
+
   /** Scans the tree for signs of serious bugs (e.g. this.size doesn't match
    *  number of elements, internal nodes not caching max element properly...)
    *  Computational complexity: O(number of nodes), i.e. O(size). This method
@@ -817,6 +795,7 @@ if (Symbol && Symbol.iterator) // iterator is equivalent to entries()
   (BTree as any).prototype[Symbol.iterator] = BTree.prototype.entries;
 (BTree as any).prototype.where = BTree.prototype.filter;
 (BTree as any).prototype.setRange = BTree.prototype.setPairs;
+(BTree as any).prototype.add = BTree.prototype.set;
 
 function iterator<T>(next: () => {done:boolean,value?:T} = (() => ({ done:true, value:undefined }))): IterableIterator<T> {
   var result: any = { next };
@@ -1318,14 +1297,13 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   }
 }
 
-// TODO: it's much simpler and maybe faster to a separate empty array per 
-//       node. Test perf of that. (Use shared empty array in shared nodes?)
 // Optimization: this array of `undefined`s is used instead of a normal
 // array of values in nodes where `undefined` is the only value.
 // Its length is extended to max node size on first use; since it can
 // be shared between trees with different maximums, its length can only
 // increase, never decrease. Its type should be undefined[] but strangely
-// TypeScript won't allow the comparison V[] === undefined[]
+// TypeScript won't allow the comparison V[] === undefined[]. To prevent
+// users from making this array too large, BTree has a maximum node size.
 var undefVals: any[] = [];
 
 const Delete = {delete: true}, DeleteRange = () => Delete;

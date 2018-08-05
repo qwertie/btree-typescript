@@ -1,4 +1,4 @@
-import { IMap } from './b+tree';
+import { IMap } from './interfaces';
 /** A super-inefficient sorted list for testing purposes */
 export default class SortedArray<K = any, V = any> implements IMap<K, V> {
     a: [K, V][];
@@ -13,7 +13,7 @@ export default class SortedArray<K = any, V = any> implements IMap<K, V> {
     getArray(): [K, V][];
     minKey(): K | undefined;
     maxKey(): K | undefined;
-    forEach(callbackFn: (v: V, k: K) => void): void;
+    forEach(callbackFn: (v: V, k: K, list: SortedArray<K, V>) => void): void;
     [Symbol.iterator](): IterableIterator<[K, V]>;
     entries(): IterableIterator<[K, V]>;
     keys(): IterableIterator<K>;

@@ -1,4 +1,4 @@
-import {IMap} from './b+tree';
+import {IMap} from './interfaces';
 
 /** A super-inefficient sorted list for testing purposes */
 export default class SortedArray<K=any, V=any> implements IMap<K,V>
@@ -40,8 +40,8 @@ export default class SortedArray<K=any, V=any> implements IMap<K,V>
   getArray() { return this.a; }
   minKey(): K | undefined { return this.a[0][0]; }
   maxKey(): K | undefined { return this.a[this.a.length-1][0]; }
-  forEach(callbackFn: (v:V, k:K) => void) {
-    this.a.forEach(pair => callbackFn(pair[1], pair[0]));
+  forEach(callbackFn: (v:V, k:K, list:SortedArray<K,V>) => void) {
+    this.a.forEach(pair => callbackFn(pair[1], pair[0], this));
   }
 
   // a.values() used to implement IMap<K,V> but it's not actually available in Node v10.4

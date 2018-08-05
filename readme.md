@@ -35,6 +35,7 @@ Features
 - Includes neat stuff such as `Range` methods for batch operations
 - Throws an exception if you try to use `NaN` as a key, but infinity is allowed.
 - No dependencies. 15K minified.
+- Includes a lattice of interfaces for TypeScript users (see below)
 
 ### Additional operations supported on this B+ tree ###
 
@@ -135,6 +136,70 @@ t.editRange(t.minKey(), t.maxKey(), true, (k, v) => {
     return {value: v + '!'};
 })
 ~~~
+
+Interface lattice
+-----------------
+
+BTree includes a lattice of interface types representing subsets of BTree's interface. I would encourage other authors of map/dictionary/tree/hashtable types to utilize these interfaces. These interfaces can be divided along three dimensions:
+
+### 1. Read/write access ###
+
+I have defined several kinds of interfaces along the read/write access dimension:
+
+- **Source**: A "source" is a read-only interface (`ISetSource<K>` and `IMapSource<K,V>`). At minimum, sources include a `size` property and methods `get`, `has`, `forEach`, and `keys`.
+- **Sink**: A "sink" is a write-only interface (`ISetSink<K>` and `IMapSink<K,V>`). At minimum, sinks have `set`, `delete` and `clear` methods.
+- **Mutable**: An interface that combines the source and sink interfaces (`ISet<K>` and `IMap<K,V>`).
+- **Functional**: An interface for [persistent](https://en.wikipedia.org/wiki/Persistent_data_structure) data structures. It combines a read-only interface with methods that return a modified copy of the collection. The functional interfaces end with `F` (`ISetF<K>` and `IMapF<K,V>`).
+
+### 2. Sorted versus unsorted ###
+
+The `Sorted` interfaces extend the non-sorted interfaces with queries that only a sorted collection can perform efficiently, such as `minKey()` and `nextHigherKey(k)`. At minimum, sorted interfaces add methods `minKey`, `maxKey`, `nextHigherKey`, `nextLowerKey`, and `forRange`, plus iterators that return keys/values/pairs in sorted order and accept a `firstKey` parameter to control the starting point of iteration.
+
+### 3. Set versus map ###
+
+A map is a collection of keys with values, while a set is a collection of keys without values.
+
+For the most part, each `Set` interface is a subset of the corresponding `Map` interface with "values" removed. For example, `MapF<K,V>` extends `SetF<K>`. An exception to this is that `IMapSink<K, V>` could not be derived from `ISetSink<K>` (and thus `IMap<K,V>` is not derived from `ISet<K>`) because the type `V` does not necessarily include `undefined`. Therefore you can write `set.set(key)` to add a key to a set, but you cannot write `map.set(key)` without specifying a value (in TypeScript this is true _even if `V` includes undefined_.)
+
+### List of interfaces ###
+
+All of these interfaces use `any` as the default type of `K` and `V`.
+
+- `ISetSource<K>`
+- `ISetSink<K>`
+- `ISet<K>               extends ISetSource<K>, ISetSink<K>`
+- `IMapSource<K, V>      extends ISetSource<K>`
+- `IMapSink<K, V>`
+- `IMap<K, V>            extends IMapSource<K,V>, IMapSink<K,V>`
+- `ISortedSetSource<K>   extends ISetSource<K>`
+- `ISortedSet<K>         extends ISortedSetSource<K>, ISetSink<K>`
+- `ISortedMapSource<K,V> extends IMapSource<K, V>, ISortedSetSource<K>`
+- `ISortedMap<K,V>       extends IMap<K,V>, ISortedMapSource<K,V>`
+- `ISetF<K>              extends ISetSource<K>`
+- `IMapF<K, V>           extends IMapSource<K,V>, ISetF<K>`
+- `ISortedSetF<K>        extends ISetF<K>, ISortedSetSource<K>`
+- `ISortedMapF<K,V>      extends ISortedSetF<K>, IMapF<K,V>, ISortedMapSource<K,V>`
+
+If the lattice were complete there would be 16 interfaces (4*2*2). In fact there are only 14 interfaces because `ISortedMapSink<K,V>` and `ISortedSetSink<K, V>` don't exist, because sorted sinks are indistinguishable from unsorted sinks.
+
+`BTree<K,V>` implements all of these interfaces except `ISetSink<K>`, `ISet<K>`, and `ISortedSet<K>`.
+
+### ES6 Map/Set compatibility ###
+
+The `IMap<K,V>` interface is compatible with the ES6 `Map<K,V>` type as well as `BTree<K,V>`. In order to accomplish this, compromises had to be made:
+
+- The `set(k,v)` method returns `any` for compatibility with both `BTree` and `Map`, since `BTree` returns `boolean` (true if an item was added or false if it already existed), while `Map` returns `this`.
+- ES6's `Map.forEach(c)` method calls `c(value,key)` instead of `c(key,value)`, unlike all other methods which put the key first. Therefore `IMap` works the same way. Unfortunately, this means that `ISetSource<K>`, the supertype of `IMapSource<K,V>`, cannot sanely have a `forEach` method because if it did, the first parameter to the callback would be unused.
+- The batch operations `setPairs`, `deletePairs` and `reduce` are left out because they are not defined by `Map`. Instead, these methods are defined in `ISortedMap<K,V>`.
+- Likewise, the functional operations `reduce`, `filter` and `mapValues` are not included in `IMap`, but they are defined in `IMapF<K,V>` and (except `mapValues`) `ISetF<K>`.
+
+Similarly, `ISet<K>` is compatible with ES6 `Set`. Again there are compromises:
+
+- The `set` method is renamed `add` in `Set` and `ISet<K>`, so `add` exists on `BTree.prototype` as a synonym for `set`.
+- There is no `forEach` method for reasons alluded to above. Use `keys()` instead.
+- There is no `filter` or `reduce` because `Set` doesn't support them.
+
+Although `BTree<K,V>` doesn't directly implement `ISet<K>`, it does implement `ISetSource<K>` and it is safe to cast `BTree<K,V>` to `ISet<K>` or `ISortedSet<K>` provided that `V` is allowed to be undefined.
 
 Benchmarks (in milliseconds for integer keys/values)
 ----------------------------------------------------
@@ -304,6 +369,11 @@ Benchmarks (in milliseconds for integer keys/values)
 
 Version history
 ---------------
+
+### v1.2 ###
+
+- Added a complete lattice of interfaces as described above.
+- Interfaces have been moved to a separate *interfaces.d.ts* file which is re-exported by the main module in *b+tree.d.ts*.
 
 ### v1.1 ###
 

@@ -1,10 +1,10 @@
 {
   "name": "sorted-btree",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "A sorted list of key-value pairs in a fast, typed in-memory B+ tree with a powerful API.",
   "main": "b+tree.js",
   "scripts": {
-    "test": "tsc && jest",
+    "test": "tsc && echo //ts-jest-issue-657 >interfaces.js && jest",
     "build": "tsc && npm run minify",
     "minify": "uglifyjs -cm -o b+tree.min.js -- b+tree.js",
     "prepare": "npm run build",
@@ -16,6 +16,7 @@
     "b+tree.min.js",
     "sorted-array.js",
     "sorted-array.d.ts",
+    "interfaces.d.ts",
     "readme.md"
   ],
   "repository": {

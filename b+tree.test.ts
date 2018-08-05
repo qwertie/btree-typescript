@@ -143,7 +143,9 @@ describe('Simple tests on leaf nodes', () =>
 
   test('Can be frozen and unfrozen', () => {
     var tree = new BTree([[1,"one"]]);
+    expect(tree.isFrozen).toBe(false);
     tree.freeze();
+    expect(tree.isFrozen).toBe(true);
     expect(() => tree.set(2, "two")).toThrowError(/frozen/);
     expect(() => tree.setPairs([[2, "two"]])).toThrowError(/frozen/);
     expect(() => tree.clear()).toThrowError(/frozen/);

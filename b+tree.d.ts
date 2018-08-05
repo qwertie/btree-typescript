@@ -1,42 +1,10 @@
+import { ISortedMap, ISortedMapF } from './interfaces';
+export { ISetSource, ISetSink, ISet, ISetF, ISortedSetSource, ISortedSet, ISortedSetF, IMapSource, IMapSink, IMap, IMapF, ISortedMapSource, ISortedMap, ISortedMapF } from './interfaces';
 export declare type EditRangeResult<V, R = number> = {
     value?: V;
     break?: R;
     delete?: boolean;
 };
-declare type index = number;
-/** Read-only map interface (i.e. a source of key-value pairs).
- *  It is not desirable to demand a Symbol polyfill, so [Symbol.iterator] is left out. */
-export interface IMapSource<K = any, V = any> {
-    /** Returns the number of key/value pairs in the map object. */
-    size: number;
-    /** Returns the value associated to the key, or undefined if there is none. */
-    get(key: K): V | undefined;
-    /** Returns a boolean asserting whether the key exists in the map object or not. */
-    has(key: K): boolean;
-    /** Calls callbackFn once for each key-value pair present in the map object.
-     *  The ES6 Map class sends the value to the callback before the key, so
-     *  this interface must do likewise. */
-    forEach(callbackFn: (v: V, k: K) => void): void;
-    entries(): IterableIterator<[K, V]>;
-    keys(): IterableIterator<K>;
-    values(): IterableIterator<V>;
-}
-/** Write-only map interface (i.e. a drain into which key-value pairs can be "sunk") */
-export interface IMapSink<K = any, V = any> {
-    /** Returns true if an element in the map object existed and has been
-     *  removed, or false if the element did not exist. */
-    delete(key: K): boolean;
-    /** Sets the value for the key in the map object (the return value is
-     *  boolean in BTree but Map returns the Map itself.) */
-    set(key: K, value: V): void;
-    /** Removes all key/value pairs from the IMap object. */
-    clear(): void;
-}
-/** An interface compatible with ES6 Map and BTree. This interface does not
- *  describe the complete interface of either class, but merely the common
- *  interface shared by both. */
-export interface IMap<K = any, V = any> extends IMapSource<K, V>, IMapSink<K, V> {
-}
 /** Compares two numbers, strings, arrays of numbers/strings, Dates,
  *  or objects that have a valueOf() method returning a number or string.
  *  Optimized for numbers. Returns 1 if a>b, -1 if a<b, and 0 if a===b.
@@ -106,7 +74,7 @@ export declare function defaultComparator(a: any, b: any): number;
  *
  * @author David Piepgrass
  */
-export default class BTree<K = any, V = any> implements IMap<K, V> {
+export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISortedMap<K, V> {
     private _root;
     _size: number;
     _maxNodeSize: number;
@@ -128,17 +96,7 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
     readonly isEmpty: boolean;
     /** Releases the tree so that its size is 0. */
     clear(): void;
-    /** Runs a function for each key-value pair, in order from smallest to
-     *  largest key. For compatibility with ES6 Map, the argument order to
-     *  the callback is backwards: value first, then key. Call forEachPair
-     *  instead to receive the key as the first argument.
-     * @param thisArg If provided, this parameter is assigned as the `this`
-     *        value for each callback.
-     * @returns the number of values that were sent to the callback,
-     *        or the R value if the callback returned {break:R}. */
-    forEach<R = number, Any = any>(callback: (v: V, k: K, tree: BTree<K, V>) => {
-        break?: R;
-    } | void, thisArg?: Any): R | number;
+    forEach(callback: (v: V, k: K, tree: BTree<K, V>) => void, thisArg?: any): number;
     /** Runs a function for each key-value pair, in order from smallest to
      *  largest key. The callback can return {break:R} (where R is any value
      *  except undefined) to stop immediately and return R from forEachPair.
@@ -193,9 +151,11 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
      * @description Computational complexity: O(log size)
      */
     delete(key: K): boolean;
+    /** Returns a copy of the tree with the specified key set (the value is undefined). */
+    with(key: K): BTree<K, V | undefined>;
     /** Returns a copy of the tree with the specified key-value pair set. */
-    with<V2>(key: K, value: V2): BTree<K, V | V2>;
-    /** Returns a copy of the tree with the specified key-value pair set. */
+    with<V2>(key: K, value: V2, overwrite?: boolean): BTree<K, V | V2>;
+    /** Returns a copy of the tree with the specified key-value pairs set. */
     withPairs<V2>(pairs: [K, V | V2][], overwrite: boolean): BTree<K, V | V2>;
     /** Returns a copy of the tree with the specified keys present.
      *  @param keys The keys to add. If a key is already present in the tree,
@@ -239,7 +199,8 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
      *
      *  **Note**: the same array is sent to the callback on every iteration.
      */
-    reduce<R>(callback: (previous: R, currentPair: [K, V], counter: number) => R, initialValue: R): R;
+    reduce<R>(callback: (previous: R, currentPair: [K, V], counter: number, tree: BTree<K, V>) => R, initialValue: R): R;
+    reduce<R>(callback: (previous: R | undefined, currentPair: [K, V], counter: number, tree: BTree<K, V>) => R): R | undefined;
     /** Returns an iterator that provides items in order (ascending order if
      *  the collection's comparator uses ascending order, as is the default.)
      *  @param lowestKey First key to be iterated, or undefined to start at
@@ -259,14 +220,12 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
      *         collection, the pair matching highestKey is skipped, not iterated.
      */
     entriesReversed(highestKey?: K, reusedArray?: (K | V)[], skipHighest?: boolean): IterableIterator<[K, V]>;
-    protected findPath(key?: K): {
-        nodequeue: BNode<K, V>[][];
-        nodeindex: number[];
-        leaf: BNode<K, V>;
-    } | undefined;
-    /** Returns a new iterator for iterating the keys of each pair in ascending order. */
+    private findPath;
+    /** Returns a new iterator for iterating the keys of each pair in ascending order.
+     *  @param firstKey: Minimum key to include in the output. */
     keys(firstKey?: K): IterableIterator<K>;
-    /** Returns a new iterator for iterating the values of each pair in order by key. */
+    /** Returns a new iterator for iterating the values of each pair in order by key.
+     *  @param firstKey: Minimum key whose associated value is included in the output. */
     values(firstKey?: K): IterableIterator<V>;
     /** Returns the maximum number of children/values before nodes will split. */
     readonly maxNodeSize: number;
@@ -302,9 +261,9 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
     nextHigherPair(key: K): [K, V] | undefined;
     /** Returns the next key larger than the specified key (or undefined if there is none) */
     nextHigherKey(key: K): K | undefined;
-    /** Returns the next pair whose key is larger than the specified key (or undefined if there is none) */
+    /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none) */
     nextLowerPair(key: K): [K, V] | undefined;
-    /** Returns the next key larger than the specified key (or undefined if there is none) */
+    /** Returns the next key smaller than the specified key (or undefined if there is none) */
     nextLowerKey(key: K): K | undefined;
     /** Edits the value associated with a key in the tree, if it already exists.
      * @returns true if the key existed, false if not.
@@ -333,26 +292,7 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
      * @description Computational complexity: O(pairs.length * log(size + pairs.length))
      */
     setPairs(pairs: [K, V][], overwrite?: boolean): number;
-    /**
-     * Scans the specified range of keys, in ascending order by key.
-     * Note: the callback `onFound` must not insert or remove items in the
-     * collection. Doing so may cause incorrect data to be sent to the
-     * callback afterward.
-     * @param low The first key scanned will be greater than or equal to `low`.
-     * @param high Scanning stops when a key larger than this is reached.
-     * @param includeHigh If the `high` key is present, `onFound` is called for
-     *        that final pair if and only if this parameter is true.
-     * @param onFound A function that is called for each key-value pair. This
-     *        function can return {break:R} to stop early with result R.
-     * @param initialCounter Initial third argument of onFound. This value
-     *        increases by one each time `onFound` is called. Default: 0
-     * @returns The number of values found, or R if the callback returned
-     *        `{break:R}` to stop early.
-     * @description Computational complexity: O(number of items scanned + log size)
-     */
-    forRange<R = number>(low: K, high: K, includeHigh: boolean, onFound?: (k: K, v: V, counter: number) => {
-        break?: R;
-    } | void, initialCounter?: number): R | number;
+    forRange(low: K, high: K, includeHigh: boolean, onFound?: (k: K, v: V, counter: number) => void, initialCounter?: number): number;
     /**
      * Scans and potentially modifies values for a subsequence of keys.
      * Note: the callback `onFound` should ideally be a pure function.
@@ -408,6 +348,8 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
     freeze(): void;
     /** Ensures mutations are allowed, reversing the effect of freeze(). */
     unfreeze(): void;
+    /** Returns true if the tree appears to be frozen. */
+    readonly isFrozen: boolean;
     /** Scans the tree for signs of serious bugs (e.g. this.size doesn't match
      *  number of elements, internal nodes not caching max element properly...)
      *  Computational complexity: O(number of nodes), i.e. O(size). This method
@@ -415,30 +357,5 @@ export default class BTree<K = any, V = any> implements IMap<K, V> {
      *  does check that maxKey() of the children of internal nodes are sorted. */
     checkValid(): void;
 }
-/** Leaf node / base class. **************************************************/
-declare class BNode<K, V> {
-    keys: K[];
-    values: V[];
-    isShared: true | undefined;
-    readonly isLeaf: boolean;
-    constructor(keys?: K[], values?: V[]);
-    maxKey(): K;
-    indexOf(key: K, failXor: number, cmp: (a: K, b: K) => number): index;
-    minKey(): K;
-    clone(): BNode<K, V>;
-    greedyClone(force?: boolean): BNode<K, V>;
-    get(key: K, defaultValue: V | undefined, tree: BTree<K, V>): V | undefined;
-    checkValid(depth: number, tree: BTree<K, V>): number;
-    set(key: K, value: V, overwrite: boolean | undefined, tree: BTree<K, V>): boolean | BNode<K, V>;
-    reifyValues(): V[];
-    insertInLeaf(i: index, key: K, value: V, tree: BTree<K, V>): boolean;
-    takeFromRight(rhs: BNode<K, V>): void;
-    takeFromLeft(lhs: BNode<K, V>): void;
-    splitOffRightSide(): BNode<K, V>;
-    forRange<R>(low: K, high: K, includeHigh: boolean | undefined, editMode: boolean, tree: BTree<K, V>, count: number, onFound?: (k: K, v: V, counter: number) => EditRangeResult<V, R> | void): EditRangeResult<V, R> | number;
-    /** Adds entire contents of right-hand sibling (rhs is left unchanged) */
-    mergeSibling(rhs: BNode<K, V>, _: number): void;
-}
 /** A BTree frozen in the empty state. */
 export declare const EmptyBTree: BTree<any, any>;
-export {};

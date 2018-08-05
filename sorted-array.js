@@ -71,7 +71,8 @@ var __values = (this && this.__values) || function (o) {
         SortedArray.prototype.minKey = function () { return this.a[0][0]; };
         SortedArray.prototype.maxKey = function () { return this.a[this.a.length - 1][0]; };
         SortedArray.prototype.forEach = function (callbackFn) {
-            this.a.forEach(function (pair) { return callbackFn(pair[1], pair[0]); });
+            var _this = this;
+            this.a.forEach(function (pair) { return callbackFn(pair[1], pair[0], _this); });
         };
         // a.values() used to implement IMap<K,V> but it's not actually available in Node v10.4
         SortedArray.prototype[Symbol.iterator] = function () { return this.a.values(); };

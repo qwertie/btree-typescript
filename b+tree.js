@@ -1,4 +1,3 @@
-// B+ tree by David Piepgrass. License: MIT
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
         ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
@@ -20,6 +19,26 @@ var __extends = (this && this.__extends) || (function () {
 })(function (require, exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
+    // Informative microbenchmarks & stuff:
+    // http://www.jayconrod.com/posts/52/a-tour-of-v8-object-representation (very educational)
+    // https://blog.mozilla.org/luke/2012/10/02/optimizing-javascript-variable-access/ (local vars are faster than properties)
+    // http://benediktmeurer.de/2017/12/13/an-introduction-to-speculative-optimization-in-v8/ (other stuff)
+    // https://jsperf.com/js-in-operator-vs-alternatives (avoid 'in' operator; `.p!==undefined` faster than `hasOwnProperty('p')` in all browsers)
+    // https://jsperf.com/instanceof-vs-typeof-vs-constructor-vs-member (speed of type tests varies wildly across browsers)
+    // https://jsperf.com/detecting-arrays-new (a.constructor===Array is best across browsers, assuming a is an object)
+    // https://jsperf.com/shallow-cloning-methods (a constructor is faster than Object.create; hand-written clone faster than Object.assign)
+    // https://jsperf.com/ways-to-fill-an-array (slice-and-replace is fastest)
+    // https://jsperf.com/math-min-max-vs-ternary-vs-if (Math.min/max is slow on Edge)
+    // https://jsperf.com/array-vs-property-access-speed (v.x/v.y is faster than a[0]/a[1] in major browsers IF hidden class is constant)
+    // https://jsperf.com/detect-not-null-or-undefined (`x==null` slightly slower than `x===null||x===undefined` on all browsers)
+    // Overall, microbenchmarks suggest Firefox is the fastest browser for JavaScript and Edge is the slowest.
+    // Lessons from https://v8project.blogspot.com/2017/09/elements-kinds-in-v8.html:
+    //   - Avoid holes in arrays. Avoid `new Array(N)`, it will be "holey" permanently.
+    //   - Don't read outside bounds of an array (it scans prototype chain).
+    //   - Small integer arrays are stored differently from doubles
+    //   - Adding non-numbers to an array deoptimizes it permanently into a general array
+    //   - Objects can be used like arrays (e.g. have length property) but are slower
+    //   - V8 source (NewElementsCapacity in src/objects.h): arrays grow by 50% + 16 elements
     /** Compares two numbers, strings, arrays of numbers/strings, Dates,
      *  or objects that have a valueOf() method returning a number or string.
      *  Optimized for numbers. Returns 1 if a>b, -1 if a<b, and 0 if a===b.
@@ -226,12 +245,11 @@ var __extends = (this && this.__extends) || (function () {
         BTree.prototype.delete = function (key) {
             return this.editRange(key, key, true, DeleteRange) !== 0;
         };
-        /** Returns a copy of the tree with the specified key set (the value is undefined). */
         BTree.prototype.with = function (key, value, overwrite) {
             var nu = this.clone();
             return nu.set(key, value, overwrite) || overwrite ? nu : this;
         };
-        /** Returns a copy of the tree with the specified key-value pair set. */
+        /** Returns a copy of the tree with the specified key-value pairs set. */
         BTree.prototype.withPairs = function (pairs, overwrite) {
             var nu = this.clone();
             return nu.setPairs(pairs, overwrite) !== 0 || overwrite ? nu : this;
@@ -444,7 +462,8 @@ var __extends = (this && this.__extends) || (function () {
             }
             return { nodequeue: nodequeue, nodeindex: nodeindex, leaf: nextnode };
         };
-        /** Returns a new iterator for iterating the keys of each pair in ascending order. */
+        /** Returns a new iterator for iterating the keys of each pair in ascending order.
+         *  @param firstKey: Minimum key to include in the output. */
         BTree.prototype.keys = function (firstKey) {
             var it = this.entries(firstKey, ReusedArray);
             return iterator(function () {
@@ -454,7 +473,8 @@ var __extends = (this && this.__extends) || (function () {
                 return n;
             });
         };
-        /** Returns a new iterator for iterating the values of each pair in order by key. */
+        /** Returns a new iterator for iterating the values of each pair in order by key.
+         *  @param firstKey: Minimum key whose associated value is included in the output. */
         BTree.prototype.values = function (firstKey) {
             var it = this.entries(firstKey, ReusedArray);
             return iterator(function () {
@@ -543,12 +563,12 @@ var __extends = (this && this.__extends) || (function () {
             var p = this.nextHigherPair(key);
             return p ? p[0] : p;
         };
-        /** Returns the next pair whose key is larger than the specified key (or undefined if there is none) */
+        /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none) */
         BTree.prototype.nextLowerPair = function (key) {
             var it = this.entriesReversed(key, ReusedArray, true);
             return it.next().value;
         };
-        /** Returns the next key larger than the specified key (or undefined if there is none) */
+        /** Returns the next key smaller than the specified key (or undefined if there is none) */
         BTree.prototype.nextLowerKey = function (key) {
             var p = this.nextLowerPair(key);
             return p ? p[0] : p;
@@ -713,6 +733,14 @@ var __extends = (this && this.__extends) || (function () {
             delete this.set;
             delete this.editRange;
         };
+        Object.defineProperty(BTree.prototype, "isFrozen", {
+            /** Returns true if the tree appears to be frozen. */
+            get: function () {
+                return this.hasOwnProperty('editRange');
+            },
+            enumerable: true,
+            configurable: true
+        });
         /** Scans the tree for signs of serious bugs (e.g. this.size doesn't match
          *  number of elements, internal nodes not caching max element properly...)
          *  Computational complexity: O(number of nodes), i.e. O(size). This method
@@ -729,6 +757,7 @@ var __extends = (this && this.__extends) || (function () {
         BTree.prototype[Symbol.iterator] = BTree.prototype.entries;
     BTree.prototype.where = BTree.prototype.filter;
     BTree.prototype.setRange = BTree.prototype.setPairs;
+    BTree.prototype.add = BTree.prototype.set;
     function iterator(next) {
         if (next === void 0) { next = (function () { return ({ done: true, value: undefined }); }); }
         var result = { next: next };
@@ -1195,14 +1224,13 @@ var __extends = (this && this.__extends) || (function () {
         };
         return BNodeInternal;
     }(BNode));
-    // TODO: it's much simpler and maybe faster to a separate empty array per 
-    //       node. Test perf of that. (Use shared empty array in shared nodes?)
     // Optimization: this array of `undefined`s is used instead of a normal
     // array of values in nodes where `undefined` is the only value.
     // Its length is extended to max node size on first use; since it can
     // be shared between trees with different maximums, its length can only
     // increase, never decrease. Its type should be undefined[] but strangely
-    // TypeScript won't allow the comparison V[] === undefined[]
+    // TypeScript won't allow the comparison V[] === undefined[]. To prevent
+    // users from making this array too large, BTree has a maximum node size.
     var undefVals = [];
     var Delete = { delete: true }, DeleteRange = function () { return Delete; };
     var Break = { break: true };
