@@ -1,8 +1,9 @@
 {
   "name": "sorted-btree",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "A sorted list of key-value pairs in a fast, typed in-memory B+ tree with a powerful API.",
   "main": "b+tree.js",
+  "typings": "b+tree",
   "scripts": {
     "test": "tsc && echo //ts-jest-issue-657 >interfaces.js && jest",
     "build": "tsc && npm run minify",
@@ -77,7 +78,8 @@
       "jsx",
       "json"
     ],
-    "bail": true
+    "bail": true,
+    "testEnvironment": "node"    
   },
   "testpack": {
     "packagejson": {
