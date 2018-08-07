@@ -268,8 +268,9 @@ for (let size of [1000, 10000, 100000, 1000000]) {
   measure(sum => `Sum of all values with iterator in B+ tree: ${sum}`, () => {
     var sum = 0;
     // entries() (instead of values()) with reused pair should be fastest
-    for (var p of tree.entries(undefined, []))
-      sum += p[1];
+    // (not using for-of because tsc is in ES5 mode w/o --downlevelIteration)
+    for (var it = tree.entries(undefined, []), next = it.next(); !next.done; next = it.next())
+      sum += next.value[1];
     return sum;
   });
   measure(sum => `Sum of all values with forEach in Map: ${sum}`, () => {

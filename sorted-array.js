@@ -1,13 +1,3 @@
-var __values = (this && this.__values) || function (o) {
-    var m = typeof Symbol === "function" && o[Symbol.iterator], i = 0;
-    if (m) return m.call(o);
-    return {
-        next: function () {
-            if (o && i >= o.length) o = void 0;
-            return { value: o && o[i++], done: !o };
-        }
-    };
-};
 (function (factory) {
     if (typeof module === "object" && typeof module.exports === "object") {
         var v = factory(require, exports);
@@ -22,22 +12,12 @@ var __values = (this && this.__values) || function (o) {
     /** A super-inefficient sorted list for testing purposes */
     var SortedArray = /** @class */ (function () {
         function SortedArray(entries, compare) {
-            var e_1, _a;
             this.cmp = compare || (function (a, b) { return a < b ? -1 : a > b ? 1 : a === b ? 0 : a - b; });
             this.a = [];
             if (entries !== undefined)
-                try {
-                    for (var entries_1 = __values(entries), entries_1_1 = entries_1.next(); !entries_1_1.done; entries_1_1 = entries_1.next()) {
-                        var e = entries_1_1.value;
-                        this.set(e[0], e[1]);
-                    }
-                }
-                catch (e_1_1) { e_1 = { error: e_1_1 }; }
-                finally {
-                    try {
-                        if (entries_1_1 && !entries_1_1.done && (_a = entries_1.return)) _a.call(entries_1);
-                    }
-                    finally { if (e_1) throw e_1.error; }
+                for (var _i = 0, entries_1 = entries; _i < entries_1.length; _i++) {
+                    var e = entries_1[_i];
+                    this.set(e[0], e[1]);
                 }
         }
         Object.defineProperty(SortedArray.prototype, "size", {
