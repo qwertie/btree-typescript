@@ -7,6 +7,8 @@ This is a fast B+ tree implementation, largely compatible with the standard Map,
 
 `BTree` is faster and/or uses less memory than other popular JavaScript sorted trees (see Benchmarks). However, data structures in JavaScript tend to be slower than the built-in `Array` and `Map` data structures in typical cases, because the built-in data structures are mostly implemented in a faster language such as C++. Even so, if you have a large amount of data that you want to keep sorted, the built-in data structures will not serve you well, and `BTree` offers features like fast cloning that the built-in types don't.
 
+Use `npm install sorted-btree` in a terminal to install it in your npm-based project.
+
 Features
 --------
 
