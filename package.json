@@ -52,6 +52,7 @@
     "babel-core": "^6.26.3",
     "bintrees": "^1.0.2",
     "collections": "^5.1.5",
+    "fast-check": "^2.2.0",
     "functional-red-black-tree": "^1.0.1",
     "jest": "^23.4.1",
     "mersenne-twister": "^1.1.0",
@@ -79,7 +80,7 @@
       "json"
     ],
     "bail": true,
-    "testEnvironment": "node"    
+    "testEnvironment": "node"
   },
   "testpack": {
     "packagejson": {

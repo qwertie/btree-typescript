@@ -1,6 +1,7 @@
 import BTree, {IMap, EmptyBTree} from './b+tree';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
+import * as fc from 'fast-check';
 
 var test: (name:string,f:()=>void)=>void = it;
 
@@ -386,3 +387,77 @@ function testBTree(maxNodeSize: number)
     expectTreeEqualTo(t9, list);
   });
 }
+
+describe("middle delete", () => {
+  it("should always match Set", () => {
+    const tree = new BTree<number,number>(undefined, undefined, 4);
+    const keys = new Set<number>();
+
+    // tree and keys should always contain same keys
+    for (let i=0; i < 200; i++) {
+        // add to both
+        tree.set(i, i);
+        keys.add(i);
+        if (tree.size > 50 && i % 2 == 0) {
+            const key = Math.floor(i / 2);
+            // delete from both
+            tree.delete(key);
+            keys.delete(key);
+            keys.forEach(key => {
+                if (!tree.has(key)) {
+                    throw new Error('No key ' + key + ' found in tree at cycle ' + i);
+                }
+            })
+        }
+    }
+  })
+})
+
+describe('properties', () => {
+  it('should always contain keys added and not removed', () => {
+
+    type Model = {
+      // set: Set<number>;
+      arr: SortedArray<number, number|undefined>;
+    };
+
+    class SetCommand implements fc.Command<Model, BTree<number,number|undefined>> {
+      constructor(readonly value: number) {}
+      check = (m: Readonly<Model>) => true;
+      run(m: Model, tree: BTree<number,number|undefined>): void {
+        tree.set(this.value, this.value); // impact the system
+        // m.set.add(this.value);            // impact the model
+        m.arr.set(this.value, this.value);
+        expectTreeEqualTo(tree, m.arr);
+      }
+      toString = () => `set(${this.value})`;
+    }
+    class DeleteCommand implements fc.Command<Model, BTree<number,number|undefined>> {
+      constructor(readonly idx: number) {}
+      check(m: Readonly<Model>): boolean {
+        // should not call pop on empty BTree
+        return m.arr.size > 0;
+      }
+      run(m: Model, tree: BTree<number,number|undefined>): void {
+        let kv = m.arr.getArray().splice(this.idx % m.arr.size, 1)[0]; // select a key
+        tree.delete(kv[0]);
+        expectTreeEqualTo(tree, m.arr);
+      }
+      toString = () => `delete(%${this.idx})`;
+    }
+
+    // define the possible commands and their inputs
+    const allCommands = [
+      fc.integer().map(v => new SetCommand(v)),
+      fc.integer().map(v => new DeleteCommand(v)),
+    ];
+    // run everything
+    fc.assert(
+      fc.property(fc.commands(allCommands, 50), cmds => {
+        const s = () => ({ model: { arr: new SortedArray() }, real: new BTree() });
+        fc.modelRun(s, cmds);
+      })
+    );
+
+  })
+})
