@@ -1171,7 +1171,16 @@ var __extends = (this && this.__extends) || (function () {
                         if (children[i].isShared)
                             children[i] = children[i].clone();
                         var result = children[i].forRange(low, high, includeHigh, editMode, tree, count, onFound);
-                        keys[i] = children[i].maxKey();
+                        if (children[i].keys.length > 0) {
+                            keys[i] = children[i].maxKey();
+                        }
+                        else {
+                            // delete empty child
+                            keys.splice(i, 1);
+                            children.splice(i, 1);
+                            iHigh--;
+                            i--;
+                        }
                         if (typeof result !== 'number')
                             return result;
                         count = result;
@@ -1187,7 +1196,7 @@ var __extends = (this && this.__extends) || (function () {
                             this.tryMerge(i, tree._maxNodeSize);
                     }
                     // Are we completely empty?
-                    if (children[0].keys.length === 0) {
+                    if (children.length > 0 && children[0].keys.length === 0) {
                         check(children.length === 1 && keys.length === 1, "emptiness bug");
                         children.shift();
                         keys.shift();
