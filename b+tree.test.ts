@@ -385,4 +385,17 @@ function testBTree(maxNodeSize: number)
       list.delete(k);
     expectTreeEqualTo(t9, list);
   });
+
+  test("Issue #2 reproduction", () => {
+    const tree = new BTree<number>([], (a, b) => a - b, maxNodeSize);
+    for (let i = 0; i <= 1999; i++) {
+      tree.set(i, i);
+      if (tree.size > 100 && i % 2 == 0) {
+        const key = i / 2;
+        tree.delete(key);
+        tree.checkValid();
+        expect(tree.size).toBe(i / 2 + 50);
+      }
+    }
+  }
 }

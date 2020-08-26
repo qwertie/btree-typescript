@@ -747,7 +747,7 @@ var __extends = (this && this.__extends) || (function () {
          *  skips the most expensive test - whether all keys are sorted - but it
          *  does check that maxKey() of the children of internal nodes are sorted. */
         BTree.prototype.checkValid = function () {
-            var size = this._root.checkValid(0, this);
+            var size = this._root.checkValid(0, this, 0);
             check(size === this.size, "size mismatch: counted ", size, "but stored", this.size);
         };
         return BTree;
@@ -866,15 +866,15 @@ var __extends = (this && this.__extends) || (function () {
             var i = this.indexOf(key, -1, tree._compare);
             return i < 0 ? defaultValue : this.values[i];
         };
-        BNode.prototype.checkValid = function (depth, tree) {
+        BNode.prototype.checkValid = function (depth, tree, baseIndex) {
             var kL = this.keys.length, vL = this.values.length;
-            check(this.values === undefVals ? kL <= vL : kL === vL, "keys/values length mismatch: depth", depth, "with lengths", kL, vL);
+            check(this.values === undefVals ? kL <= vL : kL === vL, "keys/values length mismatch: depth", depth, "with lengths", kL, vL, "and baseIndex", baseIndex);
             // Note: we don't check for "node too small" because sometimes a node
             // can legitimately have size 1. This occurs if there is a batch 
             // deletion, leaving a node of size 1, and the siblings are full so
             // it can't be merged with adjacent nodes. However, the parent will
             // verify that the average node size is at least half of the maximum.
-            check(depth == 0 || kL > 0, "empty leaf at depth", depth);
+            check(depth == 0 || kL > 0, "empty leaf at depth", depth, "and baseIndex", baseIndex);
             return kL;
         };
         // Leaf Node: set & node splitting //////////////////////////////////////////
@@ -1062,24 +1062,26 @@ var __extends = (this && this.__extends) || (function () {
             var i = this.indexOf(key, 0, tree._compare), children = this.children;
             return i < children.length ? children[i].get(key, defaultValue, tree) : undefined;
         };
-        BNodeInternal.prototype.checkValid = function (depth, tree) {
+        BNodeInternal.prototype.checkValid = function (depth, tree, baseIndex) {
             var kL = this.keys.length, cL = this.children.length;
-            check(kL === cL, "keys/children length mismatch: depth", depth, "lengths", kL, cL);
-            check(kL > 1, "internal node has length", kL, "at depth", depth);
+            check(kL === cL, "keys/children length mismatch: depth", depth, "lengths", kL, cL, "baseIndex", baseIndex);
+            check(kL > 1 || depth > 0, "internal node has length", kL, "at depth", depth, "baseIndex", baseIndex);
             var size = 0, c = this.children, k = this.keys, childSize = 0;
             for (var i = 0; i < cL; i++) {
-                size += c[i].checkValid(depth + 1, tree);
+                size += c[i].checkValid(depth + 1, tree, baseIndex + size);
                 childSize += c[i].keys.length;
-                check(size >= childSize, "wtf"); // no way this will ever fail
-                check(i === 0 || c[i - 1].constructor === c[i].constructor, "type mismatch");
+                check(size >= childSize, "wtf", baseIndex); // no way this will ever fail
+                check(i === 0 || c[i - 1].constructor === c[i].constructor, "type mismatch, baseIndex:", baseIndex);
                 if (c[i].maxKey() != k[i])
-                    check(false, "keys[", i, "] =", k[i], "is wrong, should be ", c[i].maxKey(), "at depth", depth);
+                    check(false, "keys[", i, "] =", k[i], "is wrong, should be ", c[i].maxKey(), "at depth", depth, "baseIndex", baseIndex);
                 if (!(i === 0 || tree._compare(k[i - 1], k[i]) < 0))
                     check(false, "sort violation at depth", depth, "index", i, "keys", k[i - 1], k[i]);
             }
-            var toofew = childSize < (tree.maxNodeSize >> 1) * cL;
+            // 2020/08 this code doesn't always avoid grossly undersized nodes,
+            // but AFAIK such nodes are pretty harmless, so accept them.
+            var toofew = childSize === 0; // childSize < (tree.maxNodeSize >> 1)*cL;
             if (toofew || childSize > tree.maxNodeSize * cL)
-                check(false, toofew ? "too few" : "too many", "children (", childSize, size, ") at depth", depth, ", maxNodeSize:", tree.maxNodeSize, "children.length:", cL);
+                check(false, toofew ? "too few" : "too many", "children (", childSize, size, ") at depth", depth, "maxNodeSize:", tree.maxNodeSize, "children.length:", cL, "baseIndex:", baseIndex);
             return size;
         };
         // Internal Node: set & node splitting //////////////////////////////////////
@@ -1151,11 +1153,14 @@ var __extends = (this && this.__extends) || (function () {
             this.children.unshift(lhs.children.pop());
         };
         // Internal Node: scanning & deletions //////////////////////////////////////
+        // Note: `count` is the next value of the third argument to `onFound`. 
+        //       A leaf node's `forRange` function returns a new value for this counter,
+        //       unless the operation is to stop early.
         BNodeInternal.prototype.forRange = function (low, high, includeHigh, editMode, tree, count, onFound) {
             var cmp = tree._compare;
-            var iLow = this.indexOf(low, 0, cmp), i = iLow;
-            var iHigh = Math.min(high === low ? iLow : this.indexOf(high, 0, cmp), this.keys.length - 1);
             var keys = this.keys, children = this.children;
+            var iLow = this.indexOf(low, 0, cmp), i = iLow;
+            var iHigh = Math.min(high === low ? iLow : this.indexOf(high, 0, cmp), keys.length - 1);
             if (!editMode) {
                 // Simple case
                 for (; i <= iHigh; i++) {
@@ -1171,6 +1176,8 @@ var __extends = (this && this.__extends) || (function () {
                         if (children[i].isShared)
                             children[i] = children[i].clone();
                         var result = children[i].forRange(low, high, includeHigh, editMode, tree, count, onFound);
+                        // Note: if children[i] is empty then keys[i]=undefined.
+                        //       This is an invalid state, but it is fixed below.
                         keys[i] = children[i].maxKey();
                         if (typeof result !== 'number')
                             return result;
@@ -1183,15 +1190,18 @@ var __extends = (this && this.__extends) || (function () {
                     if (iLow > 0)
                         iLow--;
                     for (i = iHigh; i >= iLow; i--) {
-                        if (children[i].keys.length <= half)
-                            this.tryMerge(i, tree._maxNodeSize);
+                        if (children[i].keys.length <= half) {
+                            if (children[i].keys.length !== 0) {
+                                this.tryMerge(i, tree._maxNodeSize);
+                            }
+                            else { // child is empty! delete it!
+                                keys.splice(i, 1);
+                                children.splice(i, 1);
+                            }
+                        }
                     }
-                    // Are we completely empty?
-                    if (children[0].keys.length === 0) {
-                        check(children.length === 1 && keys.length === 1, "emptiness bug");
-                        children.shift();
-                        keys.shift();
-                    }
+                    if (children.length !== 0 && children[0].keys.length === 0)
+                        check(false, "emptiness bug");
                 }
             }
             return count;
@@ -1247,7 +1257,7 @@ var __extends = (this && this.__extends) || (function () {
             args[_i - 1] = arguments[_i];
         }
         if (!fact) {
-            args.unshift('B+ tree '); // at beginning of message
+            args.unshift('B+ tree'); // at beginning of message
             throw new Error(args.join(' '));
         }
     }

@@ -58,7 +58,7 @@ Features
 - Fast clone: `t.clone()`
 - For more information, **see [full documentation](https://github.com/qwertie/btree-typescript/blob/master/b%2Btree.ts) in the source code.**
 
-**Note:** Confusingly, the ES6 `Map.forEach(c)` method calls `c(value,key)` instead of `c(key,value)`, in contrast to other methods such as `set()` and `entries()` which put the key first. I can only assume that they reversed the order on the theory that users would usually want to examine values and ignore keys. BTree's `forEach()` therefore works the same way, but a second method `.forEachPair((key,value)=>{...})` is provided which sends you the key first and the value second; this method is slightly faster because it is the "native" for-each method for this class.
+**Note:** Confusingly, the ES6 `Map.forEach(c)` method calls `c(value,key)` instead of `c(key,value)`, in contrast to other methods such as `set()` and `entries()` which put the key first. I can only assume that they reversed the order on the hypothesis that users would usually want to examine values and ignore keys. BTree's `forEach()` therefore works the same way, but there is a second method `.forEachPair((key,value)=>{...})` which sends you the key first and the value second; this method is slightly faster because it is the "native" for-each method for this class.
 
 **Note:** Duplicate keys are not allowed (supporting duplicates properly is complex).
 
