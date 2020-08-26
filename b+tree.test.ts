@@ -36,9 +36,9 @@ describe('Simple tests on leaf nodes', () =>
     let tree = new BTree<number,string>([[0,""],[1,"1"],[2,"to"],[3,"tri"],[4,"four"],[5,"five!"]]);
     test('forEach', () => {
       let i = 0;
-      expect(tree.forEach(function(v,k,tree_) {
+      expect(tree.forEach(function(this:any, v, k, tree_) {
         expect(tree_).toBe(tree);
-        expect(this.self).toBe("me");
+        expect((this as any).self).toBe("me");
         forExpector(k, v, i, i++);
       }, {self:"me"})).toBe(6);
     });
@@ -121,7 +121,7 @@ describe('Simple tests on leaf nodes', () =>
       expectTreeEqualTo(tree, new SortedArray([["B",2],["D",4],["E",5],["F",6],["G",7]]));
     });
     test('editRange() - again', () => {
-      expect(tree.editRange(tree.minKey(), "F", true, (k,v,counter) => {
+      expect(tree.editRange(tree.minKey()!, "F", true, (k,v,counter) => {
         if (k == "D")
           return {value: 44};
         if (k == "E" || k == "G")
@@ -332,10 +332,10 @@ function testBTree(maxNodeSize: number)
       addToBoth(tree, list, i*10, i);
     
     // Test reduce()
-    expect(tree.reduce((sum, pair) => sum + pair[1], 0)).toBe(501*250);
+    expect(tree.reduce((sum, pair) => sum + pair[1]!, 0)).toBe(501*250);
     
     // Test mapValues()
-    tree.mapValues(v => v*10).forEachPair((k, v) => { expect(v).toBe(k) });
+    tree.mapValues(v => v!*10).forEachPair((k, v) => { expect(v).toBe(k) });
 
     // Perform various kinds of no-ops
     var t1 = tree;
@@ -381,7 +381,7 @@ function testBTree(maxNodeSize: number)
 
     // Filter out all hundreds
     var t9 = t8.filter(k => k % 100 !== 0, true);
-    for (let k = 0; k <= tree.maxKey(); k += 100)
+    for (let k = 0; k <= tree.maxKey()!; k += 100)
       list.delete(k);
     expectTreeEqualTo(t9, list);
   });
@@ -397,5 +397,5 @@ function testBTree(maxNodeSize: number)
         expect(tree.size).toBe(i / 2 + 50);
       }
     }
-  }
+  });
 }

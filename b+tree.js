@@ -1077,7 +1077,7 @@ var __extends = (this && this.__extends) || (function () {
                 if (!(i === 0 || tree._compare(k[i - 1], k[i]) < 0))
                     check(false, "sort violation at depth", depth, "index", i, "keys", k[i - 1], k[i]);
             }
-            // 2020/08 this code doesn't always avoid grossly undersized nodes,
+            // 2020/08: BTree doesn't always avoid grossly undersized nodes,
             // but AFAIK such nodes are pretty harmless, so accept them.
             var toofew = childSize === 0; // childSize < (tree.maxNodeSize >> 1)*cL;
             if (toofew || childSize > tree.maxNodeSize * cL)

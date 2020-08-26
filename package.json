@@ -1,6 +1,6 @@
 {
   "name": "sorted-btree",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "A sorted list of key-value pairs in a fast, typed in-memory B+ tree with a powerful API.",
   "main": "b+tree.js",
   "typings": "b+tree",
@@ -97,7 +97,7 @@
     "dirty": true,
     "replace-import//": "// Use the minified version in .testpack",
     "replace-import": [
-      "|./b\\+tree|$P/b+tree.min|",
+      "|./b\\+tree|$P/b+tree|",
       "|..?|$P|",
       "|..?([/\\\\].*)|$P$1|"
     ]
