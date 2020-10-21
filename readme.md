@@ -372,6 +372,15 @@ Benchmarks (in milliseconds for integer keys/values)
 Version history
 ---------------
 
+### v1.2.4 ###
+
+- Issue #9 fixed: `nextLowerPair(0)` was being treated like `nextLowerPair(undefined)`, and `nextLowerPair(undefined)` was returning the second-highest pair when it should have returned the highest pair.
+
+### v1.2.3 ###
+
+- Important bug fix in deletion code avoids occasional tree corruption that can occur after a series of delete operations
+- Add `typings` option in package.json so that `tsc` works for end-users
+
 ### v1.2 ###
 
 - Added a complete lattice of interfaces as described above.
@@ -393,6 +402,7 @@ Version history
 ### v1.0: Initial version ###
 
 - With fast cloning and all that good stuff
+
 
 ### Endnote ###
 

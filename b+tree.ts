@@ -398,7 +398,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
   /** Returns an iterator that provides items in reversed order.
    *  @param highestKey Key at which to start iterating, or undefined to 
-   *         start at minKey(). If the specified key doesn't exist then iteration
+   *         start at maxKey(). If the specified key doesn't exist then iteration
    *         starts at the next lower key (according to the comparator).
    *  @param reusedArray Optional array used repeatedly to store key-value
    *         pairs, to avoid creating a new array on every iteration.
@@ -406,8 +406,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    *         collection, the pair matching highestKey is skipped, not iterated.
    */
   entriesReversed(highestKey?: K, reusedArray?: (K|V)[], skipHighest?: boolean): IterableIterator<[K,V]> {
-    if ((highestKey = highestKey || this.maxKey()) === undefined)
-      return iterator<[K,V]>(); // collection is empty
+    if (highestKey === undefined) {
+      highestKey = this.maxKey();
+      skipHighest = undefined;
+      if (highestKey === undefined)
+        return iterator<[K,V]>(); // collection is empty
+    }
     var {nodequeue,nodeindex,leaf} = this.findPath(highestKey) || this.findPath(this.maxKey())!;
     check(!nodequeue[0] || leaf === nodequeue[0][nodeindex[0]], "wat!");
     var i = leaf.indexOf(highestKey, 0, this._compare);
@@ -580,29 +584,33 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return this.set(key, value, false);
   }
 
-  /** Returns the next pair whose key is larger than the specified key (or undefined if there is none) */
-  nextHigherPair(key: K): [K,V]|undefined {
+  /** Returns the next pair whose key is larger than the specified key (or undefined if there is none).
+   *  If key === undefined, this function returns the lowest pair.
+   */
+  nextHigherPair(key: K|undefined): [K,V]|undefined {
     var it = this.entries(key, ReusedArray);
     var r = it.next();
-    if (!r.done && this._compare(r.value[0], key) <= 0)
+    if (!r.done && key !== undefined && this._compare(r.value[0], key) <= 0)
       r = it.next();
     return r.value;
   }
   
   /** Returns the next key larger than the specified key (or undefined if there is none) */
-  nextHigherKey(key: K): K|undefined {
+  nextHigherKey(key: K|undefined): K|undefined {
     var p = this.nextHigherPair(key);
     return p ? p[0] : p;
   }
 
-  /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none) */
-  nextLowerPair(key: K): [K,V]|undefined {
+  /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none).
+   *  If key === undefined, this function returns the highest pair.
+   */
+  nextLowerPair(key: K|undefined): [K,V]|undefined {
     var it = this.entriesReversed(key, ReusedArray, true);
     return it.next().value;
   }
   
   /** Returns the next key smaller than the specified key (or undefined if there is none) */
-  nextLowerKey(key: K): K|undefined {
+  nextLowerKey(key: K|undefined): K|undefined {
     var p = this.nextLowerPair(key);
     return p ? p[0] : p;
   }

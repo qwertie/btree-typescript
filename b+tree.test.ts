@@ -398,4 +398,33 @@ function testBTree(maxNodeSize: number)
       }
     }
   });
+
+  test("nextLowerPair/nextHigherPair and issue #9: nextLowerPair returns highest pair if key is 0", () => {
+    const tree = new BTree<number,number>(undefined, undefined, maxNodeSize);
+    tree.set(-2, 123);
+    tree.set(0, 1234);
+    tree.set(2, 12345);
+    
+    expect(tree.nextLowerPair(-2)).toEqual(undefined);
+    expect(tree.nextLowerPair(-1)).toEqual([-2, 123]);
+    expect(tree.nextLowerPair(0)).toEqual([-2, 123]);
+    expect(tree.nextLowerKey(0)).toBe(-2);
+    expect(tree.nextHigherPair(-1)).toEqual([0, 1234]);
+    expect(tree.nextHigherPair(0)).toEqual([2, 12345]);
+    expect(tree.nextHigherKey(0)).toBe(2);
+    expect(tree.nextHigherPair(1)).toEqual([2, 12345]);
+    expect(tree.nextHigherPair(2)).toEqual(undefined);
+    expect(tree.nextLowerPair(undefined)).toEqual([2, 12345]);
+    expect(tree.nextHigherPair(undefined)).toEqual([-2, 123]);
+
+    for (var i = -10; i <= 300; i++) // embiggen the tree
+      tree.set(i, i*2);
+    expect(tree.nextLowerPair(-1)).toEqual([-2, -4]);
+    expect(tree.nextLowerPair(0)).toEqual([-1, -2]);
+    expect(tree.nextHigherPair(-1)).toEqual([0, 0]);
+    expect(tree.nextHigherPair(0)).toEqual([1, 2]);
+    
+    expect(tree.nextLowerPair(undefined)).toEqual([300, 600]);
+    expect(tree.nextHigherPair(undefined)).toEqual([-10, -20]);
+  });
 }

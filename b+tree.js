@@ -379,7 +379,7 @@ var __extends = (this && this.__extends) || (function () {
         };
         /** Returns an iterator that provides items in reversed order.
          *  @param highestKey Key at which to start iterating, or undefined to
-         *         start at minKey(). If the specified key doesn't exist then iteration
+         *         start at maxKey(). If the specified key doesn't exist then iteration
          *         starts at the next lower key (according to the comparator).
          *  @param reusedArray Optional array used repeatedly to store key-value
          *         pairs, to avoid creating a new array on every iteration.
@@ -387,8 +387,12 @@ var __extends = (this && this.__extends) || (function () {
          *         collection, the pair matching highestKey is skipped, not iterated.
          */
         BTree.prototype.entriesReversed = function (highestKey, reusedArray, skipHighest) {
-            if ((highestKey = highestKey || this.maxKey()) === undefined)
-                return iterator(); // collection is empty
+            if (highestKey === undefined) {
+                highestKey = this.maxKey();
+                skipHighest = undefined;
+                if (highestKey === undefined)
+                    return iterator(); // collection is empty
+            }
             var _a = this.findPath(highestKey) || this.findPath(this.maxKey()), nodequeue = _a.nodequeue, nodeindex = _a.nodeindex, leaf = _a.leaf;
             check(!nodequeue[0] || leaf === nodequeue[0][nodeindex[0]], "wat!");
             var i = leaf.indexOf(highestKey, 0, this._compare);
@@ -550,11 +554,13 @@ var __extends = (this && this.__extends) || (function () {
         BTree.prototype.setIfNotPresent = function (key, value) {
             return this.set(key, value, false);
         };
-        /** Returns the next pair whose key is larger than the specified key (or undefined if there is none) */
+        /** Returns the next pair whose key is larger than the specified key (or undefined if there is none).
+         *  If key === undefined, this function returns the lowest pair.
+         */
         BTree.prototype.nextHigherPair = function (key) {
             var it = this.entries(key, ReusedArray);
             var r = it.next();
-            if (!r.done && this._compare(r.value[0], key) <= 0)
+            if (!r.done && key !== undefined && this._compare(r.value[0], key) <= 0)
                 r = it.next();
             return r.value;
         };
@@ -563,7 +569,9 @@ var __extends = (this && this.__extends) || (function () {
             var p = this.nextHigherPair(key);
             return p ? p[0] : p;
         };
-        /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none) */
+        /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none).
+         *  If key === undefined, this function returns the highest pair.
+         */
         BTree.prototype.nextLowerPair = function (key) {
             var it = this.entriesReversed(key, ReusedArray, true);
             return it.next().value;

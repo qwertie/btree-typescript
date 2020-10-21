@@ -212,7 +212,7 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
     entries(lowestKey?: K, reusedArray?: (K | V)[]): IterableIterator<[K, V]>;
     /** Returns an iterator that provides items in reversed order.
      *  @param highestKey Key at which to start iterating, or undefined to
-     *         start at minKey(). If the specified key doesn't exist then iteration
+     *         start at maxKey(). If the specified key doesn't exist then iteration
      *         starts at the next lower key (according to the comparator).
      *  @param reusedArray Optional array used repeatedly to store key-value
      *         pairs, to avoid creating a new array on every iteration.
@@ -257,14 +257,18 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      * @returns true if a new key was added
     */
     setIfNotPresent(key: K, value: V): boolean;
-    /** Returns the next pair whose key is larger than the specified key (or undefined if there is none) */
-    nextHigherPair(key: K): [K, V] | undefined;
+    /** Returns the next pair whose key is larger than the specified key (or undefined if there is none).
+     *  If key === undefined, this function returns the lowest pair.
+     */
+    nextHigherPair(key: K | undefined): [K, V] | undefined;
     /** Returns the next key larger than the specified key (or undefined if there is none) */
-    nextHigherKey(key: K): K | undefined;
-    /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none) */
-    nextLowerPair(key: K): [K, V] | undefined;
+    nextHigherKey(key: K | undefined): K | undefined;
+    /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none).
+     *  If key === undefined, this function returns the highest pair.
+     */
+    nextLowerPair(key: K | undefined): [K, V] | undefined;
     /** Returns the next key smaller than the specified key (or undefined if there is none) */
-    nextLowerKey(key: K): K | undefined;
+    nextLowerKey(key: K | undefined): K | undefined;
     /** Edits the value associated with a key in the tree, if it already exists.
      * @returns true if the key existed, false if not.
     */

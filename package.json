@@ -1,6 +1,6 @@
 {
   "name": "sorted-btree",
-  "version": "1.2.2",
+  "version": "1.2.4",
   "description": "A sorted list of key-value pairs in a fast, typed in-memory B+ tree with a powerful API.",
   "main": "b+tree.js",
   "typings": "b+tree",
@@ -45,19 +45,19 @@
   "homepage": "https://github.com/qwertie/btree-typescript#readme",
   "devDependencies": {
     "@types/bintrees": "^1.0.2",
-    "@types/collections": "^5.0.0",
-    "@types/jasmine": "^2.8.8",
+    "@types/collections": "^5.0.2",
+    "@types/jasmine": "^2.8.17",
     "@types/mersenne-twister": "^1.1.2",
-    "@types/node": "^10.5.3",
+    "@types/node": "^10.17.28",
     "babel-core": "^6.26.3",
     "bintrees": "^1.0.2",
-    "collections": "^5.1.5",
+    "collections": "^5.1.11",
     "functional-red-black-tree": "^1.0.1",
-    "jest": "^23.4.1",
+    "jest": "^23.6.0",
     "mersenne-twister": "^1.1.0",
-    "testpack-cli": "^1.1.2",
+    "testpack-cli": "^1.1.4",
     "ts-jest": "^22.4.6",
-    "ts-node": "^7.0.0",
+    "ts-node": "^7.0.1",
     "typescript": "^2.9.2",
     "uglifyjs": "^2.4.11"
   },
@@ -79,7 +79,7 @@
       "json"
     ],
     "bail": true,
-    "testEnvironment": "node"    
+    "testEnvironment": "node"
   },
   "testpack": {
     "packagejson": {
