@@ -1,7 +1,10 @@
 var __extends = (this && this.__extends) || (function () {
-    var extendStatics = Object.setPrototypeOf ||
-        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -19,6 +22,7 @@ var __extends = (this && this.__extends) || (function () {
 })(function (require, exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
+    exports.EmptyBTree = exports.defaultComparator = void 0;
     // Informative microbenchmarks & stuff:
     // http://www.jayconrod.com/posts/52/a-tour-of-v8-object-representation (very educational)
     // https://blog.mozilla.org/luke/2012/10/02/optimizing-javascript-variable-access/ (local vars are faster than properties)
@@ -141,19 +145,19 @@ var __extends = (this && this.__extends) || (function () {
             // ES6 Map<K,V> methods ///////////////////////////////////////////////////
             /** Gets the number of key-value pairs in the tree. */
             get: function () { return this._size; },
-            enumerable: true,
+            enumerable: false,
             configurable: true
         });
         Object.defineProperty(BTree.prototype, "length", {
             /** Gets the number of key-value pairs in the tree. */
             get: function () { return this._size; },
-            enumerable: true,
+            enumerable: false,
             configurable: true
         });
         Object.defineProperty(BTree.prototype, "isEmpty", {
             /** Returns true iff the tree contains no key-value pairs. */
             get: function () { return this._size === 0; },
-            enumerable: true,
+            enumerable: false,
             configurable: true
         });
         /** Releases the tree so that its size is 0. */
@@ -494,7 +498,7 @@ var __extends = (this && this.__extends) || (function () {
             get: function () {
                 return this._maxNodeSize;
             },
-            enumerable: true,
+            enumerable: false,
             configurable: true
         });
         /** Gets the lowest key in the tree. Complexity: O(log size) */
@@ -718,7 +722,7 @@ var __extends = (this && this.__extends) || (function () {
                     node = node.children;
                 return h;
             },
-            enumerable: true,
+            enumerable: false,
             configurable: true
         });
         /** Makes the object read-only to ensure it is not accidentally modified.
@@ -746,7 +750,7 @@ var __extends = (this && this.__extends) || (function () {
             get: function () {
                 return this.hasOwnProperty('editRange');
             },
-            enumerable: true,
+            enumerable: false,
             configurable: true
         });
         /** Scans the tree for signs of serious bugs (e.g. this.size doesn't match
@@ -783,7 +787,7 @@ var __extends = (this && this.__extends) || (function () {
         }
         Object.defineProperty(BNode.prototype, "isLeaf", {
             get: function () { return this.children === undefined; },
-            enumerable: true,
+            enumerable: false,
             configurable: true
         });
         // Shared methods /////////////////////////////////////////////////////////

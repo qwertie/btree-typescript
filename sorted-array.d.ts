@@ -4,7 +4,7 @@ export default class SortedArray<K = any, V = any> implements IMap<K, V> {
     a: [K, V][];
     cmp: (a: K, b: K) => number;
     constructor(entries?: [K, V][], compare?: (a: K, b: K) => number);
-    readonly size: number;
+    get size(): number;
     get(key: K, defaultValue?: V): V | undefined;
     set(key: K, value: V, overwrite?: boolean): boolean;
     has(key: K): boolean;

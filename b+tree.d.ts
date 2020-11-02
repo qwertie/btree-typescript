@@ -89,11 +89,11 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      */
     constructor(entries?: [K, V][], compare?: (a: K, b: K) => number, maxNodeSize?: number);
     /** Gets the number of key-value pairs in the tree. */
-    readonly size: number;
+    get size(): number;
     /** Gets the number of key-value pairs in the tree. */
-    readonly length: number;
+    get length(): number;
     /** Returns true iff the tree contains no key-value pairs. */
-    readonly isEmpty: boolean;
+    get isEmpty(): boolean;
     /** Releases the tree so that its size is 0. */
     clear(): void;
     forEach(callback: (v: V, k: K, tree: BTree<K, V>) => void, thisArg?: any): number;
@@ -228,7 +228,7 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      *  @param firstKey: Minimum key whose associated value is included in the output. */
     values(firstKey?: K): IterableIterator<V>;
     /** Returns the maximum number of children/values before nodes will split. */
-    readonly maxNodeSize: number;
+    get maxNodeSize(): number;
     /** Gets the lowest key in the tree. Complexity: O(log size) */
     minKey(): K | undefined;
     /** Gets the highest key in the tree. Complexity: O(1) */
@@ -342,7 +342,7 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
     deleteKeys(keys: K[]): number;
     /** Gets the height of the tree: the number of internal nodes between the
      *  BTree object and its leaf nodes (zero if there are no internal nodes). */
-    readonly height: number;
+    get height(): number;
     /** Makes the object read-only to ensure it is not accidentally modified.
      *  Freezing does not have to be permanent; unfreeze() reverses the effect.
      *  This is accomplished by replacing mutator functions with a function
@@ -353,7 +353,7 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
     /** Ensures mutations are allowed, reversing the effect of freeze(). */
     unfreeze(): void;
     /** Returns true if the tree appears to be frozen. */
-    readonly isFrozen: boolean;
+    get isFrozen(): boolean;
     /** Scans the tree for signs of serious bugs (e.g. this.size doesn't match
      *  number of elements, internal nodes not caching max element properly...)
      *  Computational complexity: O(number of nodes), i.e. O(size). This method

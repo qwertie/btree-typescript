@@ -22,7 +22,7 @@
         }
         Object.defineProperty(SortedArray.prototype, "size", {
             get: function () { return this.a.length; },
-            enumerable: true,
+            enumerable: false,
             configurable: true
         });
         SortedArray.prototype.get = function (key, defaultValue) {

@@ -372,6 +372,10 @@ Benchmarks (in milliseconds for integer keys/values)
 Version history
 ---------------
 
+### v1.3.0 ###
+
+- Now built with TypeScript v3.8.3. No semantic change.
+
 ### v1.2.4 ###
 
 - Issue #9 fixed: `nextLowerPair(0)` was being treated like `nextLowerPair(undefined)`, and `nextLowerPair(undefined)` was returning the second-highest pair when it should have returned the highest pair.

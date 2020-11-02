@@ -805,7 +805,7 @@ if (Symbol && Symbol.iterator) // iterator is equivalent to entries()
 (BTree as any).prototype.setRange = BTree.prototype.setPairs;
 (BTree as any).prototype.add = BTree.prototype.set;
 
-function iterator<T>(next: () => {done:boolean,value?:T} = (() => ({ done:true, value:undefined }))): IterableIterator<T> {
+function iterator<T>(next: () => IteratorResult<T> = (() => ({ done:true, value:undefined }))): IterableIterator<T> {
   var result: any = { next };
   if (Symbol && Symbol.iterator)
     result[Symbol.iterator] = function() { return this; };
