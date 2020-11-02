@@ -36,7 +36,7 @@ Features
   with all keys in a given node.
 - Includes neat stuff such as `Range` methods for batch operations
 - Throws an exception if you try to use `NaN` as a key, but infinity is allowed.
-- No dependencies. 15K minified.
+- No dependencies. 16K minified.
 - Includes a lattice of interfaces for TypeScript users (see below)
 
 ### Additional operations supported on this B+ tree ###
@@ -371,6 +371,10 @@ Benchmarks (in milliseconds for integer keys/values)
 
 Version history
 ---------------
+
+### v1.4.0 ###
+
+- Now built as CommonJS module instead of UMD module, for better compatibility with webpack. No semantic change.
 
 ### v1.3.0 ###
 
