@@ -30,17 +30,91 @@ type index = number;
 //   - Objects can be used like arrays (e.g. have length property) but are slower
 //   - V8 source (NewElementsCapacity in src/objects.h): arrays grow by 50% + 16 elements
 
-/** Compares two numbers, strings, arrays of numbers/strings, Dates,
- *  or objects that have a valueOf() method returning a number or string. 
- *  Optimized for numbers. Returns 1 if a>b, -1 if a<b, and 0 if a===b.
+/**
+ * numbers, strings and arrays thereof, and objects that have a valueOf() method returning a number or string like Dates.
  */
-export function defaultComparator(a: any, b: any) {
-  var c = a - b;
-  if (c === c) return c; // a & b are number
-  // General case (c is NaN): string / arrays / Date / incomparable things
-  if (a) a = a.valueOf();
-  if (b) b = b.valueOf();
-  return a < b ? -1 : a > b ? 1 : a == b ? 0 : c;   
+export type DefaultComparable = number | string | (number | string)[] | { valueOf: ()=> number | string | (number | string)[] };
+
+/**
+ * Compares DefaultComparables to form a strict partial ordering.
+ * 
+ * Handles +/-0 and NaN like Map: NaN is equal to NaN, and -0 is equal to +0.
+ * 
+ * Arrays are compared using '<' and '>', which may cause unexpected equality: for example [1] will be considered equal to ['1'].
+ * 
+ * Two objects with equal valueOf compare the same, but compare unequal to primitives that have the same value.
+ */
+export function defaultComparator(a: DefaultComparable, b: DefaultComparable): number {
+  // Compare types first.
+  // Note that the trick of using 'a - b' the checking for NaN to detect non numbers values does not work if the strings are numeric (ex: "5"),
+  // leading most comparison functions using that approach to fail to have transitivity.
+  let ta = typeof a;
+  let tb = typeof b;
+  if (ta !== tb) {
+    return ta < tb ? -1 : 1;
+  }
+
+  if (ta === 'object'){
+    a = a.valueOf() as DefaultComparable;
+    b = b.valueOf() as DefaultComparable;
+    ta = typeof a;
+    tb = typeof b;
+    // Deal with one producing a string, and the other a number
+    if (ta !== tb) {
+      return ta < tb ? -1 : 1;
+    }
+  }
+
+  // a and b are now the same type, and either a number, string or array.
+
+  // use Object.is to make NaN compare equal to NaN.
+  // This treats also -0 as not equal to 0, which is handled separately below.
+  if (Object.is(a, b)) return 0;
+
+  // All comparisons with NaN return false, so NaNs will pass here.
+  if (a < b) return -1;
+
+  // Since a and b might be arrays, we cannot rely on === or ==, only < and > do something useful for ordering arrays.
+  // To find if two arrays are equal using comparison operators, both < and > must be checked (even == returns false if not the same object).
+  if (a > b) return 1
+
+  // Order NaN less than other numbers
+  if (Number.isNaN(a)) return -1;
+  if (Number.isNaN(b)) return 1;
+
+  // Handles 0 and -0 case, as well as equal (but not same object) arrays case.
+  return 0;
+};
+
+
+/**
+ * Compares finite numbers to form a strict partial ordering.
+ * 
+ * Handles +/-0 like Map: -0 is equal to +0.
+ */
+export function compareFiniteNumbers(a: number, b: number): number {
+  return a - b;
+};
+
+/**
+ * Compares strings lexically to form a strict partial ordering.
+ */
+export function compareStrings(a: string, b:string): number {
+  return a > b ? 1 : a === b ? 0 : -1;
+};
+
+/**
+ * If a and b are arrays, they are compared using '<' and '>', which may cause unexpected equality, for example [1] will be considered equal to ['1'].
+ */
+export function compareFiniteNumbersOrStringOrArray(a: number | string | (number| string)[], b: number | string | (number| string)[]): number {
+  // Strings can not be ordered relative to numbers using '<' and '>' since no matter the order, the comparison will return false.
+  let ta = typeof a;
+  let tb = typeof b;
+  if (ta !== tb) {
+    return ta < tb ? -1 : 1;
+  }
+  // Use < and > instead of < and === so arrays work correctly.
+  return a > b ? 1 : a < b ? -1 : 0;
 };
 
 /**
@@ -112,19 +186,24 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   private _root: BNode<K, V> = EmptyLeaf as BNode<K,V>;
   _size: number = 0;
   _maxNodeSize: number;
+
+  /**
+   * provides a total order over keys (and a strict partial order over the type K)
+   * @returns a negative value if a < b, 0 if a === b and a positive value if a > b
+   */
   _compare: (a:K, b:K) => number;
   
   /**
    * Initializes an empty B+ tree.
    * @param compare Custom function to compare pairs of elements in the tree.
-   *   This is not required for numbers, strings and arrays of numbers/strings.
+   *   If not specified, defaultComparator will be used which is valid as long as K extends DefaultComparable.
    * @param entries A set of key-value pairs to initialize the tree
    * @param maxNodeSize Branching factor (maximum items or children per node)
    *   Must be in range 4..256. If undefined or <4 then default is used; if >256 then 256.
    */
   public constructor(entries?: [K,V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) {
     this._maxNodeSize = maxNodeSize! >= 4 ? Math.min(maxNodeSize!, 256) : 32;
-    this._compare = compare || defaultComparator;
+    this._compare = compare || defaultComparator as any as (a: K, b: K) => number;
     if (entries)
       this.setPairs(entries);
   }

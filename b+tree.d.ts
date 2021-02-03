@@ -5,11 +5,36 @@ export declare type EditRangeResult<V, R = number> = {
     break?: R;
     delete?: boolean;
 };
-/** Compares two numbers, strings, arrays of numbers/strings, Dates,
- *  or objects that have a valueOf() method returning a number or string.
- *  Optimized for numbers. Returns 1 if a>b, -1 if a<b, and 0 if a===b.
+/**
+ * numbers, strings and arrays thereof, and objects that have a valueOf() method returning a number or string like Dates.
  */
-export declare function defaultComparator(a: any, b: any): number;
+export declare type DefaultComparable = number | string | (number | string)[] | {
+    valueOf: () => number | string | (number | string)[];
+};
+/**
+ * Compares DefaultComparables to form a strict partial ordering.
+ *
+ * Handles +/-0 and NaN like Map: NaN is equal to NaN, and -0 is equal to +0.
+ *
+ * Arrays are compared using '<' and '>', which may cause unexpected equality: for example [1] will be considered equal to ['1'].
+ *
+ * Two objects with equal valueOf compare the same, but compare unequal to primitives that have the same value.
+ */
+export declare function defaultComparator(a: DefaultComparable, b: DefaultComparable): number;
+/**
+ * Compares finite numbers to form a strict partial ordering.
+ *
+ * Handles +/-0 like Map: -0 is equal to +0.
+ */
+export declare function compareFiniteNumbers(a: number, b: number): number;
+/**
+ * Compares strings lexically to form a strict partial ordering.
+ */
+export declare function compareStrings(a: string, b: string): number;
+/**
+ * If a and b are arrays, they are compared using '<' and '>', which may cause unexpected equality, for example [1] will be considered equal to ['1'].
+ */
+export declare function compareFiniteNumbersOrStringOrArray(a: number | string | (number | string)[], b: number | string | (number | string)[]): number;
 /**
  * A reasonably fast collection of key-value pairs with a powerful API.
  * Largely compatible with the standard Map. BTree is a B+ tree data structure,
@@ -78,11 +103,15 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
     private _root;
     _size: number;
     _maxNodeSize: number;
+    /**
+     * provides a total order over keys (and a strict partial order over the type K)
+     * @returns a negative value if a < b, 0 if a === b and a positive value if a > b
+     */
     _compare: (a: K, b: K) => number;
     /**
      * Initializes an empty B+ tree.
      * @param compare Custom function to compare pairs of elements in the tree.
-     *   This is not required for numbers, strings and arrays of numbers/strings.
+     *   If not specified, defaultComparator will be used which is valid as long as K extends DefaultComparable.
      * @param entries A set of key-value pairs to initialize the tree
      * @param maxNodeSize Branching factor (maximum items or children per node)
      *   Must be in range 4..256. If undefined or <4 then default is used; if >256 then 256.

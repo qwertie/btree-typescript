@@ -1,4 +1,4 @@
-import BTree, {IMap, EmptyBTree} from './b+tree';
+import BTree, {IMap, EmptyBTree, defaultComparator, compareFiniteNumbers, compareFiniteNumbersOrStringOrArray, compareStrings} from './b+tree';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
 
@@ -13,6 +13,153 @@ function expectTreeEqualTo(a: BTree, b: SortedArray) {
 function addToBoth<K,V>(a: IMap<K,V>, b: IMap<K,V>, k: K, v: V) {
   expect(a.set(k,v)).toEqual(b.set(k,v));
 }
+
+describe('defaultComparator', () =>
+{
+  const dateA = new Date(Date.UTC(96, 1, 2, 3, 4, 5));
+  const dateA2 = new Date(Date.UTC(96, 1, 2, 3, 4, 5));
+  const dateB = new Date(Date.UTC(96, 1, 2, 3, 4, 6));
+  const values = [
+    dateA,
+    dateA2,
+    dateB,
+    dateA.valueOf(),
+    '24x',
+    '0',
+    '1',
+    '3',
+    'String',
+    '10',
+    0,
+    "NaN",
+    NaN,
+    Infinity,
+    -0,
+    -Infinity,
+    1,
+    10,
+    2,
+    [],
+    '[]',
+    [1],
+    ['1']
+  ];
+  const sorted = [-Infinity, -10, -1, -0, 0, 1, 2, 10, Infinity];
+  testComparison(defaultComparator, sorted, values, [[dateA, dateA2], [0, -0], [[1], ['1']]]);
+});
+
+describe('compareFiniteNumbers', () =>
+{
+  const sorted = [-10, -1, -0, 0, 1, 2, 10];
+  testComparison(compareFiniteNumbers, sorted, sorted, [[-0, 0]]);
+});
+
+describe('compareStrings', () =>
+{
+  const values = [
+    '24x',
+    '+0',
+    '0.0',
+    '0',
+    '-0',
+    '1',
+    '3',
+    'String',
+    '10',
+    "NaN",
+  ];;
+  testComparison(compareStrings, [], values, []);
+});
+
+describe('compareFiniteNumbersOrStringOrArray', () =>
+{
+  const values = [
+    '24x',
+    '0',
+    '1',
+    '3',
+    'String',
+    '10',
+    0,
+    "NaN",
+    -0,
+    1,
+    10,
+    2,
+    [],
+    '[]',
+    [1],
+    ['1']
+  ];
+  const sorted = [-10, -1, -0, 0, 1, 2, 10];
+  testComparison(compareFiniteNumbersOrStringOrArray, sorted, values, [[0, -0], [[1], ['1']]]);
+});
+
+
+/**
+ * Tests a comparison function, ensuring it produces a strict partial order over the provided values.
+ * Additionally confirms that the comparison function has the correct definition of equality via expectedDuplicates.
+ */
+function testComparison(comparison: (a: any, b: any) => number, inOrder: any[], values: any[], expectedDuplicates: [any, any][] = []) {
+  function check(a: any, b: any): number {
+    const v = comparison(a, b);
+    expect(typeof v).toEqual('number');
+    expect(v === v).toEqual(true); // Not NaN
+    return Math.sign(v);
+  }
+
+  test('comparison has correct order', () => {
+    expect([...inOrder].sort(comparison)).toMatchObject(inOrder);
+  });
+
+  test('comparison deffierantes values', () => {
+    let duplicates = [];
+    for (let i = 0; i < values.length; i++) {
+      for (let j = i + 1; j < values.length; j++) {
+        if (check(values[i], values[j]) === 0) {
+          duplicates.push([values[i], values[j]]);
+        }
+      }
+    }
+    expect(duplicates).toMatchObject(expectedDuplicates);
+  });
+
+  test('comparison forms a strict partial ordering', () => {
+    // To be a strict partial order, the function must be:
+    // irreflexive: not a < a
+    // transitive: if a < b and b < c then a < c
+    // asymmetric: if a < b then not b < a
+
+    // Since our comparison has three outputs, we adjust that to, we need to tighten the rules that involve 'not a < b' (where we have two possible outputs) as follows:
+    // irreflexive: compare(a, a) === 0
+    // transitive: if compare(a, b) < 0 and compare(b, c) < 0 then compare(a, c) < 0
+    // asymmetric: sign(compare(a, b)) === -sign(compare(b, a))
+
+    // This can is brute forced in O(n^3) time below:
+    // Violations
+    const irreflexive = []
+    const transitive = []
+    const asymmetric = []
+    for (const a of values) {
+      // irreflexive: compare(a, a) === 0
+      if(check(a, a) !== 0) irreflexive.push(a);
+      for (const b of values) {
+        for (const c of values) {
+          // transitive: if compare(a, b) < 0 and compare(b, c) < 0 then compare(a, c) < 0
+          if (check(a, b) < 0 && check(b, c) < 0) {
+            if(check(a, c) !== -1) transitive.push([a, b, c]);
+          }
+        }
+        // sign(compare(a, b)) === -sign(compare(b, a))
+        if(check(a, b) !== -check(b, a)) asymmetric.push([a, b]);
+      }
+    }
+    expect(irreflexive).toEqual([]);
+    expect(transitive).toEqual([]);
+    expect(asymmetric).toEqual([]);
+  });
+}
+
 
 describe('Simple tests on leaf nodes', () =>
 {
@@ -426,5 +573,34 @@ function testBTree(maxNodeSize: number)
     
     expect(tree.nextLowerPair(undefined)).toEqual([300, 600]);
     expect(tree.nextHigherPair(undefined)).toEqual([-10, -20]);
+  });
+
+  test('Regression test for invalid default comparator causing malformed trees', () => {
+    const key = '24e26f0b-3c1a-47f8-a7a1-e8461ddb69ce6';
+    const tree = new BTree<string,{}>(undefined, undefined, maxNodeSize);
+    // The defaultComparator was not transitive for these inputs due to comparing numeric strings to each other numerically,
+    // but lexically when compared to non-numeric strings. This resulted in keys not being orderable, and the tree behaving incorrectly.
+    const inputs: [string,{}][] = [
+      [key, {}],
+      ['0', {}],
+      ['1', {}],
+      ['2', {}],
+      ['3', {}],
+      ['4', {}],
+      ['Cheese', {}],
+      ['10', {}],
+      ['11', {}],
+      ['12', {}],
+      ['13', {}],
+      ['15', {}],
+      ['16', {}],
+    ];
+
+    for (const [id, node] of inputs) {
+      expect( tree.set(id, node)).toBeTruthy();
+      tree.checkValid();
+      expect(tree.get(key)).not.toBeUndefined();
+    }
+    expect(tree.get(key)).not.toBeUndefined();
   });
 }
