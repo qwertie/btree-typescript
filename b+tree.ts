@@ -45,9 +45,18 @@ export type DefaultComparable = number | string | (number | string)[] | { valueO
  * Two objects with equal valueOf compare the same, but compare unequal to primitives that have the same value.
  */
 export function defaultComparator(a: DefaultComparable, b: DefaultComparable): number {
-  // Compare types first.
+  // Special case finite numbers first for performance.
   // Note that the trick of using 'a - b' the checking for NaN to detect non numbers values does not work if the strings are numeric (ex: "5"),
   // leading most comparison functions using that approach to fail to have transitivity.
+  if (Number.isFinite(a) && Number.isFinite(b)) {
+    // Does not partially order NaNs or infinite values, but thats fine since they can't reach here.
+    // This will handle -0 and 0 as equal.
+    return a as number - (b as number);
+  }
+
+  // Compare types and order values of different types by type.
+  // This prevents implicit conversion of strings to numbers from causing invaliding ordering,
+  // and generally simplifies which cases need to be considered below.
   let ta = typeof a;
   let tb = typeof b;
   if (ta !== tb) {
@@ -86,7 +95,6 @@ export function defaultComparator(a: DefaultComparable, b: DefaultComparable): n
   return 0;
 };
 
-
 /**
  * Compares finite numbers to form a strict partial ordering.
  * 
@@ -101,20 +109,6 @@ export function compareFiniteNumbers(a: number, b: number): number {
  */
 export function compareStrings(a: string, b:string): number {
   return a > b ? 1 : a === b ? 0 : -1;
-};
-
-/**
- * If a and b are arrays, they are compared using '<' and '>', which may cause unexpected equality, for example [1] will be considered equal to ['1'].
- */
-export function compareFiniteNumbersOrStringOrArray(a: number | string | (number| string)[], b: number | string | (number| string)[]): number {
-  // Strings can not be ordered relative to numbers using '<' and '>' since no matter the order, the comparison will return false.
-  let ta = typeof a;
-  let tb = typeof b;
-  if (ta !== tb) {
-    return ta < tb ? -1 : 1;
-  }
-  // Use < and > instead of < and === so arrays work correctly.
-  return a > b ? 1 : a < b ? -1 : 0;
 };
 
 /**

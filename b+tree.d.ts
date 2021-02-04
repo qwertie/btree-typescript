@@ -32,10 +32,6 @@ export declare function compareFiniteNumbers(a: number, b: number): number;
  */
 export declare function compareStrings(a: string, b: string): number;
 /**
- * If a and b are arrays, they are compared using '<' and '>', which may cause unexpected equality, for example [1] will be considered equal to ['1'].
- */
-export declare function compareFiniteNumbersOrStringOrArray(a: number | string | (number | string)[], b: number | string | (number | string)[]): number;
-/**
  * A reasonably fast collection of key-value pairs with a powerful API.
  * Largely compatible with the standard Map. BTree is a B+ tree data structure,
  * so the collection is sorted by key.

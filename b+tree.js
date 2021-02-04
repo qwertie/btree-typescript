@@ -13,7 +13,7 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EmptyBTree = exports.compareFiniteNumbersOrStringOrArray = exports.compareStrings = exports.compareFiniteNumbers = exports.defaultComparator = void 0;
+exports.EmptyBTree = exports.compareStrings = exports.compareFiniteNumbers = exports.defaultComparator = void 0;
 /**
  * Compares DefaultComparables to form a strict partial ordering.
  *
@@ -24,9 +24,17 @@ exports.EmptyBTree = exports.compareFiniteNumbersOrStringOrArray = exports.compa
  * Two objects with equal valueOf compare the same, but compare unequal to primitives that have the same value.
  */
 function defaultComparator(a, b) {
-    // Compare types first.
+    // Special case finite numbers first for performance.
     // Note that the trick of using 'a - b' the checking for NaN to detect non numbers values does not work if the strings are numeric (ex: "5"),
     // leading most comparison functions using that approach to fail to have transitivity.
+    if (Number.isFinite(a) && Number.isFinite(b)) {
+        // Does not partially order NaNs or infinite values, but thats fine since they can't reach here.
+        // This will handle -0 and 0 as equal.
+        return a - b;
+    }
+    // Compare types and order values of different types by type.
+    // This prevents implicit conversion of strings to numbers from causing invaliding ordering,
+    // and generally simplifies which cases need to be considered below.
     var ta = typeof a;
     var tb = typeof b;
     if (ta !== tb) {
@@ -81,21 +89,6 @@ function compareStrings(a, b) {
     return a > b ? 1 : a === b ? 0 : -1;
 }
 exports.compareStrings = compareStrings;
-;
-/**
- * If a and b are arrays, they are compared using '<' and '>', which may cause unexpected equality, for example [1] will be considered equal to ['1'].
- */
-function compareFiniteNumbersOrStringOrArray(a, b) {
-    // Strings can not be ordered relative to numbers using '<' and '>' since no matter the order, the comparison will return false.
-    var ta = typeof a;
-    var tb = typeof b;
-    if (ta !== tb) {
-        return ta < tb ? -1 : 1;
-    }
-    // Use < and > instead of < and === so arrays work correctly.
-    return a > b ? 1 : a < b ? -1 : 0;
-}
-exports.compareFiniteNumbersOrStringOrArray = compareFiniteNumbersOrStringOrArray;
 ;
 /**
  * A reasonably fast collection of key-value pairs with a powerful API.

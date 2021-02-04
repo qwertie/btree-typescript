@@ -1,4 +1,4 @@
-import BTree, {IMap, EmptyBTree, defaultComparator, compareFiniteNumbers, compareFiniteNumbersOrStringOrArray, compareStrings} from './b+tree';
+import BTree, {IMap, EmptyBTree, defaultComparator, compareFiniteNumbers, compareStrings} from './b+tree';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
 
@@ -70,31 +70,6 @@ describe('compareStrings', () =>
   ];;
   testComparison(compareStrings, [], values, []);
 });
-
-describe('compareFiniteNumbersOrStringOrArray', () =>
-{
-  const values = [
-    '24x',
-    '0',
-    '1',
-    '3',
-    'String',
-    '10',
-    0,
-    "NaN",
-    -0,
-    1,
-    10,
-    2,
-    [],
-    '[]',
-    [1],
-    ['1']
-  ];
-  const sorted = [-10, -1, -0, 0, 1, 2, 10];
-  testComparison(compareFiniteNumbersOrStringOrArray, sorted, values, [[0, -0], [[1], ['1']]]);
-});
-
 
 /**
  * Tests a comparison function, ensuring it produces a strict partial order over the provided values.
