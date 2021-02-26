@@ -488,6 +488,213 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return {nodequeue, nodeindex, leaf:nextnode};
   }
 
+  /**
+   * Computes the delta operations (adds, deletes, and modifications) required to go from this tree to the supplied destination.
+   * For efficiency, the delta is returned via invocations of supplied handlers.
+   * The computation is optimized for the case in which the two trees have large amounts of shared data (obtained by calling the
+   * `clone` or `with` APIs) and will avoid any iteration of shared state.
+   * @param destination The tree to compute a delta to.
+   * @param processAdd Callback invoked for all adds in the delta.
+   * @param processDelete Callback invoked for all deletions in the delta.
+   * @param processModify Callback invoked for all modifications in the delta.
+   */
+  delta(destination: BTree<K, V>, processAdd: (k: K, v: V) => void, processDelete: (k: K, v: V) => void, processModify: (k: K, vOld: V, vNew: V) => void): void {
+    // If comparators are different, then the fast path is not possible. Simply fall back to a standard full enumeration.
+    // Also do this if either tree is empty, as everything will be an add/delete and requires a full walk.
+    if (destination._compare !== this._compare || this.isEmpty || destination.isEmpty) {
+      this.forEachPair((kThis, vThis) => {
+        if (!destination.has(kThis)) {
+          processDelete(kThis, vThis);
+        } else {
+          const vDst = destination.get(kThis);
+          if (vThis !== vDst)
+            processModify(kThis, vThis, vDst as unknown as V);
+        }
+      });
+      destination.forEachPair((kDst, vDst) => {
+        if (!this.has(kDst)) {
+          processAdd(kDst, vDst);
+        }
+      });
+    } else {
+      // Cursor-based delta algorithm is as follows:
+      // - Until neither cursor has navigated to the end of the tree, do the following:
+      //  - If the source cursor is "behind" the destination cursor (strictly <, via compare), advance it.
+      //  - Otherwise, advance the destination cursor.
+      //  - Any time a cursor is stepped, perform the following:
+      //    - If the stepped cursor points to a key/value pair:
+      //      - If srcCursor > dstCursor, it is an Add.
+      //      - If srcCursor < dstCursor, and srcCursor was most recently stepped, it is a Delete. The extra condition avoids the erroneous adds
+      //        that would occur when dstCursor (designated the leader) steps forward when srcCursor === dstCursor.
+      //    - Otherwise, if both cursors point to nodes, compare them. If they are equal by reference (shared), skip
+      //      both cursors to the next node in the walk.
+      // - Once one cursor has finished stepping, any remaining steps (if any) are taken and key/value pairs are logged
+      //    as adds (if dst) or deletes (if src).
+      // This algorithm gives the critical guarantee that all locations (both nodes and key/value pairs) in both trees that 
+      // are identical by value (and possibly by reference) will be visited *at the same time* by the cursors.
+      // This removes the possibility of emitting incorrect deltas, as well as allowing for skipping shared nodes.
+      const { _compare } = this;
+      const src = BTree.makeDeltaCursor(this);
+      const dst = BTree.makeDeltaCursor(destination);
+      // It doesn't matter how srcStepped is initialized.
+      // Step order is only used when either cursor is at a leaf, and cursors always start at a node.
+      let srcSuccess = true, dstSuccess = true, srcSteppedLast = true;
+      while (srcSuccess && dstSuccess) {
+        const cursorOrder = BTree.compare(src, dst, _compare);
+        const { leaf: leafSrc, internalSpine: internalSpineSrc, levelIndices: levelIndicesSrc } = src;
+        const { leaf: leafDst, internalSpine: internalSpineDst, levelIndices: levelIndicesDst } = dst;
+        if (leafSrc || leafDst) {
+          if (leafSrc && leafDst && cursorOrder === 0) {
+            // Equal keys, check for modifications
+            const valSrc = leafSrc.values[levelIndicesSrc[levelIndicesSrc.length - 1]];
+            const valDst = leafDst.values[levelIndicesDst[levelIndicesDst.length - 1]];
+            if (valSrc !== valDst)
+              processModify(src.currentKey, valSrc, valDst);
+          } else if (leafDst && cursorOrder > 0) {
+            // Dst is behind, and at a leaf
+            const valDst = leafDst.values[levelIndicesDst[levelIndicesDst.length - 1]];
+            processAdd(dst.currentKey, valDst);
+          } else if (leafSrc && cursorOrder < 0 && srcSteppedLast) {
+            // Src is behind, and at a leaf
+            const valSrc = leafSrc.values[levelIndicesSrc[levelIndicesSrc.length - 1]];
+            processDelete(src.currentKey, valSrc);
+          }
+        } else if (!leafSrc && !leafDst) {
+          const lastSrc = internalSpineSrc.length - 1;
+          const lastDst = internalSpineDst.length - 1;
+          const nodeSrc = internalSpineSrc[lastSrc][levelIndicesSrc[lastSrc]];
+          const nodeDst = internalSpineDst[lastDst][levelIndicesDst[lastDst]];
+          if (nodeDst === nodeSrc) {
+            srcSuccess = BTree.advance(src, true);
+            dstSuccess = BTree.advance(dst, true);
+            continue;
+          }
+        }
+        srcSteppedLast = cursorOrder < 0;
+        if (srcSteppedLast) {
+          srcSuccess = BTree.advance(src);
+        } else {
+          dstSuccess = BTree.advance(dst);
+        }
+      }
+      if (srcSuccess)
+        this.finishDeltaWalk(src, dst, _compare, processDelete);
+      if (dstSuccess)
+        this.finishDeltaWalk(dst, src, _compare, processAdd);
+    }
+  }
+
+  private finishDeltaWalk(cursor: DeltaCursor<K, V>, cursorStopped: DeltaCursor<K, V>, compare: (a: K, b: K) => number, callback: (k: K, v: V) => void): void {
+    let canStep: boolean = true;
+    while (canStep) {
+      const { leaf, levelIndices, currentKey } = cursor;
+      if (leaf) {
+        const compared = BTree.compare(cursor, cursorStopped, compare);
+        if (compared > 0) {
+          const value = leaf.values[levelIndices[levelIndices.length - 1]];
+          callback(currentKey, value);
+        }
+      }
+      canStep = BTree.advance(cursor);
+    }
+  }
+
+  private static makeDeltaCursor<K, V>(tree: BTree<K, V>): DeltaCursor<K, V> {
+    const { _root, height } = tree;
+    return { height: height, internalSpine: [[_root]], levelIndices: [0], leaf: undefined, currentKey: _root.maxKey() };
+  }
+
+  /**
+   * Advances the cursor to the next step in the walk of its tree.
+   * Cursors are walked backwards in sort order, as this allows them to leverage maxKey() in order to be compared in O(1).
+   * @param cursor The cursor to advance
+   * @param stepToNode If true, the cursor will be advanced to the next node (skipping values)
+   * @returns true if the step was completed and false if the step would have caused the cursor to move beyond the end of the tree.
+   */ 
+  private static advance<K, V>(cursor: DeltaCursor<K, V>, stepToNode: boolean = false): boolean {
+    const { internalSpine, levelIndices, leaf } = cursor;
+    // TODO: introduce length locals
+    if (stepToNode || leaf) {
+      // Step to the next node only if:
+      // - We are explicitly directed to via stepToNode, or
+      // - There are no key/value pairs left to step to in this leaf
+      if (stepToNode || levelIndices[levelIndices.length - 1] === 0) {
+        // Root is leaf
+        if (internalSpine.length === 0)
+          return false;
+        // Walk back up the tree until we find a new subtree to descend into
+        const nodeLevelIndex = internalSpine.length - 1;
+        let levelIndexWalkBack = nodeLevelIndex;
+        while (levelIndexWalkBack >= 0) {
+          const childIndex = levelIndices[levelIndexWalkBack]
+          if (childIndex > 0) {
+            if (levelIndexWalkBack < levelIndices.length - 1) {
+              // Remove leaf state from cursor
+              cursor.leaf = undefined;
+              levelIndices.splice(levelIndexWalkBack + 1, levelIndices.length - levelIndexWalkBack);
+            }
+            // If we walked upwards past any internal node, splice them out
+            if (levelIndexWalkBack < nodeLevelIndex)
+              internalSpine.splice(levelIndexWalkBack + 1, internalSpine.length - levelIndexWalkBack);
+            // Move to new internal node
+            const nodeIndex = --levelIndices[levelIndexWalkBack];
+            cursor.currentKey = internalSpine[levelIndexWalkBack][nodeIndex].maxKey();
+            return true;
+          }
+          levelIndexWalkBack--;
+        }
+        // Cursor is in the far left leaf of the tree, no more nodes to enumerate
+        return false;
+      } else {
+        // Move to new leaf value
+        const valueIndex = --levelIndices[levelIndices.length - 1];
+        cursor.currentKey = (leaf as unknown as BNode<K, V>).keys[valueIndex];
+        return true;
+      }
+    } else { // Cursor does not point to a value in a leaf, so move downwards
+      const nextLevel = internalSpine.length;
+      const currentLevel = nextLevel - 1;
+      const node = internalSpine[currentLevel][levelIndices[currentLevel]];
+      if (node.isLeaf) {
+        // Entering into a leaf. Set the cursor to point at the last key/value pair.
+        cursor.leaf = node;
+        const valueIndex = levelIndices[nextLevel] = node.values.length - 1;
+        cursor.currentKey = node.keys[valueIndex];
+      } else {
+        const children = (node as BNodeInternal<K,V>).children;
+        internalSpine[nextLevel] = children;
+        const childIndex = children.length - 1;
+        levelIndices[nextLevel] = childIndex;
+        cursor.currentKey = children[childIndex].maxKey();
+      }
+      return true;
+    }
+  }
+
+  /**
+   * Compares the two cursors. Returns a value indicating which cursor is ahead in a walk.
+   * Note that cursors are advanced in reverse sorting order.
+   */
+  private static compare<K, V>(cursorA: DeltaCursor<K, V>, cursorB: DeltaCursor<K, V>, compareKeys: (a: K, b: K) => number): number {
+    const { height: heightA, currentKey: currentKeyA, levelIndices: levelIndicesA } = cursorA;
+    const { height: heightB, currentKey: currentKeyB, levelIndices: levelIndicesB } = cursorB;
+    // Reverse the comparison order, as cursors are advanced in reverse sorting order
+    const keyComparison = compareKeys(currentKeyB, currentKeyA);
+    if (keyComparison !== 0) {
+      return keyComparison;
+    }
+
+    // Normalize depth values relative to the shortest tree.
+    // This ensures that concurrent cursor walks of trees of differing heights can reliably land on shared nodes at the same time.
+    // To accomplish this, a cursor that is on an internal node at depth D1 with maxKey X is considered "behind" a cursor on an
+    // internal node at depth D2 with maxKey Y, when D1 < D2. Thus, always walking the cursor that is "behind" will allow the cursor
+    // at shallower depth (but equal maxKey) to "catch up" and land on shared nodes.
+    const heightMin = heightA < heightB ? heightA : heightB;
+    const depthANormalized = levelIndicesA.length - (heightA - heightMin);
+    const depthBNormalized = levelIndicesB.length - (heightB - heightMin);
+    return depthANormalized - depthBNormalized;
+  }
+
   /** Returns a new iterator for iterating the keys of each pair in ascending order. 
    *  @param firstKey: Minimum key to include in the output. */
   keys(firstKey?: K): IterableIterator<K> {
@@ -755,9 +962,13 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   /** Gets the height of the tree: the number of internal nodes between the 
    *  BTree object and its leaf nodes (zero if there are no internal nodes). */
   get height(): number {
-    for (var node = this._root, h = -1; node != null; h++)
-      node = (node as any).children;
-    return h;
+    let node: BNode<K, V> | undefined = this._root;
+    let height = -1;
+    while (node) {
+      height++;
+      node = node.isLeaf ? undefined : (node as unknown as BNodeInternal<K, V>).children[0];
+    }
+    return height;
   }
 
   /** Makes the object read-only to ensure it is not accidentally modified.
@@ -1313,6 +1524,21 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     this.tryMerge(oldLength-1, maxNodeSize);
   }
 }
+
+/**
+ * A walkable pointer into a BTree for computing efficient deltas between trees with shared data.
+ * - A cursor points to either a key/value pair (KVP) or a node (which can be either a leaf or an internal node). 
+ *    As a consequence, a cursor cannot be created for an empty tree.
+ * - A cursor can be walked forwards using `advance`. A cursor can be compared to another cursor to 
+ *    determine which is ahead in advancement.
+ * - A cursor is valid only for the tree it was created from, and only until the first edit made to 
+ *    that tree since the cursor's creation.
+ * - A cursor contains a key for the current location, which is the maxKey when the cursor points to a node 
+ *    and a key corresponding to a value when pointing to a leaf.
+ * - Leaf is only populated if the cursor points to a KVP. If this is the case, levelIndices.length === internalSpine.length + 1
+ *    and levelIndices[levelIndices.length - 1] is the index of the value.
+ */
+type DeltaCursor<K,V> = { height: number, internalSpine: BNode<K,V>[][], levelIndices: number[], leaf: BNode<K,V> | undefined, currentKey: K };
 
 // Optimization: this array of `undefined`s is used instead of a normal
 // array of values in nodes where `undefined` is the only value.

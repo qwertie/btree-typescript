@@ -221,6 +221,32 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      */
     entriesReversed(highestKey?: K, reusedArray?: (K | V)[], skipHighest?: boolean): IterableIterator<[K, V]>;
     private findPath;
+    /**
+     * Computes the delta operations (adds, deletes, and modifications) required to go from this tree to the supplied destination.
+     * For efficiency, the delta is returned via invocations of supplied handlers.
+     * The computation is optimized for the case in which the two trees have large amounts of shared data (obtained by calling the
+     * `clone` or `with` APIs) and will avoid any iteration of shared state.
+     * @param destination The tree to compute a delta to.
+     * @param processAdd Callback invoked for all adds in the delta.
+     * @param processDelete Callback invoked for all deletions in the delta.
+     * @param processModify Callback invoked for all modifications in the delta.
+     */
+    delta(destination: BTree<K, V>, processAdd: (k: K, v: V) => void, processDelete: (k: K, v: V) => void, processModify: (k: K, vOld: V, vNew: V) => void): void;
+    private finishDeltaWalk;
+    private static makeDeltaCursor;
+    /**
+     * Advances the cursor to the next step in the walk of its tree.
+     * Cursors are walked backwards in sort order, as this allows them to leverage maxKey() in order to be compared in O(1).
+     * @param cursor The cursor to advance
+     * @param stepToNode If true, the cursor will be advanced to the next node (skipping values)
+     * @returns true if the step was completed and false if the step would have caused the cursor to move beyond the end of the tree.
+     */
+    private static advance;
+    /**
+     * Compares the two cursors. Returns a value indicating which cursor is ahead in a walk.
+     * Note that cursors are advanced in reverse sorting order.
+     */
+    private static compare;
     /** Returns a new iterator for iterating the keys of each pair in ascending order.
      *  @param firstKey: Minimum key to include in the output. */
     keys(firstKey?: K): IterableIterator<K>;
