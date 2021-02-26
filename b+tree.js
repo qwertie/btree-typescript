@@ -591,29 +591,30 @@ var BTree = /** @class */ (function () {
     BTree.advance = function (cursor, stepToNode) {
         if (stepToNode === void 0) { stepToNode = false; }
         var internalSpine = cursor.internalSpine, levelIndices = cursor.levelIndices, leaf = cursor.leaf;
-        // TODO: introduce length locals
         if (stepToNode || leaf) {
+            var levelsLength = levelIndices.length;
             // Step to the next node only if:
             // - We are explicitly directed to via stepToNode, or
             // - There are no key/value pairs left to step to in this leaf
-            if (stepToNode || levelIndices[levelIndices.length - 1] === 0) {
+            if (stepToNode || levelIndices[levelsLength - 1] === 0) {
+                var spineLength = internalSpine.length;
                 // Root is leaf
-                if (internalSpine.length === 0)
+                if (spineLength === 0)
                     return false;
                 // Walk back up the tree until we find a new subtree to descend into
-                var nodeLevelIndex = internalSpine.length - 1;
+                var nodeLevelIndex = spineLength - 1;
                 var levelIndexWalkBack = nodeLevelIndex;
                 while (levelIndexWalkBack >= 0) {
                     var childIndex = levelIndices[levelIndexWalkBack];
                     if (childIndex > 0) {
-                        if (levelIndexWalkBack < levelIndices.length - 1) {
+                        if (levelIndexWalkBack < levelsLength - 1) {
                             // Remove leaf state from cursor
                             cursor.leaf = undefined;
-                            levelIndices.splice(levelIndexWalkBack + 1, levelIndices.length - levelIndexWalkBack);
+                            levelIndices.splice(levelIndexWalkBack + 1, levelsLength - levelIndexWalkBack);
                         }
                         // If we walked upwards past any internal node, splice them out
                         if (levelIndexWalkBack < nodeLevelIndex)
-                            internalSpine.splice(levelIndexWalkBack + 1, internalSpine.length - levelIndexWalkBack);
+                            internalSpine.splice(levelIndexWalkBack + 1, spineLength - levelIndexWalkBack);
                         // Move to new internal node
                         var nodeIndex = --levelIndices[levelIndexWalkBack];
                         cursor.currentKey = internalSpine[levelIndexWalkBack][nodeIndex].maxKey();
@@ -626,7 +627,7 @@ var BTree = /** @class */ (function () {
             }
             else {
                 // Move to new leaf value
-                var valueIndex = --levelIndices[levelIndices.length - 1];
+                var valueIndex = --levelIndices[levelsLength - 1];
                 cursor.currentKey = leaf.keys[valueIndex];
                 return true;
             }

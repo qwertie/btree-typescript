@@ -613,29 +613,30 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    */ 
   private static advance<K, V>(cursor: DeltaCursor<K, V>, stepToNode: boolean = false): boolean {
     const { internalSpine, levelIndices, leaf } = cursor;
-    // TODO: introduce length locals
     if (stepToNode || leaf) {
+      const levelsLength = levelIndices.length;
       // Step to the next node only if:
       // - We are explicitly directed to via stepToNode, or
       // - There are no key/value pairs left to step to in this leaf
-      if (stepToNode || levelIndices[levelIndices.length - 1] === 0) {
+      if (stepToNode || levelIndices[levelsLength - 1] === 0) {
+        const spineLength = internalSpine.length;
         // Root is leaf
-        if (internalSpine.length === 0)
+        if (spineLength === 0)
           return false;
         // Walk back up the tree until we find a new subtree to descend into
-        const nodeLevelIndex = internalSpine.length - 1;
+        const nodeLevelIndex = spineLength - 1;
         let levelIndexWalkBack = nodeLevelIndex;
         while (levelIndexWalkBack >= 0) {
           const childIndex = levelIndices[levelIndexWalkBack]
           if (childIndex > 0) {
-            if (levelIndexWalkBack < levelIndices.length - 1) {
+            if (levelIndexWalkBack < levelsLength - 1) {
               // Remove leaf state from cursor
               cursor.leaf = undefined;
-              levelIndices.splice(levelIndexWalkBack + 1, levelIndices.length - levelIndexWalkBack);
+              levelIndices.splice(levelIndexWalkBack + 1, levelsLength - levelIndexWalkBack);
             }
             // If we walked upwards past any internal node, splice them out
             if (levelIndexWalkBack < nodeLevelIndex)
-              internalSpine.splice(levelIndexWalkBack + 1, internalSpine.length - levelIndexWalkBack);
+              internalSpine.splice(levelIndexWalkBack + 1, spineLength - levelIndexWalkBack);
             // Move to new internal node
             const nodeIndex = --levelIndices[levelIndexWalkBack];
             cursor.currentKey = internalSpine[levelIndexWalkBack][nodeIndex].maxKey();
@@ -647,7 +648,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
         return false;
       } else {
         // Move to new leaf value
-        const valueIndex = --levelIndices[levelIndices.length - 1];
+        const valueIndex = --levelIndices[levelsLength - 1];
         cursor.currentKey = (leaf as unknown as BNode<K, V>).keys[valueIndex];
         return true;
       }
