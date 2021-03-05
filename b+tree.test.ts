@@ -386,19 +386,19 @@ function testBTree(maxNodeSize: number)
     expectTreeEqualTo(t9, list);
   });
 
-  describe("Delta computation", () => {
-    let adds: Map<number, number>;
-    let deletes: Map<number, number>;
-    let modifies: Map<number, { vOld: number, vNew: number }>;
+  describe("Diff computation", () => {
+    let onlyThis: Map<number, number>;
+    let onlyOther: Map<number, number>;
+    let different: Map<number, { vOld: number, vNew: number }>;
     function reset(): void {
-      adds = new Map();
-      deletes = new Map();
-      modifies = new Map();
+      onlyOther = new Map();
+      onlyThis = new Map();
+      different = new Map();
     }
 
-    const onAdd = (k: number, v: number) => adds.set(k, v);
-    const onDelete = (k: number, v: number) => deletes.set(k, v);
-    const onModify = (k: number, vOld: number, vNew: number) => modifies.set(k, {vOld, vNew});
+    const OnlyThis = (k: number, v: number) => { onlyThis.set(k, v); }
+    const OnlyOther = (k: number, v: number) => { onlyOther.set(k, v); }
+    const Different = (k: number, vThis: number, vOther: number) => { different.set(k, {vOld: vThis, vNew: vOther}); }
     const compare = (a: number, b: number) => a - b;
 
     function expectMapEquals<K, V>(map: Map<K, V>, collection: [K, V][]) {
@@ -414,34 +414,34 @@ function testBTree(maxNodeSize: number)
 
     const entriesGroup: [number, number][][] = [[], [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]];
     entriesGroup.forEach(entries => {
-      test(`Delta generated for the same tree ${entries.length > 0 ? "(non-empty)" : "(empty)"}`, () => {
+      test(`Diff generated for the same tree ${entries.length > 0 ? "(non-empty)" : "(empty)"}`, () => {
         const tree = new BTree<number, number>(entries, compare, maxNodeSize);
-        tree.delta(tree, onAdd, onDelete, onModify);
-        expect(adds.size).toEqual(0);
-        expect(deletes.size).toEqual(0);
-        expect(modifies.size).toEqual(0);
+        tree.diff(tree, OnlyOther, OnlyThis, Different);
+        expect(onlyOther.size).toEqual(0);
+        expect(onlyThis.size).toEqual(0);
+        expect(different.size).toEqual(0);
       });
     });
 
     function applyChanges(treeA: BTree<number, number>, duplicate: (tree: BTree<number, number>) => BTree<number, number>): void {
       const treeB = duplicate(treeA);
       const maxKey: number = treeA.maxKey()!;
-      const setInADeletedInB = -10;
-      treeA.set(setInADeletedInB, setInADeletedInB);
-      const addedToB = -1;
-      treeB.set(addedToB, addedToB);
-      const addedToDst = maxKey + 1;
-      treeB.set(addedToDst, addedToDst);
-      const deletedInB = 10
-      treeB.delete(deletedInB);
-      const modifyValue = -100;
+      const onlyInA = -10;
+      treeA.set(onlyInA, onlyInA);
+      const onlyInBSmall = -1;
+      treeB.set(onlyInBSmall, onlyInBSmall);
+      const onlyInBLarge = maxKey + 1;
+      treeB.set(onlyInBLarge, onlyInBLarge);
+      const onlyInAFromDelete = 10
+      treeB.delete(onlyInAFromDelete);
+      const differingValue = -100;
       const modifiedInB1 = 3, modifiedInB2 = maxKey - 2;
-      treeB.set(modifiedInB1, modifyValue);
-      treeB.set(modifiedInB2, modifyValue)
-      treeA.delta(treeB, onAdd, onDelete, onModify);
-      expectMapEquals(adds, [[addedToDst, addedToDst], [addedToB, addedToB]]);
-      expectMapEquals(deletes, [[deletedInB, deletedInB], [setInADeletedInB, setInADeletedInB]]);
-      expectMapEquals(modifies, [[modifiedInB2, { vOld: modifiedInB2, vNew: modifyValue }], [modifiedInB1, { vOld: modifiedInB1, vNew: modifyValue }]]);
+      treeB.set(modifiedInB1, differingValue);
+      treeB.set(modifiedInB2, differingValue)
+      treeA.diff(treeB, OnlyThis, OnlyOther, Different);
+      expectMapEquals(onlyOther, [[onlyInBLarge, onlyInBLarge], [onlyInBSmall, onlyInBSmall]]);
+      expectMapEquals(onlyThis, [[onlyInAFromDelete, onlyInAFromDelete], [onlyInA, onlyInA]]);
+      expectMapEquals(different, [[modifiedInB2, { vOld: modifiedInB2, vNew: differingValue }], [modifiedInB1, { vOld: modifiedInB1, vNew: differingValue }]]);
     }
 
     function makeLargeTree(): BTree<number, number> {
@@ -453,34 +453,31 @@ function testBTree(maxNodeSize: number)
       return tree;
     }
 
-    [compare, (a: number, b: number) => b - a].forEach(compareT => {
-      const testString = `with ${compareT === compare ? "identical" : "different"} comparators`;
-      test(`Delta generated for different trees ${testString}`, () => {
-        const treeA = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
-        const treeB = new BTree<number, number>(entriesGroup[1], compareT, maxNodeSize);
-        treeB.set(-1, -1);
-        treeB.delete(2);
-        treeB.set(3, 4);
-        treeB.set(10, 10);
-        treeA.delta(treeB, onAdd, onDelete, onModify);
-        expectMapEquals(adds, [[-1, -1], [10, 10]]);
-        expectMapEquals(deletes, [[2, 2]]);
-        expectMapEquals(modifies, [[3, { vOld: 3, vNew: 4 }]]);
-      });
+    test(`Diff generated for different trees`, () => {
+      const treeA = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
+      const treeB = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
+      treeB.set(-1, -1);
+      treeB.delete(2);
+      treeB.set(3, 4);
+      treeB.set(10, 10);
+      treeA.diff(treeB, OnlyThis, OnlyOther, Different);
+      expectMapEquals(onlyOther, [[-1, -1], [10, 10]]);
+      expectMapEquals(onlyThis, [[2, 2]]);
+      expectMapEquals(different, [[3, { vOld: 3, vNew: 4 }]]);
+    });
 
-      test(`Delta generated for large trees ${testString}`, () => {
-        const tree = makeLargeTree();
-        applyChanges(tree, tree => {
-          const secondTree = new BTree<number, number>([], compareT);
-          tree.forEachPair((k, v) => {
-            secondTree.set(k, v);
-          });
-          return secondTree;
+    test(`Diff generated for large trees`, () => {
+      const tree = makeLargeTree();
+      applyChanges(tree, tree => {
+        const secondTree = new BTree<number, number>([], compare);
+        tree.forEachPair((k, v) => {
+          secondTree.set(k, v);
         });
+        return secondTree;
       });
     });
 
-    test(`Delta generated for cloned trees`, () => {
+    test(`Diff generated for cloned trees`, () => {
       const tree = makeLargeTree();
       applyChanges(tree, tree => tree.clone());
     });

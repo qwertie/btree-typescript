@@ -222,26 +222,37 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
     entriesReversed(highestKey?: K, reusedArray?: (K | V)[], skipHighest?: boolean): IterableIterator<[K, V]>;
     private findPath;
     /**
-     * Computes the delta operations (adds, deletes, and modifications) required to go from this tree to the supplied destination.
-     * For efficiency, the delta is returned via invocations of supplied handlers.
-     * The computation is optimized for the case in which the two trees have large amounts of shared data (obtained by calling the
-     * `clone` or `with` APIs) and will avoid any iteration of shared state.
-     * @param destination The tree to compute a delta to.
-     * @param processAdd Callback invoked for all adds in the delta.
-     * @param processDelete Callback invoked for all deletions in the delta.
-     * @param processModify Callback invoked for all modifications in the delta.
+     * Computes the differences between `this` and `other`.
+     * For efficiency, the diff is returned via invocations of supplied handlers.
+     * The computation is optimized for the case in which the two trees have large amounts
+     * of shared data (obtained by calling the `clone` or `with` APIs) and will avoid
+     * any iteration of shared state.
+     * The handlers can cause computation to early exit by returning {break: R}.
+     * @param other The tree to compute a diff against.
+     * @param onlyThis Callback invoked for all keys only present in `this`.
+     * @param onlyOther Callback invoked for all keys only present in `other`.
+     * @param different Callback invoked for all keys with differing values.
      */
-    delta(destination: BTree<K, V>, processAdd: (k: K, v: V) => void, processDelete: (k: K, v: V) => void, processModify: (k: K, vOld: V, vNew: V) => void): void;
-    private finishDeltaWalk;
-    private static makeDeltaCursor;
+    diff<R>(other: BTree<K, V>, onlyThis?: (k: K, v: V) => {
+        break?: R;
+    } | void, onlyOther?: (k: K, v: V) => {
+        break?: R;
+    } | void, different?: (k: K, vThis: V, vOther: V) => {
+        break?: R;
+    } | void): R | undefined;
+    /**
+     * Helper method for walking a cursor and invoking a callback at every key/value pair.
+     */
+    private static finishDiffWalk;
+    private static makeDiffCursor;
     /**
      * Advances the cursor to the next step in the walk of its tree.
      * Cursors are walked backwards in sort order, as this allows them to leverage maxKey() in order to be compared in O(1).
-     * @param cursor The cursor to advance
+     * @param cursor The cursor to step
      * @param stepToNode If true, the cursor will be advanced to the next node (skipping values)
      * @returns true if the step was completed and false if the step would have caused the cursor to move beyond the end of the tree.
      */
-    private static advance;
+    private static step;
     /**
      * Compares the two cursors. Returns a value indicating which cursor is ahead in a walk.
      * Note that cursors are advanced in reverse sorting order.

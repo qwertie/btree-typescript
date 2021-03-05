@@ -489,117 +489,145 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   }
 
   /**
-   * Computes the delta operations (adds, deletes, and modifications) required to go from this tree to the supplied destination.
-   * For efficiency, the delta is returned via invocations of supplied handlers.
-   * The computation is optimized for the case in which the two trees have large amounts of shared data (obtained by calling the
-   * `clone` or `with` APIs) and will avoid any iteration of shared state.
-   * @param destination The tree to compute a delta to.
-   * @param processAdd Callback invoked for all adds in the delta.
-   * @param processDelete Callback invoked for all deletions in the delta.
-   * @param processModify Callback invoked for all modifications in the delta.
+   * Computes the differences between `this` and `other`.
+   * For efficiency, the diff is returned via invocations of supplied handlers.
+   * The computation is optimized for the case in which the two trees have large amounts 
+   * of shared data (obtained by calling the `clone` or `with` APIs) and will avoid 
+   * any iteration of shared state.
+   * The handlers can cause computation to early exit by returning {break: R}.
+   * @param other The tree to compute a diff against.
+   * @param onlyThis Callback invoked for all keys only present in `this`.
+   * @param onlyOther Callback invoked for all keys only present in `other`.
+   * @param different Callback invoked for all keys with differing values.
    */
-  delta(destination: BTree<K, V>, processAdd: (k: K, v: V) => void, processDelete: (k: K, v: V) => void, processModify: (k: K, vOld: V, vNew: V) => void): void {
-    // If comparators are different, then the fast path is not possible. Simply fall back to a standard full enumeration.
-    // Also do this if either tree is empty, as everything will be an add/delete and requires a full walk.
-    if (destination._compare !== this._compare || this.isEmpty || destination.isEmpty) {
-      this.forEachPair((kThis, vThis) => {
-        if (!destination.has(kThis)) {
-          processDelete(kThis, vThis);
-        } else {
-          const vDst = destination.get(kThis);
-          if (vThis !== vDst)
-            processModify(kThis, vThis, vDst as unknown as V);
-        }
-      });
-      destination.forEachPair((kDst, vDst) => {
-        if (!this.has(kDst)) {
-          processAdd(kDst, vDst);
-        }
-      });
-    } else {
-      // Cursor-based delta algorithm is as follows:
-      // - Until neither cursor has navigated to the end of the tree, do the following:
-      //  - If the source cursor is "behind" the destination cursor (strictly <, via compare), advance it.
-      //  - Otherwise, advance the destination cursor.
-      //  - Any time a cursor is stepped, perform the following:
-      //    - If the stepped cursor points to a key/value pair:
-      //      - If srcCursor > dstCursor, it is an Add.
-      //      - If srcCursor < dstCursor, and srcCursor was most recently stepped, it is a Delete. The extra condition avoids the erroneous adds
-      //        that would occur when dstCursor (designated the leader) steps forward when srcCursor === dstCursor.
-      //    - Otherwise, if both cursors point to nodes, compare them. If they are equal by reference (shared), skip
-      //      both cursors to the next node in the walk.
-      // - Once one cursor has finished stepping, any remaining steps (if any) are taken and key/value pairs are logged
-      //    as adds (if dst) or deletes (if src).
-      // This algorithm gives the critical guarantee that all locations (both nodes and key/value pairs) in both trees that 
-      // are identical by value (and possibly by reference) will be visited *at the same time* by the cursors.
-      // This removes the possibility of emitting incorrect deltas, as well as allowing for skipping shared nodes.
-      const { _compare } = this;
-      const src = BTree.makeDeltaCursor(this);
-      const dst = BTree.makeDeltaCursor(destination);
-      // It doesn't matter how srcStepped is initialized.
-      // Step order is only used when either cursor is at a leaf, and cursors always start at a node.
-      let srcSuccess = true, dstSuccess = true, srcSteppedLast = true;
-      while (srcSuccess && dstSuccess) {
-        const cursorOrder = BTree.compare(src, dst, _compare);
-        const { leaf: leafSrc, internalSpine: internalSpineSrc, levelIndices: levelIndicesSrc } = src;
-        const { leaf: leafDst, internalSpine: internalSpineDst, levelIndices: levelIndicesDst } = dst;
-        if (leafSrc || leafDst) {
-          if (leafSrc && leafDst && cursorOrder === 0) {
+  diff<R>(
+    other: BTree<K, V>,
+    onlyThis?: (k: K, v: V) => { break?: R } | void,
+    onlyOther?: (k: K, v: V) => { break?: R } | void,
+    different?: (k: K, vThis: V, vOther: V) => { break?: R} | void
+  ): R | undefined {
+    if (other._compare !== this._compare) {
+      throw new Error("Tree comparators are not the same.");
+    }
+
+    if (this.isEmpty || other.isEmpty) {
+      if (this.isEmpty && other.isEmpty)
+        return undefined;
+      // If either tree is empty, everything will be an onlyThis/onlyOther.
+      let cursor: DiffCursor<K, V>;
+      let handler: ((k: K, v: V) => { break?: R } | void) | undefined;
+      if (this.isEmpty) {
+        cursor = BTree.makeDiffCursor(other);
+        handler = onlyOther;
+      } else {
+        cursor = BTree.makeDiffCursor(this);
+        handler = onlyThis;
+      }
+      return handler === undefined ? undefined : BTree.finishDiffWalk(cursor, handler);
+    }
+
+    // Cursor-based diff algorithm is as follows:
+    // - Until neither cursor has navigated to the end of the tree, do the following:
+    //  - If the `this` cursor is "behind" the `other` cursor (strictly <, via compare), advance it.
+    //  - Otherwise, advance the `other` cursor.
+    //  - Any time a cursor is stepped, perform the following:
+    //    - If the stepped cursor points to a key/value pair:
+    //      - If thisCursor > otherCursor, it is an OnlyOther.
+    //      - If thisCursor < otherCursor, and thisCursor was most recently stepped, it is a OnlyThis. The extra condition avoids the
+    //        erroneous OnlyOther calls that would occur when otherCursor (designated the leader) steps forward when thisCursor === otherCursor.
+    //    - Otherwise, if both cursors point to nodes, compare them. If they are equal by reference (shared), skip
+    //      both cursors to the next node in the walk.
+    // - Once one cursor has finished stepping, any remaining steps (if any) are taken and key/value pairs are logged
+    //   as OnlyOther (if otherCursor is stepping) or OnlyThis (if thisCursor is stepping).
+    // This algorithm gives the critical guarantee that all locations (both nodes and key/value pairs) in both trees that 
+    // are identical by value (and possibly by reference) will be visited *at the same time* by the cursors.
+    // This removes the possibility of emitting incorrect diffs, as well as allowing for skipping shared nodes.
+    const { _compare } = this;
+    const thisCursor = BTree.makeDiffCursor(this);
+    const otherCursor = BTree.makeDiffCursor(other);
+    // It doesn't matter how thisSteppedLast is initialized.
+    // Step order is only used when either cursor is at a leaf, and cursors always start at a node.
+    let thisSuccess = true, otherSuccess = true, thisSteppedLast = true;
+    while (thisSuccess && otherSuccess) {
+      const cursorOrder = BTree.compare(thisCursor, otherCursor, _compare);
+      const { leaf: leafThis, internalSpine: internalSpineThis, levelIndices: levelIndicesThis } = thisCursor;
+      const { leaf: leafOther, internalSpine: internalSpineOther, levelIndices: levelIndicesOther } = otherCursor;
+      if (leafThis || leafOther) {
+        if (leafThis && leafOther && cursorOrder === 0) {
+          if (different) {
             // Equal keys, check for modifications
-            const valSrc = leafSrc.values[levelIndicesSrc[levelIndicesSrc.length - 1]];
-            const valDst = leafDst.values[levelIndicesDst[levelIndicesDst.length - 1]];
-            if (valSrc !== valDst)
-              processModify(src.currentKey, valSrc, valDst);
-          } else if (leafDst && cursorOrder > 0) {
-            // Dst is behind, and at a leaf
-            const valDst = leafDst.values[levelIndicesDst[levelIndicesDst.length - 1]];
-            processAdd(dst.currentKey, valDst);
-          } else if (leafSrc && cursorOrder < 0 && srcSteppedLast) {
-            // Src is behind, and at a leaf
-            const valSrc = leafSrc.values[levelIndicesSrc[levelIndicesSrc.length - 1]];
-            processDelete(src.currentKey, valSrc);
+            const valThis = leafThis.values[levelIndicesThis[levelIndicesThis.length - 1]];
+            const valOther = leafOther.values[levelIndicesOther[levelIndicesOther.length - 1]];
+            if (!Object.is(valThis, valOther)) {
+              const result = different(thisCursor.currentKey, valThis, valOther);
+              if (result && result.break)
+                return result.break;
+            }
           }
-        } else if (!leafSrc && !leafDst) {
-          const lastSrc = internalSpineSrc.length - 1;
-          const lastDst = internalSpineDst.length - 1;
-          const nodeSrc = internalSpineSrc[lastSrc][levelIndicesSrc[lastSrc]];
-          const nodeDst = internalSpineDst[lastDst][levelIndicesDst[lastDst]];
-          if (nodeDst === nodeSrc) {
-            srcSuccess = BTree.advance(src, true);
-            dstSuccess = BTree.advance(dst, true);
-            continue;
+        } else if (leafOther && cursorOrder > 0) {
+          if (onlyOther) {
+            // Other is behind, and at a leaf
+            const valOther = leafOther.values[levelIndicesOther[levelIndicesOther.length - 1]];
+            const result = onlyOther(otherCursor.currentKey, valOther);
+            if (result && result.break)
+              return result.break;
+          }
+        } else if (leafThis && cursorOrder < 0 && thisSteppedLast) {
+          if (onlyThis) {
+            // Src is behind, and at a leaf
+            const valThis = leafThis.values[levelIndicesThis[levelIndicesThis.length - 1]];
+            const result = onlyThis(thisCursor.currentKey, valThis);
+            if (result && result.break)
+              return result.break;
           }
         }
-        srcSteppedLast = cursorOrder < 0;
-        if (srcSteppedLast) {
-          srcSuccess = BTree.advance(src);
-        } else {
-          dstSuccess = BTree.advance(dst);
+      } else if (!leafThis && !leafOther) {
+        const lastThis = internalSpineThis.length - 1;
+        const lastOther = internalSpineOther.length - 1;
+        const nodeThis = internalSpineThis[lastThis][levelIndicesThis[lastThis]];
+        const nodeOther = internalSpineOther[lastOther][levelIndicesOther[lastOther]];
+        if (nodeOther === nodeThis) {
+          thisSuccess = BTree.step(thisCursor, true);
+          otherSuccess = BTree.step(otherCursor, true);
+          continue;
         }
       }
-      if (srcSuccess)
-        this.finishDeltaWalk(src, dst, _compare, processDelete);
-      if (dstSuccess)
-        this.finishDeltaWalk(dst, src, _compare, processAdd);
+      thisSteppedLast = cursorOrder < 0;
+      if (thisSteppedLast) {
+        thisSuccess = BTree.step(thisCursor);
+      } else {
+        otherSuccess = BTree.step(otherCursor);
+      }
     }
+
+    if (thisSuccess && onlyThis)
+      return BTree.finishDiffWalk(thisCursor, onlyThis);
+    if (otherSuccess && onlyOther)
+      return BTree.finishDiffWalk(otherCursor, onlyOther);
   }
 
-  private finishDeltaWalk(cursor: DeltaCursor<K, V>, cursorStopped: DeltaCursor<K, V>, compare: (a: K, b: K) => number, callback: (k: K, v: V) => void): void {
+  /**
+   * Helper method for walking a cursor and invoking a callback at every key/value pair.
+   */
+  private static finishDiffWalk<K, V, R>(
+    cursor: DiffCursor<K, V>,
+    callback: (k: K, v: V) => { break?: R } | void
+  ): R | undefined {
     let canStep: boolean = true;
     while (canStep) {
       const { leaf, levelIndices, currentKey } = cursor;
       if (leaf) {
-        const compared = BTree.compare(cursor, cursorStopped, compare);
-        if (compared > 0) {
-          const value = leaf.values[levelIndices[levelIndices.length - 1]];
-          callback(currentKey, value);
-        }
+        const value = leaf.values[levelIndices[levelIndices.length - 1]];
+        const result = callback(currentKey, value);
+        if (result && result.break)
+          return result.break;
       }
-      canStep = BTree.advance(cursor);
+      canStep = BTree.step(cursor);
     }
+    return undefined;
   }
 
-  private static makeDeltaCursor<K, V>(tree: BTree<K, V>): DeltaCursor<K, V> {
+  private static makeDiffCursor<K, V>(tree: BTree<K, V>): DiffCursor<K, V> {
     const { _root, height } = tree;
     return { height: height, internalSpine: [[_root]], levelIndices: [0], leaf: undefined, currentKey: _root.maxKey() };
   }
@@ -607,11 +635,11 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   /**
    * Advances the cursor to the next step in the walk of its tree.
    * Cursors are walked backwards in sort order, as this allows them to leverage maxKey() in order to be compared in O(1).
-   * @param cursor The cursor to advance
+   * @param cursor The cursor to step
    * @param stepToNode If true, the cursor will be advanced to the next node (skipping values)
    * @returns true if the step was completed and false if the step would have caused the cursor to move beyond the end of the tree.
    */ 
-  private static advance<K, V>(cursor: DeltaCursor<K, V>, stepToNode: boolean = false): boolean {
+  private static step<K, V>(cursor: DiffCursor<K, V>, stepToNode: boolean = false): boolean {
     const { internalSpine, levelIndices, leaf } = cursor;
     if (stepToNode || leaf) {
       const levelsLength = levelIndices.length;
@@ -676,7 +704,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    * Compares the two cursors. Returns a value indicating which cursor is ahead in a walk.
    * Note that cursors are advanced in reverse sorting order.
    */
-  private static compare<K, V>(cursorA: DeltaCursor<K, V>, cursorB: DeltaCursor<K, V>, compareKeys: (a: K, b: K) => number): number {
+  private static compare<K, V>(cursorA: DiffCursor<K, V>, cursorB: DiffCursor<K, V>, compareKeys: (a: K, b: K) => number): number {
     const { height: heightA, currentKey: currentKeyA, levelIndices: levelIndicesA } = cursorA;
     const { height: heightB, currentKey: currentKeyB, levelIndices: levelIndicesB } = cursorB;
     // Reverse the comparison order, as cursors are advanced in reverse sorting order
@@ -1527,10 +1555,10 @@ class BNodeInternal<K,V> extends BNode<K,V> {
 }
 
 /**
- * A walkable pointer into a BTree for computing efficient deltas between trees with shared data.
+ * A walkable pointer into a BTree for computing efficient diffs between trees with shared data.
  * - A cursor points to either a key/value pair (KVP) or a node (which can be either a leaf or an internal node). 
  *    As a consequence, a cursor cannot be created for an empty tree.
- * - A cursor can be walked forwards using `advance`. A cursor can be compared to another cursor to 
+ * - A cursor can be walked forwards using `step`. A cursor can be compared to another cursor to 
  *    determine which is ahead in advancement.
  * - A cursor is valid only for the tree it was created from, and only until the first edit made to 
  *    that tree since the cursor's creation.
@@ -1539,7 +1567,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
  * - Leaf is only populated if the cursor points to a KVP. If this is the case, levelIndices.length === internalSpine.length + 1
  *    and levelIndices[levelIndices.length - 1] is the index of the value.
  */
-type DeltaCursor<K,V> = { height: number, internalSpine: BNode<K,V>[][], levelIndices: number[], leaf: BNode<K,V> | undefined, currentKey: K };
+type DiffCursor<K,V> = { height: number, internalSpine: BNode<K,V>[][], levelIndices: number[], leaf: BNode<K,V> | undefined, currentKey: K };
 
 // Optimization: this array of `undefined`s is used instead of a normal
 // array of values in nodes where `undefined` is the only value.
