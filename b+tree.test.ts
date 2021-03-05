@@ -389,7 +389,7 @@ function testBTree(maxNodeSize: number)
   describe("Diff computation", () => {
     let onlyThis: Map<number, number>;
     let onlyOther: Map<number, number>;
-    let different: Map<number, { vOld: number, vNew: number }>;
+    let different: Map<number, string>;
     function reset(): void {
       onlyOther = new Map();
       onlyThis = new Map();
@@ -398,28 +398,64 @@ function testBTree(maxNodeSize: number)
 
     const OnlyThis = (k: number, v: number) => { onlyThis.set(k, v); }
     const OnlyOther = (k: number, v: number) => { onlyOther.set(k, v); }
-    const Different = (k: number, vThis: number, vOther: number) => { different.set(k, {vOld: vThis, vNew: vOther}); }
+    const Different = (k: number, vThis: number, vOther: number) => { different.set(k, `vThis: ${vThis}, vOther: ${vOther}`); }
     const compare = (a: number, b: number) => a - b;
 
-    function expectMapEquals<K, V>(map: Map<K, V>, collection: [K, V][]) {
-      expect(map.size).toEqual(collection.length);
-      collection.forEach(kvp => {
-        expect(map.get(kvp[0])).toEqual(kvp[1]);
+    function expectMapsEquals<K, V>(mapA: Map<K, V>, mapB: Map<K, V>) {
+      expect(mapA.size).toEqual(mapB.size);
+      mapA.forEach((valueA, keyA) => {
+        const valueB = mapB.get(keyA);
+        expect(Object.is(valueA, valueB));
       });
     }
 
-    beforeEach(() => {
+    function expectDiffCorrect(treeThis: BTree<number, number>, treeOther: BTree<number, number>): void {
       reset();
+      treeThis.diff(treeOther, OnlyThis, OnlyOther, Different);
+      let onlyThisT: Map<number, number> = new Map();
+      let onlyOtherT: Map<number, number> = new Map();
+      let differentT: Map<number, string> = new Map();
+      treeThis.forEachPair((kThis, vThis) => {
+        if (!treeOther.has(kThis)) {
+          onlyThisT.set(kThis, vThis);
+        } else {
+          const vOther = treeOther.get(kThis);
+          if (!Object.is(vThis, vOther))
+            differentT.set(kThis, `vThis: ${vThis}, vOther: ${vOther}`);
+        }
+      });
+      treeOther.forEachPair((kOther, vOther) => {
+        if (!treeThis.has(kOther)) {
+          onlyOtherT.set(kOther, vOther);
+        }
+      });
+      expectMapsEquals(onlyThis, onlyThisT);
+      expectMapsEquals(onlyOther, onlyOtherT);
+      expectMapsEquals(different, differentT);
+    }
+
+    test(`Diff on trees with different comparators is an error`, () => {
+      const treeA = new BTree<number, number>([], compare);
+      const treeB = new BTree<number, number>([], (a, b) => b - a);
+      expect(() => treeA.diff(treeB, OnlyThis, OnlyOther, Different)).toThrow('comparators');
     });
 
     const entriesGroup: [number, number][][] = [[], [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]];
     entriesGroup.forEach(entries => {
       test(`Diff generated for the same tree ${entries.length > 0 ? "(non-empty)" : "(empty)"}`, () => {
         const tree = new BTree<number, number>(entries, compare, maxNodeSize);
-        tree.diff(tree, OnlyOther, OnlyThis, Different);
+        expectDiffCorrect(tree, tree);
         expect(onlyOther.size).toEqual(0);
         expect(onlyThis.size).toEqual(0);
         expect(different.size).toEqual(0);
+      });
+    });
+
+    [entriesGroup, [...entriesGroup].reverse()].forEach(doubleEntries => {
+      test(`Diff generated between an ${doubleEntries[0].length === 0 ? 'empty' : 'non-empty'} tree and a ${doubleEntries[1].length === 0 ? 'empty' : 'non-empty'} one`, () => {
+        const treeA = new BTree<number, number>(doubleEntries[0], compare, maxNodeSize);
+        const treeB = new BTree<number, number>(doubleEntries[1], compare, maxNodeSize);
+        expectDiffCorrect(treeA, treeB);
       });
     });
 
@@ -439,9 +475,7 @@ function testBTree(maxNodeSize: number)
       treeB.set(modifiedInB1, differingValue);
       treeB.set(modifiedInB2, differingValue)
       treeA.diff(treeB, OnlyThis, OnlyOther, Different);
-      expectMapEquals(onlyOther, [[onlyInBLarge, onlyInBLarge], [onlyInBSmall, onlyInBSmall]]);
-      expectMapEquals(onlyThis, [[onlyInAFromDelete, onlyInAFromDelete], [onlyInA, onlyInA]]);
-      expectMapEquals(different, [[modifiedInB2, { vOld: modifiedInB2, vNew: differingValue }], [modifiedInB1, { vOld: modifiedInB1, vNew: differingValue }]]);
+      expectDiffCorrect(treeA, treeB);
     }
 
     function makeLargeTree(): BTree<number, number> {
@@ -460,10 +494,7 @@ function testBTree(maxNodeSize: number)
       treeB.delete(2);
       treeB.set(3, 4);
       treeB.set(10, 10);
-      treeA.diff(treeB, OnlyThis, OnlyOther, Different);
-      expectMapEquals(onlyOther, [[-1, -1], [10, 10]]);
-      expectMapEquals(onlyThis, [[2, 2]]);
-      expectMapEquals(different, [[3, { vOld: 3, vNew: 4 }]]);
+      expectDiffCorrect(treeA, treeB);
     });
 
     test(`Diff generated for large trees`, () => {
@@ -481,6 +512,10 @@ function testBTree(maxNodeSize: number)
       const tree = makeLargeTree();
       applyChanges(tree, tree => tree.clone());
     });
+
+    // Can early out for each handler
+    // Chained shared trees
+    // Random changes
   });
 
   test("Issue #2 reproduction", () => {
