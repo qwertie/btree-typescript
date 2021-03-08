@@ -513,17 +513,10 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     if (this.isEmpty || other.isEmpty) {
       if (this.isEmpty && other.isEmpty)
         return undefined;
-      // If either tree is empty, everything will be an onlyThis/onlyOther.
-      let cursor: DiffCursor<K, V>;
-      let handler: ((k: K, v: V) => { break?: R } | void) | undefined;
-      if (this.isEmpty) {
-        cursor = BTree.makeDiffCursor(other);
-        handler = onlyOther;
-      } else {
-        cursor = BTree.makeDiffCursor(this);
-        handler = onlyThis;
-      }
-      return handler === undefined ? undefined : BTree.finishDiffWalk(cursor, handler);
+      // If one tree is empty, everything will be an onlyThis/onlyOther.
+      if (this.isEmpty)
+        return onlyOther === undefined ? undefined : BTree.stepToEnd(BTree.makeDiffCursor(other), onlyOther);
+      return onlyThis === undefined ? undefined : BTree.stepToEnd(BTree.makeDiffCursor(this), onlyThis);
     }
 
     // Cursor-based diff algorithm is as follows:
@@ -601,15 +594,31 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     }
 
     if (thisSuccess && onlyThis)
-      return BTree.finishDiffWalk(thisCursor, onlyThis);
+      return BTree.finishCursorWalk(thisCursor, otherCursor, _compare, onlyThis);
     if (otherSuccess && onlyOther)
-      return BTree.finishDiffWalk(otherCursor, onlyOther);
+      return BTree.finishCursorWalk(otherCursor, thisCursor, _compare, onlyOther);
+  }
+
+  private static finishCursorWalk<K, V, R>(
+    cursor: DiffCursor<K, V>,
+    cursorFinished: DiffCursor<K, V>,
+    compareKeys: (a: K, b: K) => number,
+    callback: (k: K, v: V) => { break?: R } | void
+  ): R | undefined {
+    const compared = BTree.compare(cursor, cursorFinished, compareKeys);
+    if (compared === 0) {
+      if (!BTree.step(cursor))
+        return undefined;
+    } else if (compared < 0) {
+      check(false, "cursor walk terminated early");
+    }
+    return BTree.stepToEnd(cursor, callback);
   }
 
   /**
    * Helper method for walking a cursor and invoking a callback at every key/value pair.
    */
-  private static finishDiffWalk<K, V, R>(
+  private static stepToEnd<K, V, R>(
     cursor: DiffCursor<K, V>,
     callback: (k: K, v: V) => { break?: R } | void
   ): R | undefined {

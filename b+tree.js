@@ -480,18 +480,10 @@ var BTree = /** @class */ (function () {
         if (this.isEmpty || other.isEmpty) {
             if (this.isEmpty && other.isEmpty)
                 return undefined;
-            // If either tree is empty, everything will be an onlyThis/onlyOther.
-            var cursor = void 0;
-            var handler = void 0;
-            if (this.isEmpty) {
-                cursor = BTree.makeDiffCursor(other);
-                handler = onlyOther;
-            }
-            else {
-                cursor = BTree.makeDiffCursor(this);
-                handler = onlyThis;
-            }
-            return handler === undefined ? undefined : BTree.finishDiffWalk(cursor, handler);
+            // If one tree is empty, everything will be an onlyThis/onlyOther.
+            if (this.isEmpty)
+                return onlyOther === undefined ? undefined : BTree.stepToEnd(BTree.makeDiffCursor(other), onlyOther);
+            return onlyThis === undefined ? undefined : BTree.stepToEnd(BTree.makeDiffCursor(this), onlyThis);
         }
         // Cursor-based diff algorithm is as follows:
         // - Until neither cursor has navigated to the end of the tree, do the following:
@@ -571,14 +563,25 @@ var BTree = /** @class */ (function () {
             }
         }
         if (thisSuccess && onlyThis)
-            return BTree.finishDiffWalk(thisCursor, onlyThis);
+            return BTree.finishCursorWalk(thisCursor, otherCursor, _compare, onlyThis);
         if (otherSuccess && onlyOther)
-            return BTree.finishDiffWalk(otherCursor, onlyOther);
+            return BTree.finishCursorWalk(otherCursor, thisCursor, _compare, onlyOther);
+    };
+    BTree.finishCursorWalk = function (cursor, cursorFinished, compareKeys, callback) {
+        var compared = BTree.compare(cursor, cursorFinished, compareKeys);
+        if (compared === 0) {
+            if (!BTree.step(cursor))
+                return undefined;
+        }
+        else if (compared < 0) {
+            check(false, "cursor walk terminated early");
+        }
+        return BTree.stepToEnd(cursor, callback);
     };
     /**
      * Helper method for walking a cursor and invoking a callback at every key/value pair.
      */
-    BTree.finishDiffWalk = function (cursor, callback) {
+    BTree.stepToEnd = function (cursor, callback) {
         var canStep = true;
         while (canStep) {
             var leaf = cursor.leaf, levelIndices = cursor.levelIndices, currentKey = cursor.currentKey;

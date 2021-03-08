@@ -402,11 +402,29 @@ function testBTree(maxNodeSize: number)
     const compare = (a: number, b: number) => a - b;
 
     function expectMapsEquals<K, V>(mapA: Map<K, V>, mapB: Map<K, V>) {
-      expect(mapA.size).toEqual(mapB.size);
+      const onlyA = [];
+      const onlyB = [];
+      const different = [];
       mapA.forEach((valueA, keyA) => {
         const valueB = mapB.get(keyA);
-        expect(Object.is(valueA, valueB));
+        if (valueB === undefined) {
+          onlyA.push([keyA, valueA]);
+        } else if (!Object.is(valueB, valueB)) {
+          different.push([keyA, valueA, valueB]);
+        }
       });
+      mapB.forEach((valueB, keyB) => {
+        const valueA = mapA.get(keyB);
+        if (valueA === undefined) {
+          onlyA.push([keyB, valueB]);
+        }
+      });
+      if (onlyA.length !== 0 || onlyB.length !== 0 || different.length !== 0) {
+        console.log(':(');
+      }
+      expect(onlyA.length).toEqual(0);
+      expect(onlyB.length).toEqual(0);
+      expect(different.length).toEqual(0);
     }
 
     function expectDiffCorrect(treeThis: BTree<number, number>, treeOther: BTree<number, number>): void {
@@ -434,7 +452,7 @@ function testBTree(maxNodeSize: number)
       expectMapsEquals(different, differentT);
     }
 
-    test(`Diff on trees with different comparators is an error`, () => {
+    test(`Diff of trees with different comparators is an error`, () => {
       const treeA = new BTree<number, number>([], compare);
       const treeB = new BTree<number, number>([], (a, b) => b - a);
       expect(() => treeA.diff(treeB, OnlyThis, OnlyOther, Different)).toThrow('comparators');
@@ -442,7 +460,7 @@ function testBTree(maxNodeSize: number)
 
     const entriesGroup: [number, number][][] = [[], [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]];
     entriesGroup.forEach(entries => {
-      test(`Diff generated for the same tree ${entries.length > 0 ? "(non-empty)" : "(empty)"}`, () => {
+      test(`Diff of the same tree ${entries.length > 0 ? "(non-empty)" : "(empty)"}`, () => {
         const tree = new BTree<number, number>(entries, compare, maxNodeSize);
         expectDiffCorrect(tree, tree);
         expect(onlyOther.size).toEqual(0);
@@ -451,12 +469,35 @@ function testBTree(maxNodeSize: number)
       });
     });
 
+    test(`Diff of identical trees`, () => {
+      const treeA = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
+      const treeB = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
+      expectDiffCorrect(treeA, treeB);
+    });
+
     [entriesGroup, [...entriesGroup].reverse()].forEach(doubleEntries => {
-      test(`Diff generated between an ${doubleEntries[0].length === 0 ? 'empty' : 'non-empty'} tree and a ${doubleEntries[1].length === 0 ? 'empty' : 'non-empty'} one`, () => {
+      test(`Diff of an ${doubleEntries[0].length === 0 ? 'empty' : 'non-empty'} tree and a ${doubleEntries[1].length === 0 ? 'empty' : 'non-empty'} one`, () => {
         const treeA = new BTree<number, number>(doubleEntries[0], compare, maxNodeSize);
         const treeB = new BTree<number, number>(doubleEntries[1], compare, maxNodeSize);
         expectDiffCorrect(treeA, treeB);
       });
+    });
+
+    test(`Diff of different trees`, () => {
+      const treeA = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
+      const treeB = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
+      treeB.set(-1, -1);
+      treeB.delete(2);
+      treeB.set(3, 4);
+      treeB.set(10, 10);
+      expectDiffCorrect(treeA, treeB);
+    });
+
+    test(`Diff of odds and evens`, () => {
+      const treeA = new BTree<number, number>([[1, 1], [3, 3], [5, 5], [7, 7]], compare, maxNodeSize);
+      const treeB = new BTree<number, number>([[2, 2], [4, 4], [6, 6], [8, 8]], compare, maxNodeSize);
+      expectDiffCorrect(treeA, treeB);
+      expectDiffCorrect(treeB, treeA);
     });
 
     function applyChanges(treeA: BTree<number, number>, duplicate: (tree: BTree<number, number>) => BTree<number, number>): void {
@@ -478,8 +519,8 @@ function testBTree(maxNodeSize: number)
       expectDiffCorrect(treeA, treeB);
     }
 
-    function makeLargeTree(): BTree<number, number> {
-      const size = Math.pow(maxNodeSize, 3);
+    function makeLargeTree(size?: number): BTree<number, number> {
+      size = size ?? Math.pow(maxNodeSize, 3);
       const tree = new BTree<number, number>([], compare, maxNodeSize);
       for (let i = 0; i < size; i++) {
         tree.set(i, i);
@@ -487,17 +528,7 @@ function testBTree(maxNodeSize: number)
       return tree;
     }
 
-    test(`Diff generated for different trees`, () => {
-      const treeA = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
-      const treeB = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
-      treeB.set(-1, -1);
-      treeB.delete(2);
-      treeB.set(3, 4);
-      treeB.set(10, 10);
-      expectDiffCorrect(treeA, treeB);
-    });
-
-    test(`Diff generated for large trees`, () => {
+    test(`Diff of large trees`, () => {
       const tree = makeLargeTree();
       applyChanges(tree, tree => {
         const secondTree = new BTree<number, number>([], compare);
@@ -508,10 +539,39 @@ function testBTree(maxNodeSize: number)
       });
     });
 
-    test(`Diff generated for cloned trees`, () => {
+    test(`Diff of cloned trees`, () => {
       const tree = makeLargeTree();
       applyChanges(tree, tree => tree.clone());
     });
+
+    // function makeRandomChanges(tree: BTree<number, number>, numChanges: number, maxKey: number): void {
+    //   for (let i = 0; i < numChanges; i++) {
+    //     const operation = randInt(3);
+    //     if (operation <= 1) {
+    //       tree.set(randInt(maxKey), randInt(2));
+    //     } else if (operation === 2) {
+    //       tree.delete(randInt(maxKey));
+    //     }
+    //   }
+    // }
+
+    // test(`Diff for a series of cloned trees`, () => {
+    //   const firstTree = makeLargeTree(maxNodeSize * maxNodeSize);
+    //   const trees: BTree<number, number>[] = [firstTree];
+    //   for (let i = 0; i < 20; i++) {
+    //     const newTree = trees[i].clone();
+    //     makeRandomChanges(newTree, 10, firstTree.size);
+    //     trees.push(newTree);
+    //   }
+    //   for (let i = 0; i < trees.length; i++) {
+    //     for (let j = 0; j < trees.length; j++) {
+    //       if (i === 3 && j === 8) {
+    //         console.log('break');
+    //       }
+    //       expectDiffCorrect(trees[i], trees[j]);
+    //     }
+    //   }
+    // });
 
     // Can early out for each handler
     // Chained shared trees

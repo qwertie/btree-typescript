@@ -240,10 +240,11 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
     } | void, different?: (k: K, vThis: V, vOther: V) => {
         break?: R;
     } | void): R | undefined;
+    private static finishCursorWalk;
     /**
      * Helper method for walking a cursor and invoking a callback at every key/value pair.
      */
-    private static finishDiffWalk;
+    private static stepToEnd;
     private static makeDiffCursor;
     /**
      * Advances the cursor to the next step in the walk of its tree.
