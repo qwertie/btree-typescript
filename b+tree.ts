@@ -524,10 +524,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     //  - If the `this` cursor is "behind" the `other` cursor (strictly <, via compare), advance it.
     //  - Otherwise, advance the `other` cursor.
     //  - Any time a cursor is stepped, perform the following:
-    //    - If the stepped cursor points to a key/value pair:
-    //      - If thisCursor > otherCursor, it is an OnlyOther.
-    //      - If thisCursor < otherCursor, and thisCursor was most recently stepped, it is a OnlyThis. The extra condition avoids the
-    //        erroneous OnlyOther calls that would occur when otherCursor (designated the leader) steps forward when thisCursor === otherCursor.
+    //    - If either cursor points to a key/value pair:
+    //      - If thisCursor === otherCursor and the values differ, it is a Different.
+    //      - If thisCursor > otherCursor and otherCursor is at a key/value pair, it is an OnlyOther.
+    //      - If thisCursor < otherCursor and thisCursor is at a key/value pair, it is an OnlyThis as long as the most recent 
+    //        cursor step was *not* otherCursor advancing from a tie. The extra condition avoids erroneous OnlyOther calls 
+    //        that would occur due to otherCursor being the "leader".
     //    - Otherwise, if both cursors point to nodes, compare them. If they are equal by reference (shared), skip
     //      both cursors to the next node in the walk.
     // - Once one cursor has finished stepping, any remaining steps (if any) are taken and key/value pairs are logged
@@ -540,53 +542,59 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const otherCursor = BTree.makeDiffCursor(other);
     // It doesn't matter how thisSteppedLast is initialized.
     // Step order is only used when either cursor is at a leaf, and cursors always start at a node.
-    let thisSuccess = true, otherSuccess = true, thisSteppedLast = true;
+    let thisSuccess = true, otherSuccess = true, prevCursorOrder = BTree.compare(thisCursor, otherCursor, _compare);
     while (thisSuccess && otherSuccess) {
       const cursorOrder = BTree.compare(thisCursor, otherCursor, _compare);
-      const { leaf: leafThis, internalSpine: internalSpineThis, levelIndices: levelIndicesThis } = thisCursor;
-      const { leaf: leafOther, internalSpine: internalSpineOther, levelIndices: levelIndicesOther } = otherCursor;
-      if (leafThis || leafOther) {
-        if (leafThis && leafOther && cursorOrder === 0) {
-          if (different) {
-            // Equal keys, check for modifications
-            const valThis = leafThis.values[levelIndicesThis[levelIndicesThis.length - 1]];
-            const valOther = leafOther.values[levelIndicesOther[levelIndicesOther.length - 1]];
-            if (!Object.is(valThis, valOther)) {
-              const result = different(thisCursor.currentKey, valThis, valOther);
+      const { leaf: thisLeaf, internalSpine: thisInternalSpine, levelIndices: thisLevelIndices } = thisCursor;
+      const { leaf: otherLeaf, internalSpine: otherInternalSpine, levelIndices: otherLevelIndices } = otherCursor;
+      if (thisLeaf || otherLeaf) {
+        // If the cursors were at the same location last step, then there is no work to be done.
+        if (prevCursorOrder !== 0) {
+          if (cursorOrder === 0) {
+            if (thisLeaf && otherLeaf && different) {
+              // Equal keys, check for modifications
+              const valThis = thisLeaf.values[thisLevelIndices[thisLevelIndices.length - 1]];
+              const valOther = otherLeaf.values[otherLevelIndices[otherLevelIndices.length - 1]];
+              if (!Object.is(valThis, valOther)) {
+                const result = different(thisCursor.currentKey, valThis, valOther);
+                if (result && result?.break)
+                  return result.break;
+              }
+            }
+          } else if (cursorOrder > 0) {
+            // If this is the case, we know that either:
+            // 1. otherCursor stepped last from a starting position that trailed thisCursor, and is still behind, or
+            // 2. thisCursor stepped last and leapfrogged otherCursor
+            // Either of these cases is an "only other"
+            if (otherLeaf && onlyOther) {
+              const otherVal = otherLeaf.values[otherLevelIndices[otherLevelIndices.length - 1]];
+              const result = onlyOther(otherCursor.currentKey, otherVal);
+              if (result && result.break)
+                return result.break;
+            }
+          } else if (onlyThis) {
+            if (thisLeaf && prevCursorOrder !== 0) {
+              const valThis = thisLeaf.values[thisLevelIndices[thisLevelIndices.length - 1]];
+              const result = onlyThis(thisCursor.currentKey, valThis);
               if (result && result.break)
                 return result.break;
             }
           }
-        } else if (leafOther && cursorOrder > 0) {
-          if (onlyOther) {
-            // Other is behind, and at a leaf
-            const valOther = leafOther.values[levelIndicesOther[levelIndicesOther.length - 1]];
-            const result = onlyOther(otherCursor.currentKey, valOther);
-            if (result && result.break)
-              return result.break;
-          }
-        } else if (leafThis && cursorOrder < 0 && thisSteppedLast) {
-          if (onlyThis) {
-            // Src is behind, and at a leaf
-            const valThis = leafThis.values[levelIndicesThis[levelIndicesThis.length - 1]];
-            const result = onlyThis(thisCursor.currentKey, valThis);
-            if (result && result.break)
-              return result.break;
-          }
         }
-      } else if (!leafThis && !leafOther) {
-        const lastThis = internalSpineThis.length - 1;
-        const lastOther = internalSpineOther.length - 1;
-        const nodeThis = internalSpineThis[lastThis][levelIndicesThis[lastThis]];
-        const nodeOther = internalSpineOther[lastOther][levelIndicesOther[lastOther]];
+      } else if (!thisLeaf && !otherLeaf && cursorOrder === 0) {
+        const lastThis = thisInternalSpine.length - 1;
+        const lastOther = otherInternalSpine.length - 1;
+        const nodeThis = thisInternalSpine[lastThis][thisLevelIndices[lastThis]];
+        const nodeOther = otherInternalSpine[lastOther][otherLevelIndices[lastOther]];
         if (nodeOther === nodeThis) {
+          prevCursorOrder = 0;
           thisSuccess = BTree.step(thisCursor, true);
           otherSuccess = BTree.step(otherCursor, true);
           continue;
         }
       }
-      thisSteppedLast = cursorOrder < 0;
-      if (thisSteppedLast) {
+      prevCursorOrder = cursorOrder;
+      if (cursorOrder < 0) {
         thisSuccess = BTree.step(thisCursor);
       } else {
         otherSuccess = BTree.step(otherCursor);
@@ -615,9 +623,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return BTree.stepToEnd(cursor, callback);
   }
 
-  /**
-   * Helper method for walking a cursor and invoking a callback at every key/value pair.
-   */
   private static stepToEnd<K, V, R>(
     cursor: DiffCursor<K, V>,
     callback: (k: K, v: V) => { break?: R } | void

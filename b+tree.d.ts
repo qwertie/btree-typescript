@@ -241,9 +241,6 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
         break?: R;
     } | void): R | undefined;
     private static finishCursorWalk;
-    /**
-     * Helper method for walking a cursor and invoking a callback at every key/value pair.
-     */
     private static stepToEnd;
     private static makeDiffCursor;
     /**

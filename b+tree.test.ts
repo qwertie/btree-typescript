@@ -396,6 +396,8 @@ function testBTree(maxNodeSize: number)
       different = new Map();
     }
 
+    beforeEach(() => reset());
+
     const OnlyThis = (k: number, v: number) => { onlyThis.set(k, v); }
     const OnlyOther = (k: number, v: number) => { onlyOther.set(k, v); }
     const Different = (k: number, vThis: number, vOther: number) => { different.set(k, `vThis: ${vThis}, vOther: ${vOther}`); }
@@ -419,9 +421,6 @@ function testBTree(maxNodeSize: number)
           onlyA.push([keyB, valueB]);
         }
       });
-      if (onlyA.length !== 0 || onlyB.length !== 0 || different.length !== 0) {
-        console.log(':(');
-      }
       expect(onlyA.length).toEqual(0);
       expect(onlyB.length).toEqual(0);
       expect(different.length).toEqual(0);
@@ -530,13 +529,7 @@ function testBTree(maxNodeSize: number)
 
     test(`Diff of large trees`, () => {
       const tree = makeLargeTree();
-      applyChanges(tree, tree => {
-        const secondTree = new BTree<number, number>([], compare);
-        tree.forEachPair((k, v) => {
-          secondTree.set(k, v);
-        });
-        return secondTree;
-      });
+      applyChanges(tree, tree => tree.greedyClone());
     });
 
     test(`Diff of cloned trees`, () => {
@@ -544,38 +537,35 @@ function testBTree(maxNodeSize: number)
       applyChanges(tree, tree => tree.clone());
     });
 
-    // function makeRandomChanges(tree: BTree<number, number>, numChanges: number, maxKey: number): void {
-    //   for (let i = 0; i < numChanges; i++) {
-    //     const operation = randInt(3);
-    //     if (operation <= 1) {
-    //       tree.set(randInt(maxKey), randInt(2));
-    //     } else if (operation === 2) {
-    //       tree.delete(randInt(maxKey));
-    //     }
-    //   }
-    // }
+    test(`Diff can early exit`, () => {
+      const tree = makeLargeTree(100);
+      const tree2 = tree.clone();
+      tree2.set(-1, -1);
+      tree2.delete(10);
+      tree2.set(20, -1);
+      tree2.set(110, -1);
+      const ReturnKey = (key: number) => { return { break: key }; };
 
-    // test(`Diff for a series of cloned trees`, () => {
-    //   const firstTree = makeLargeTree(maxNodeSize * maxNodeSize);
-    //   const trees: BTree<number, number>[] = [firstTree];
-    //   for (let i = 0; i < 20; i++) {
-    //     const newTree = trees[i].clone();
-    //     makeRandomChanges(newTree, 10, firstTree.size);
-    //     trees.push(newTree);
-    //   }
-    //   for (let i = 0; i < trees.length; i++) {
-    //     for (let j = 0; j < trees.length; j++) {
-    //       if (i === 3 && j === 8) {
-    //         console.log('break');
-    //       }
-    //       expectDiffCorrect(trees[i], trees[j]);
-    //     }
-    //   }
-    // });
+      let val = tree.diff(tree2, OnlyThis, OnlyOther, ReturnKey);
+      expect(onlyOther.size).toEqual(1);
+      expect(onlyThis.size).toEqual(0);
+      expect(val).toEqual(20);
+      reset();
 
-    // Can early out for each handler
-    // Chained shared trees
-    // Random changes
+      val = tree.diff(tree2, OnlyThis, ReturnKey, Different);
+      expect(different.size).toEqual(0);
+      expect(onlyThis.size).toEqual(0);
+      expect(val).toEqual(110);
+      reset();
+
+      val = tree.diff(tree2, ReturnKey, OnlyOther, Different);
+      expect(different.size).toEqual(1);
+      expect(onlyOther.size).toEqual(1);
+      expect(val).toEqual(10);
+      reset();
+
+      expectDiffCorrect(tree, tree2);
+    });
   });
 
   test("Issue #2 reproduction", () => {

@@ -490,10 +490,12 @@ var BTree = /** @class */ (function () {
         //  - If the `this` cursor is "behind" the `other` cursor (strictly <, via compare), advance it.
         //  - Otherwise, advance the `other` cursor.
         //  - Any time a cursor is stepped, perform the following:
-        //    - If the stepped cursor points to a key/value pair:
-        //      - If thisCursor > otherCursor, it is an OnlyOther.
-        //      - If thisCursor < otherCursor, and thisCursor was most recently stepped, it is a OnlyThis. The extra condition avoids the
-        //        erroneous OnlyOther calls that would occur when otherCursor (designated the leader) steps forward when thisCursor === otherCursor.
+        //    - If either cursor points to a key/value pair:
+        //      - If thisCursor === otherCursor and the values differ, it is a Different.
+        //      - If thisCursor > otherCursor and otherCursor is at a key/value pair, it is an OnlyOther.
+        //      - If thisCursor < otherCursor and thisCursor is at a key/value pair, it is an OnlyThis as long as the most recent 
+        //        cursor step was *not* otherCursor advancing from a tie. The extra condition avoids erroneous OnlyOther calls 
+        //        that would occur due to otherCursor being the "leader".
         //    - Otherwise, if both cursors point to nodes, compare them. If they are equal by reference (shared), skip
         //      both cursors to the next node in the walk.
         // - Once one cursor has finished stepping, any remaining steps (if any) are taken and key/value pairs are logged
@@ -506,56 +508,62 @@ var BTree = /** @class */ (function () {
         var otherCursor = BTree.makeDiffCursor(other);
         // It doesn't matter how thisSteppedLast is initialized.
         // Step order is only used when either cursor is at a leaf, and cursors always start at a node.
-        var thisSuccess = true, otherSuccess = true, thisSteppedLast = true;
+        var thisSuccess = true, otherSuccess = true, prevCursorOrder = BTree.compare(thisCursor, otherCursor, _compare);
         while (thisSuccess && otherSuccess) {
             var cursorOrder = BTree.compare(thisCursor, otherCursor, _compare);
-            var leafThis = thisCursor.leaf, internalSpineThis = thisCursor.internalSpine, levelIndicesThis = thisCursor.levelIndices;
-            var leafOther = otherCursor.leaf, internalSpineOther = otherCursor.internalSpine, levelIndicesOther = otherCursor.levelIndices;
-            if (leafThis || leafOther) {
-                if (leafThis && leafOther && cursorOrder === 0) {
-                    if (different) {
-                        // Equal keys, check for modifications
-                        var valThis = leafThis.values[levelIndicesThis[levelIndicesThis.length - 1]];
-                        var valOther = leafOther.values[levelIndicesOther[levelIndicesOther.length - 1]];
-                        if (!Object.is(valThis, valOther)) {
-                            var result = different(thisCursor.currentKey, valThis, valOther);
+            var thisLeaf = thisCursor.leaf, thisInternalSpine = thisCursor.internalSpine, thisLevelIndices = thisCursor.levelIndices;
+            var otherLeaf = otherCursor.leaf, otherInternalSpine = otherCursor.internalSpine, otherLevelIndices = otherCursor.levelIndices;
+            if (thisLeaf || otherLeaf) {
+                // If the cursors were at the same location last step, then there is no work to be done.
+                if (prevCursorOrder !== 0) {
+                    if (cursorOrder === 0) {
+                        if (thisLeaf && otherLeaf && different) {
+                            // Equal keys, check for modifications
+                            var valThis = thisLeaf.values[thisLevelIndices[thisLevelIndices.length - 1]];
+                            var valOther = otherLeaf.values[otherLevelIndices[otherLevelIndices.length - 1]];
+                            if (!Object.is(valThis, valOther)) {
+                                var result = different(thisCursor.currentKey, valThis, valOther);
+                                if (result && (result === null || result === void 0 ? void 0 : result.break))
+                                    return result.break;
+                            }
+                        }
+                    }
+                    else if (cursorOrder > 0) {
+                        // If this is the case, we know that either:
+                        // 1. otherCursor stepped last from a starting position that trailed thisCursor, and is still behind, or
+                        // 2. thisCursor stepped last and leapfrogged otherCursor
+                        // Either of these cases is an "only other"
+                        if (otherLeaf && onlyOther) {
+                            var otherVal = otherLeaf.values[otherLevelIndices[otherLevelIndices.length - 1]];
+                            var result = onlyOther(otherCursor.currentKey, otherVal);
+                            if (result && result.break)
+                                return result.break;
+                        }
+                    }
+                    else if (onlyThis) {
+                        if (thisLeaf && prevCursorOrder !== 0) {
+                            var valThis = thisLeaf.values[thisLevelIndices[thisLevelIndices.length - 1]];
+                            var result = onlyThis(thisCursor.currentKey, valThis);
                             if (result && result.break)
                                 return result.break;
                         }
                     }
                 }
-                else if (leafOther && cursorOrder > 0) {
-                    if (onlyOther) {
-                        // Other is behind, and at a leaf
-                        var valOther = leafOther.values[levelIndicesOther[levelIndicesOther.length - 1]];
-                        var result = onlyOther(otherCursor.currentKey, valOther);
-                        if (result && result.break)
-                            return result.break;
-                    }
-                }
-                else if (leafThis && cursorOrder < 0 && thisSteppedLast) {
-                    if (onlyThis) {
-                        // Src is behind, and at a leaf
-                        var valThis = leafThis.values[levelIndicesThis[levelIndicesThis.length - 1]];
-                        var result = onlyThis(thisCursor.currentKey, valThis);
-                        if (result && result.break)
-                            return result.break;
-                    }
-                }
             }
-            else if (!leafThis && !leafOther) {
-                var lastThis = internalSpineThis.length - 1;
-                var lastOther = internalSpineOther.length - 1;
-                var nodeThis = internalSpineThis[lastThis][levelIndicesThis[lastThis]];
-                var nodeOther = internalSpineOther[lastOther][levelIndicesOther[lastOther]];
+            else if (!thisLeaf && !otherLeaf && cursorOrder === 0) {
+                var lastThis = thisInternalSpine.length - 1;
+                var lastOther = otherInternalSpine.length - 1;
+                var nodeThis = thisInternalSpine[lastThis][thisLevelIndices[lastThis]];
+                var nodeOther = otherInternalSpine[lastOther][otherLevelIndices[lastOther]];
                 if (nodeOther === nodeThis) {
+                    prevCursorOrder = 0;
                     thisSuccess = BTree.step(thisCursor, true);
                     otherSuccess = BTree.step(otherCursor, true);
                     continue;
                 }
             }
-            thisSteppedLast = cursorOrder < 0;
-            if (thisSteppedLast) {
+            prevCursorOrder = cursorOrder;
+            if (cursorOrder < 0) {
                 thisSuccess = BTree.step(thisCursor);
             }
             else {
@@ -578,9 +586,6 @@ var BTree = /** @class */ (function () {
         }
         return BTree.stepToEnd(cursor, callback);
     };
-    /**
-     * Helper method for walking a cursor and invoking a callback at every key/value pair.
-     */
     BTree.stepToEnd = function (cursor, callback) {
         var canStep = true;
         while (canStep) {
