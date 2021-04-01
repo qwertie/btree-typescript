@@ -6,7 +6,7 @@ export declare type EditRangeResult<V, R = number> = {
     delete?: boolean;
 };
 /**
- * numbers, strings and arrays thereof, and objects that have a valueOf() method returning a number or string like Dates.
+ * Types that BTree supports by default
  */
 export declare type DefaultComparable = number | string | (number | string)[] | {
     valueOf: () => number | string | (number | string)[];

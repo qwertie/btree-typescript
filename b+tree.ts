@@ -31,7 +31,7 @@ type index = number;
 //   - V8 source (NewElementsCapacity in src/objects.h): arrays grow by 50% + 16 elements
 
 /**
- * numbers, strings and arrays thereof, and objects that have a valueOf() method returning a number or string like Dates.
+ * Types that BTree supports by default
  */
 export type DefaultComparable = number | string | (number | string)[] | { valueOf: ()=> number | string | (number | string)[] };
 
