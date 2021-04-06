@@ -13,7 +13,7 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EmptyBTree = exports.compareStrings = exports.compareFiniteNumbers = exports.defaultComparator = void 0;
+exports.EmptyBTree = exports.simpleComparator = exports.defaultComparator = void 0;
 /**
  * Compares DefaultComparables to form a strict partial ordering.
  *
@@ -25,70 +25,55 @@ exports.EmptyBTree = exports.compareStrings = exports.compareFiniteNumbers = exp
  */
 function defaultComparator(a, b) {
     // Special case finite numbers first for performance.
-    // Note that the trick of using 'a - b' the checking for NaN to detect non numbers values does not work if the strings are numeric (ex: "5"),
-    // leading most comparison functions using that approach to fail to have transitivity.
+    // Note that the trick of using 'a - b' and checking for NaN to detect non-numbers
+    // does not work if the strings are numeric (ex: "5"). This would leading most 
+    // comparison functions using that approach to fail to have transitivity.
     if (Number.isFinite(a) && Number.isFinite(b)) {
-        // Does not partially order NaNs or infinite values, but thats fine since they can't reach here.
-        // This will handle -0 and 0 as equal.
         return a - b;
     }
-    // Compare types and order values of different types by type.
-    // This prevents implicit conversion of strings to numbers from causing invaliding ordering,
-    // and generally simplifies which cases need to be considered below.
+    // The default < and > operators are not totally ordered. To allow types to be mixed
+    // in a single collection, compare types and order values of different types by type.
     var ta = typeof a;
     var tb = typeof b;
     if (ta !== tb) {
         return ta < tb ? -1 : 1;
     }
     if (ta === 'object') {
+        // standardized JavaScript bug: null is not an object, but typeof says it is
+        if (a === null)
+            return b === null ? 0 : -1;
+        else if (b === null)
+            return 1;
         a = a.valueOf();
         b = b.valueOf();
         ta = typeof a;
         tb = typeof b;
-        // Deal with one producing a string, and the other a number
+        // Deal with the two valueOf()s producing different types
         if (ta !== tb) {
             return ta < tb ? -1 : 1;
         }
     }
-    // a and b are now the same type, and either a number, string or array.
-    // use Object.is to make NaN compare equal to NaN.
-    // This treats also -0 as not equal to 0, which is handled separately below.
-    if (Object.is(a, b))
-        return 0;
-    // All comparisons with NaN return false, so NaNs will pass here.
+    // a and b are now the same type, and will be a number, string or array 
+    // (which we assume holds numbers or strings), or something unsupported.
     if (a < b)
         return -1;
-    // Since a and b might be arrays, we cannot rely on === or ==, only < and > do something useful for ordering arrays.
-    // To find if two arrays are equal using comparison operators, both < and > must be checked (even == returns false if not the same object).
     if (a > b)
         return 1;
+    if (a === b)
+        return 0;
     // Order NaN less than other numbers
     if (Number.isNaN(a))
-        return -1;
-    if (Number.isNaN(b))
+        return Number.isNaN(b) ? 0 : -1;
+    else if (Number.isNaN(b))
         return 1;
-    // Handles 0 and -0 case, as well as equal (but not same object) arrays case.
-    return 0;
+    return 0; // unreachable?
 }
 exports.defaultComparator = defaultComparator;
 ;
-/**
- * Compares finite numbers to form a strict partial ordering.
- *
- * Handles +/-0 like Map: -0 is equal to +0.
- */
-function compareFiniteNumbers(a, b) {
-    return a - b;
+function simpleComparator(a, b) {
+    return a > b ? 1 : a < b ? -1 : 0;
 }
-exports.compareFiniteNumbers = compareFiniteNumbers;
-;
-/**
- * Compares strings lexically to form a strict partial ordering.
- */
-function compareStrings(a, b) {
-    return a > b ? 1 : a === b ? 0 : -1;
-}
-exports.compareStrings = compareStrings;
+exports.simpleComparator = simpleComparator;
 ;
 /**
  * A reasonably fast collection of key-value pairs with a powerful API.

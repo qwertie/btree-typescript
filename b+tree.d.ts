@@ -8,8 +8,8 @@ export declare type EditRangeResult<V, R = number> = {
 /**
  * Types that BTree supports by default
  */
-export declare type DefaultComparable = number | string | (number | string)[] | {
-    valueOf: () => number | string | (number | string)[];
+export declare type DefaultComparable = number | string | Date | boolean | null | undefined | (number | string)[] | {
+    valueOf: () => number | string | Date | boolean | null | undefined | (number | string)[];
 };
 /**
  * Compares DefaultComparables to form a strict partial ordering.
@@ -22,15 +22,18 @@ export declare type DefaultComparable = number | string | (number | string)[] | 
  */
 export declare function defaultComparator(a: DefaultComparable, b: DefaultComparable): number;
 /**
- * Compares finite numbers to form a strict partial ordering.
+ * Compares items using the < and > operators. This function is probably slightly
+ * faster than the defaultComparator for Dates and strings, but has not been benchmarked.
+ * Unlike defaultComparator, this comparator doesn't support mixed types correctly,
+ * i.e. use it with `BTree<string>` or `BTree<Date>` but not `BTree<string|Date>`.
  *
- * Handles +/-0 like Map: -0 is equal to +0.
+ * Note: null compares as less than any number or Date, but in general null is
+ *   incomparable with strings, and undefined is not comparable with other types
+ *   using the > and < operators
  */
-export declare function compareFiniteNumbers(a: number, b: number): number;
-/**
- * Compares strings lexically to form a strict partial ordering.
- */
-export declare function compareStrings(a: string, b: string): number;
+export declare function simpleComparator(a: string, b: string): number;
+export declare function simpleComparator(a: number | null, b: number | null): number;
+export declare function simpleComparator(a: Date | null, b: Date | null): number;
 /**
  * A reasonably fast collection of key-value pairs with a powerful API.
  * Largely compatible with the standard Map. BTree is a B+ tree data structure,

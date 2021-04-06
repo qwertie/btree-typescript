@@ -1,4 +1,4 @@
-import BTree, {IMap, EmptyBTree, defaultComparator, compareFiniteNumbers, compareStrings} from './b+tree';
+import BTree, {IMap, EmptyBTree, defaultComparator, simpleComparator} from './b+tree';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
 
@@ -50,8 +50,8 @@ describe('defaultComparator', () =>
 
 describe('compareFiniteNumbers', () =>
 {
-  const sorted = [-10, -1, -0, 0, 1, 2, 10];
-  testComparison(compareFiniteNumbers, sorted, sorted, [[-0, 0]]);
+  const sorted = [-Infinity, -10, -1, -0, 0, 1, 2, 10, Infinity];
+  testComparison(simpleComparator, sorted, sorted, [[-0, 0]]);
 });
 
 describe('compareStrings', () =>
@@ -68,7 +68,7 @@ describe('compareStrings', () =>
     '10',
     "NaN",
   ];;
-  testComparison(compareStrings, [], values, []);
+  testComparison(simpleComparator, [], values, []);
 });
 
 /**
@@ -76,7 +76,7 @@ describe('compareStrings', () =>
  * Additionally confirms that the comparison function has the correct definition of equality via expectedDuplicates.
  */
 function testComparison(comparison: (a: any, b: any) => number, inOrder: any[], values: any[], expectedDuplicates: [any, any][] = []) {
-  function check(a: any, b: any): number {
+  function compare(a: any, b: any): number {
     const v = comparison(a, b);
     expect(typeof v).toEqual('number');
     expect(v === v).toEqual(true); // Not NaN
@@ -91,7 +91,7 @@ function testComparison(comparison: (a: any, b: any) => number, inOrder: any[], 
     let duplicates = [];
     for (let i = 0; i < values.length; i++) {
       for (let j = i + 1; j < values.length; j++) {
-        if (check(values[i], values[j]) === 0) {
+        if (compare(values[i], values[j]) === 0) {
           duplicates.push([values[i], values[j]]);
         }
       }
@@ -117,16 +117,16 @@ function testComparison(comparison: (a: any, b: any) => number, inOrder: any[], 
     const asymmetric = []
     for (const a of values) {
       // irreflexive: compare(a, a) === 0
-      if(check(a, a) !== 0) irreflexive.push(a);
+      if(compare(a, a) !== 0) irreflexive.push(a);
       for (const b of values) {
         for (const c of values) {
           // transitive: if compare(a, b) < 0 and compare(b, c) < 0 then compare(a, c) < 0
-          if (check(a, b) < 0 && check(b, c) < 0) {
-            if(check(a, c) !== -1) transitive.push([a, b, c]);
+          if (compare(a, b) < 0 && compare(b, c) < 0) {
+            if(compare(a, c) !== -1) transitive.push([a, b, c]);
           }
         }
         // sign(compare(a, b)) === -sign(compare(b, a))
-        if(check(a, b) !== -check(b, a)) asymmetric.push([a, b]);
+        if(compare(a, b) !== -compare(b, a)) asymmetric.push([a, b]);
       }
     }
     expect(irreflexive).toEqual([]);

@@ -33,7 +33,7 @@ type index = number;
 /**
  * Types that BTree supports by default
  */
-export type DefaultComparable = number | string | (number | string)[] | { valueOf: ()=> number | string | (number | string)[] };
+export type DefaultComparable = number | string | Date | boolean | null | undefined |  (number | string)[] | { valueOf: ()=> number | string | Date | boolean | null | undefined | (number | string)[] };
 
 /**
  * Compares DefaultComparables to form a strict partial ordering.
@@ -46,69 +46,67 @@ export type DefaultComparable = number | string | (number | string)[] | { valueO
  */
 export function defaultComparator(a: DefaultComparable, b: DefaultComparable): number {
   // Special case finite numbers first for performance.
-  // Note that the trick of using 'a - b' the checking for NaN to detect non numbers values does not work if the strings are numeric (ex: "5"),
-  // leading most comparison functions using that approach to fail to have transitivity.
+  // Note that the trick of using 'a - b' and checking for NaN to detect non-numbers
+  // does not work if the strings are numeric (ex: "5"). This would leading most 
+  // comparison functions using that approach to fail to have transitivity.
   if (Number.isFinite(a) && Number.isFinite(b)) {
-    // Does not partially order NaNs or infinite values, but thats fine since they can't reach here.
-    // This will handle -0 and 0 as equal.
     return a as number - (b as number);
   }
 
-  // Compare types and order values of different types by type.
-  // This prevents implicit conversion of strings to numbers from causing invaliding ordering,
-  // and generally simplifies which cases need to be considered below.
+  // The default < and > operators are not totally ordered. To allow types to be mixed
+  // in a single collection, compare types and order values of different types by type.
   let ta = typeof a;
   let tb = typeof b;
   if (ta !== tb) {
     return ta < tb ? -1 : 1;
   }
 
-  if (ta === 'object'){
-    a = a.valueOf() as DefaultComparable;
-    b = b.valueOf() as DefaultComparable;
+  if (ta === 'object') {
+    // standardized JavaScript bug: null is not an object, but typeof says it is
+    if (a === null)
+      return b === null ? 0 : -1;
+    else if (b === null)
+      return 1;
+
+    a = a!.valueOf() as DefaultComparable;
+    b = b!.valueOf() as DefaultComparable;
     ta = typeof a;
     tb = typeof b;
-    // Deal with one producing a string, and the other a number
+    // Deal with the two valueOf()s producing different types
     if (ta !== tb) {
       return ta < tb ? -1 : 1;
     }
   }
 
-  // a and b are now the same type, and either a number, string or array.
-
-  // use Object.is to make NaN compare equal to NaN.
-  // This treats also -0 as not equal to 0, which is handled separately below.
-  if (Object.is(a, b)) return 0;
-
-  // All comparisons with NaN return false, so NaNs will pass here.
-  if (a < b) return -1;
-
-  // Since a and b might be arrays, we cannot rely on === or ==, only < and > do something useful for ordering arrays.
-  // To find if two arrays are equal using comparison operators, both < and > must be checked (even == returns false if not the same object).
-  if (a > b) return 1
+  // a and b are now the same type, and will be a number, string or array 
+  // (which we assume holds numbers or strings), or something unsupported.
+  if (a! < b!) return -1;
+  if (a! > b!) return 1;
+  if (a === b) return 0;
 
   // Order NaN less than other numbers
-  if (Number.isNaN(a)) return -1;
-  if (Number.isNaN(b)) return 1;
-
-  // Handles 0 and -0 case, as well as equal (but not same object) arrays case.
-  return 0;
+  if (Number.isNaN(a))
+    return Number.isNaN(b) ? 0 : -1;
+  else if (Number.isNaN(b))
+    return 1;
+  return 0; // unreachable?
 };
 
 /**
- * Compares finite numbers to form a strict partial ordering.
+ * Compares items using the < and > operators. This function is probably slightly 
+ * faster than the defaultComparator for Dates and strings, but has not been benchmarked. 
+ * Unlike defaultComparator, this comparator doesn't support mixed types correctly, 
+ * i.e. use it with `BTree<string>` or `BTree<Date>` but not `BTree<string|Date>`.
  * 
- * Handles +/-0 like Map: -0 is equal to +0.
+ * Note: null compares as less than any number or Date, but in general null is 
+ *   incomparable with strings, and undefined is not comparable with other types
+ *   using the > and < operators
  */
-export function compareFiniteNumbers(a: number, b: number): number {
-  return a - b;
-};
-
-/**
- * Compares strings lexically to form a strict partial ordering.
- */
-export function compareStrings(a: string, b:string): number {
-  return a > b ? 1 : a === b ? 0 : -1;
+export function simpleComparator(a: string, b:string): number;
+export function simpleComparator(a: number|null, b:number|null): number;
+export function simpleComparator(a: Date|null, b:Date|null): number;
+export function simpleComparator(a: any, b: any): number {
+  return a > b ? 1 : a < b ? -1 : 0;
 };
 
 /**
