@@ -16,24 +16,27 @@ export declare type DefaultComparable = number | string | Date | boolean | null 
  *
  * Handles +/-0 and NaN like Map: NaN is equal to NaN, and -0 is equal to +0.
  *
- * Arrays are compared using '<' and '>', which may cause unexpected equality: for example [1] will be considered equal to ['1'].
+ * Arrays are compared using '<' and '>', which may cause unexpected equality:
+ * for example [1] will be considered equal to ['1'].
  *
- * Two objects with equal valueOf compare the same, but compare unequal to primitives that have the same value.
+ * Two objects with equal valueOf compare the same, but compare unequal to
+ * primitives that have the same value.
  */
 export declare function defaultComparator(a: DefaultComparable, b: DefaultComparable): number;
 /**
  * Compares items using the < and > operators. This function is probably slightly
  * faster than the defaultComparator for Dates and strings, but has not been benchmarked.
  * Unlike defaultComparator, this comparator doesn't support mixed types correctly,
- * i.e. use it with `BTree<string>` or `BTree<Date>` but not `BTree<string|Date>`.
+ * i.e. use it with `BTree<string>` or `BTree<number>` but not `BTree<string|number>`.
  *
- * Note: null compares as less than any number or Date, but in general null is
- *   incomparable with strings, and undefined is not comparable with other types
- *   using the > and < operators
+ * Note: null is treated like 0 when compared with numbers or Date, but in general
+ *   null is not ordered with respect to strings (neither greater nor less), and
+ *   undefined is not ordered with other types.
  */
 export declare function simpleComparator(a: string, b: string): number;
 export declare function simpleComparator(a: number | null, b: number | null): number;
 export declare function simpleComparator(a: Date | null, b: Date | null): number;
+export declare function simpleComparator(a: (number | string)[], b: (number | string)[]): number;
 /**
  * A reasonably fast collection of key-value pairs with a powerful API.
  * Largely compatible with the standard Map. BTree is a B+ tree data structure,

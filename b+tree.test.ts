@@ -79,6 +79,8 @@ function testComparison(comparison: (a: any, b: any) => number, inOrder: any[], 
   function compare(a: any, b: any): number {
     const v = comparison(a, b);
     expect(typeof v).toEqual('number');
+    if (v !== v)
+      console.log('!!!', a, b);
     expect(v === v).toEqual(true); // Not NaN
     return Math.sign(v);
   }

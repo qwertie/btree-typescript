@@ -33,16 +33,19 @@ type index = number;
 /**
  * Types that BTree supports by default
  */
-export type DefaultComparable = number | string | Date | boolean | null | undefined |  (number | string)[] | { valueOf: ()=> number | string | Date | boolean | null | undefined | (number | string)[] };
+export type DefaultComparable = number | string | Date | boolean | null | undefined | (number | string)[] |
+               { valueOf: () => number | string | Date | boolean | null | undefined | (number | string)[] };
 
 /**
  * Compares DefaultComparables to form a strict partial ordering.
  * 
  * Handles +/-0 and NaN like Map: NaN is equal to NaN, and -0 is equal to +0.
  * 
- * Arrays are compared using '<' and '>', which may cause unexpected equality: for example [1] will be considered equal to ['1'].
+ * Arrays are compared using '<' and '>', which may cause unexpected equality:
+ * for example [1] will be considered equal to ['1'].
  * 
- * Two objects with equal valueOf compare the same, but compare unequal to primitives that have the same value.
+ * Two objects with equal valueOf compare the same, but compare unequal to
+ * primitives that have the same value.
  */
 export function defaultComparator(a: DefaultComparable, b: DefaultComparable): number {
   // Special case finite numbers first for performance.
@@ -89,22 +92,24 @@ export function defaultComparator(a: DefaultComparable, b: DefaultComparable): n
     return Number.isNaN(b) ? 0 : -1;
   else if (Number.isNaN(b))
     return 1;
-  return 0; // unreachable?
+  // This could be two objects (e.g. [7] and ['7']) that aren't ordered
+  return Array.isArray(a) ? 0 : Number.NaN;
 };
 
 /**
  * Compares items using the < and > operators. This function is probably slightly 
  * faster than the defaultComparator for Dates and strings, but has not been benchmarked. 
  * Unlike defaultComparator, this comparator doesn't support mixed types correctly, 
- * i.e. use it with `BTree<string>` or `BTree<Date>` but not `BTree<string|Date>`.
+ * i.e. use it with `BTree<string>` or `BTree<number>` but not `BTree<string|number>`.
  * 
- * Note: null compares as less than any number or Date, but in general null is 
- *   incomparable with strings, and undefined is not comparable with other types
- *   using the > and < operators
+ * Note: null is treated like 0 when compared with numbers or Date, but in general 
+ *   null is not ordered with respect to strings (neither greater nor less), and 
+ *   undefined is not ordered with other types.
  */
 export function simpleComparator(a: string, b:string): number;
 export function simpleComparator(a: number|null, b:number|null): number;
 export function simpleComparator(a: Date|null, b:Date|null): number;
+export function simpleComparator(a: (number|string)[], b:(number|string)[]): number;
 export function simpleComparator(a: any, b: any): number {
   return a > b ? 1 : a < b ? -1 : 0;
 };
@@ -848,8 +853,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
   /** Ensures mutations are allowed, reversing the effect of freeze(). */
   unfreeze() {
+    // @ts-ignore "The operand of a 'delete' operator must be optional."
+    //            (wrong: delete does not affect the prototype.)
     delete this.clear;
+    // @ts-ignore
     delete this.set;
+    // @ts-ignore
     delete this.editRange;
   }
 
@@ -907,7 +916,6 @@ class BNode<K,V> {
   // If key not found, returns i^failXor where i is the insertion index.
   // Callers that don't care whether there was a match will set failXor=0.
   indexOf(key: K, failXor: number, cmp: (a:K, b:K) => number): index {
-    // TODO: benchmark multiple search strategies
     const keys = this.keys;
     var lo = 0, hi = keys.length, mid = hi >> 1;
     while(lo < hi) {

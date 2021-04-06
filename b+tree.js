@@ -19,9 +19,11 @@ exports.EmptyBTree = exports.simpleComparator = exports.defaultComparator = void
  *
  * Handles +/-0 and NaN like Map: NaN is equal to NaN, and -0 is equal to +0.
  *
- * Arrays are compared using '<' and '>', which may cause unexpected equality: for example [1] will be considered equal to ['1'].
+ * Arrays are compared using '<' and '>', which may cause unexpected equality:
+ * for example [1] will be considered equal to ['1'].
  *
- * Two objects with equal valueOf compare the same, but compare unequal to primitives that have the same value.
+ * Two objects with equal valueOf compare the same, but compare unequal to
+ * primitives that have the same value.
  */
 function defaultComparator(a, b) {
     // Special case finite numbers first for performance.
@@ -66,7 +68,8 @@ function defaultComparator(a, b) {
         return Number.isNaN(b) ? 0 : -1;
     else if (Number.isNaN(b))
         return 1;
-    return 0; // unreachable?
+    // This could be two objects (e.g. [7] and ['7']), that aren't greater or less
+    return Array.isArray(a) ? 0 : Number.NaN;
 }
 exports.defaultComparator = defaultComparator;
 ;
@@ -756,8 +759,12 @@ var BTree = /** @class */ (function () {
     };
     /** Ensures mutations are allowed, reversing the effect of freeze(). */
     BTree.prototype.unfreeze = function () {
+        // @ts-ignore "The operand of a 'delete' operator must be optional."
+        //            (wrong: delete does not affect the prototype.)
         delete this.clear;
+        // @ts-ignore
         delete this.set;
+        // @ts-ignore
         delete this.editRange;
     };
     Object.defineProperty(BTree.prototype, "isFrozen", {
@@ -812,7 +819,6 @@ var BNode = /** @class */ (function () {
     // If key not found, returns i^failXor where i is the insertion index.
     // Callers that don't care whether there was a match will set failXor=0.
     BNode.prototype.indexOf = function (key, failXor, cmp) {
-        // TODO: benchmark multiple search strategies
         var keys = this.keys;
         var lo = 0, hi = keys.length, mid = hi >> 1;
         while (lo < hi) {
