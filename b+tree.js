@@ -68,7 +68,7 @@ function defaultComparator(a, b) {
         return Number.isNaN(b) ? 0 : -1;
     else if (Number.isNaN(b))
         return 1;
-    // This could be two objects (e.g. [7] and ['7']), that aren't greater or less
+    // This could be two objects (e.g. [7] and ['7']) that aren't ordered
     return Array.isArray(a) ? 0 : Number.NaN;
 }
 exports.defaultComparator = defaultComparator;

@@ -102,6 +102,8 @@ export function defaultComparator(a: DefaultComparable, b: DefaultComparable): n
  * Unlike defaultComparator, this comparator doesn't support mixed types correctly, 
  * i.e. use it with `BTree<string>` or `BTree<number>` but not `BTree<string|number>`.
  * 
+ * NaN is not supported.
+ * 
  * Note: null is treated like 0 when compared with numbers or Date, but in general 
  *   null is not ordered with respect to strings (neither greater nor less), and 
  *   undefined is not ordered with other types.

@@ -48,13 +48,13 @@ describe('defaultComparator', () =>
   testComparison(defaultComparator, sorted, values, [[dateA, dateA2], [0, -0], [[1], ['1']]]);
 });
 
-describe('compareFiniteNumbers', () =>
+describe('simpleComparator with non-NaN numbers and null', () =>
 {
-  const sorted = [-Infinity, -10, -1, -0, 0, 1, 2, 10, Infinity];
-  testComparison(simpleComparator, sorted, sorted, [[-0, 0]]);
+  const sorted = [-Infinity, -10, -1, -0, 0, null, 1, 2, 10, Infinity];
+  testComparison<number | null>(simpleComparator, sorted, sorted, [[-0, 0], [-0, null], [0, null]]);
 });
 
-describe('compareStrings', () =>
+describe('simpleComparator with strings', () =>
 {
   const values = [
     '24x',
@@ -68,15 +68,40 @@ describe('compareStrings', () =>
     '10',
     "NaN",
   ];;
-  testComparison(simpleComparator, [], values, []);
+  testComparison<string>(simpleComparator, [], values, []);
+});
+
+describe('simpleComparator with Date', () =>
+{
+  const dateA = new Date(Date.UTC(96, 1, 2, 3, 4, 5));
+  const dateA2 = new Date(Date.UTC(96, 1, 2, 3, 4, 5));
+  const dateB = new Date(Date.UTC(96, 1, 2, 3, 4, 6));
+  const values = [
+    dateA,
+    dateA2,
+    dateB,
+    null,
+  ];
+  testComparison<Date>(simpleComparator, [], values, [[dateA, dateA2]]);
+});
+
+describe('simpleComparator arrays', () =>
+{
+  const values = [
+    [],
+    [1],
+    ['1'],
+    [2],
+  ];
+  testComparison<(number|string)[] >(simpleComparator, [], values, [[[1], ['1']]]);
 });
 
 /**
  * Tests a comparison function, ensuring it produces a strict partial order over the provided values.
  * Additionally confirms that the comparison function has the correct definition of equality via expectedDuplicates.
  */
-function testComparison(comparison: (a: any, b: any) => number, inOrder: any[], values: any[], expectedDuplicates: [any, any][] = []) {
-  function compare(a: any, b: any): number {
+function testComparison<T>(comparison: (a: T, b: T) => number, inOrder: T[], values: T[], expectedDuplicates: [T, T][] = []) {
+  function compare(a: T, b: T): number {
     const v = comparison(a, b);
     expect(typeof v).toEqual('number');
     if (v !== v)
