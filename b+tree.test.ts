@@ -162,6 +162,34 @@ function testComparison<T>(comparison: (a: T, b: T) => number, inOrder: T[], val
   });
 }
 
+describe('height calculation', () =>
+{
+  test('Empty tree', () => {
+    const tree = new BTree<number>();
+    expect(tree.height).toEqual(0);
+  });
+  test('Single node', () => {
+    const tree = new BTree<number>([[0, 0]]);
+    expect(tree.height).toEqual(0);
+  });
+  test('Multiple node, no internal nodes', () => {
+    const tree = new BTree<number>([[0, 0], [1, 1]], undefined, 32);
+    expect(tree.height).toEqual(0);
+  });
+  test('Multiple internal nodes', () => {
+    for (let expectedHeight = 1; expectedHeight < 5; expectedHeight++) {
+      for (let nodeSize = 4; nodeSize < 10; nodeSize++) {
+        const numEntries = nodeSize ** expectedHeight;
+        const entries: [number, number][] = [];
+        for (let i = 0; i < numEntries; i++) {
+          entries.push([i, i]);
+        }
+        const tree = new BTree<number>(entries, undefined, nodeSize);
+        expect(tree.height).toEqual(expectedHeight - 1);
+      }
+    }
+  });
+});
 
 describe('Simple tests on leaf nodes', () =>
 {
