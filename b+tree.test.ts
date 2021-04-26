@@ -82,7 +82,7 @@ describe('simpleComparator with Date', () =>
     dateB,
     null,
   ];
-  testComparison<Date>(simpleComparator, [], values, [[dateA, dateA2]]);
+  testComparison<Date|null>(simpleComparator, [], values, [[dateA, dateA2]]);
 });
 
 describe('simpleComparator arrays', () =>
