@@ -30,17 +30,90 @@ type index = number;
 //   - Objects can be used like arrays (e.g. have length property) but are slower
 //   - V8 source (NewElementsCapacity in src/objects.h): arrays grow by 50% + 16 elements
 
-/** Compares two numbers, strings, arrays of numbers/strings, Dates,
- *  or objects that have a valueOf() method returning a number or string. 
- *  Optimized for numbers. Returns 1 if a>b, -1 if a<b, and 0 if a===b.
+/**
+ * Types that BTree supports by default
  */
-export function defaultComparator(a: any, b: any) {
-  var c = a - b;
-  if (c === c) return c; // a & b are number
-  // General case (c is NaN): string / arrays / Date / incomparable things
-  if (a) a = a.valueOf();
-  if (b) b = b.valueOf();
-  return a < b ? -1 : a > b ? 1 : a == b ? 0 : c;   
+export type DefaultComparable = number | string | Date | boolean | null | undefined | (number | string)[] |
+               { valueOf: () => number | string | Date | boolean | null | undefined | (number | string)[] };
+
+/**
+ * Compares DefaultComparables to form a strict partial ordering.
+ * 
+ * Handles +/-0 and NaN like Map: NaN is equal to NaN, and -0 is equal to +0.
+ * 
+ * Arrays are compared using '<' and '>', which may cause unexpected equality:
+ * for example [1] will be considered equal to ['1'].
+ * 
+ * Two objects with equal valueOf compare the same, but compare unequal to
+ * primitives that have the same value.
+ */
+export function defaultComparator(a: DefaultComparable, b: DefaultComparable): number {
+  // Special case finite numbers first for performance.
+  // Note that the trick of using 'a - b' and checking for NaN to detect non-numbers
+  // does not work if the strings are numeric (ex: "5"). This would leading most 
+  // comparison functions using that approach to fail to have transitivity.
+  if (Number.isFinite(a) && Number.isFinite(b)) {
+    return a as number - (b as number);
+  }
+
+  // The default < and > operators are not totally ordered. To allow types to be mixed
+  // in a single collection, compare types and order values of different types by type.
+  let ta = typeof a;
+  let tb = typeof b;
+  if (ta !== tb) {
+    return ta < tb ? -1 : 1;
+  }
+
+  if (ta === 'object') {
+    // standardized JavaScript bug: null is not an object, but typeof says it is
+    if (a === null)
+      return b === null ? 0 : -1;
+    else if (b === null)
+      return 1;
+
+    a = a!.valueOf() as DefaultComparable;
+    b = b!.valueOf() as DefaultComparable;
+    ta = typeof a;
+    tb = typeof b;
+    // Deal with the two valueOf()s producing different types
+    if (ta !== tb) {
+      return ta < tb ? -1 : 1;
+    }
+  }
+
+  // a and b are now the same type, and will be a number, string or array 
+  // (which we assume holds numbers or strings), or something unsupported.
+  if (a! < b!) return -1;
+  if (a! > b!) return 1;
+  if (a === b) return 0;
+
+  // Order NaN less than other numbers
+  if (Number.isNaN(a))
+    return Number.isNaN(b) ? 0 : -1;
+  else if (Number.isNaN(b))
+    return 1;
+  // This could be two objects (e.g. [7] and ['7']) that aren't ordered
+  return Array.isArray(a) ? 0 : Number.NaN;
+};
+
+/**
+ * Compares items using the < and > operators. This function is probably slightly 
+ * faster than the defaultComparator for Dates and strings, but has not been benchmarked. 
+ * Unlike defaultComparator, this comparator doesn't support mixed types correctly, 
+ * i.e. use it with `BTree<string>` or `BTree<number>` but not `BTree<string|number>`.
+ * 
+ * NaN is not supported.
+ * 
+ * Note: null is treated like 0 when compared with numbers or Date, but in general 
+ *   null is not ordered with respect to strings (neither greater nor less), and 
+ *   undefined is not ordered with other types.
+ */
+export function simpleComparator(a: string, b:string): number;
+export function simpleComparator(a: number|null, b:number|null): number;
+export function simpleComparator(a: Date|null, b:Date|null): number;
+export function simpleComparator(a: (number|string)[], b:(number|string)[]): number;
+export function simpleComparator(a: any, b: any): number {
+  return a > b ? 1 : a < b ? -1 : 0;
 };
 
 /**
@@ -112,19 +185,24 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   private _root: BNode<K, V> = EmptyLeaf as BNode<K,V>;
   _size: number = 0;
   _maxNodeSize: number;
+
+  /**
+   * provides a total order over keys (and a strict partial order over the type K)
+   * @returns a negative value if a < b, 0 if a === b and a positive value if a > b
+   */
   _compare: (a:K, b:K) => number;
   
   /**
    * Initializes an empty B+ tree.
    * @param compare Custom function to compare pairs of elements in the tree.
-   *   This is not required for numbers, strings and arrays of numbers/strings.
+   *   If not specified, defaultComparator will be used which is valid as long as K extends DefaultComparable.
    * @param entries A set of key-value pairs to initialize the tree
    * @param maxNodeSize Branching factor (maximum items or children per node)
    *   Must be in range 4..256. If undefined or <4 then default is used; if >256 then 256.
    */
   public constructor(entries?: [K,V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) {
     this._maxNodeSize = maxNodeSize! >= 4 ? Math.min(maxNodeSize!, 256) : 32;
-    this._compare = compare || defaultComparator;
+    this._compare = compare || defaultComparator as any as (a: K, b: K) => number;
     if (entries)
       this.setPairs(entries);
   }
@@ -1031,8 +1109,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
   /** Ensures mutations are allowed, reversing the effect of freeze(). */
   unfreeze() {
+    // @ts-ignore "The operand of a 'delete' operator must be optional."
+    //            (wrong: delete does not affect the prototype.)
     delete this.clear;
+    // @ts-ignore
     delete this.set;
+    // @ts-ignore
     delete this.editRange;
   }
 
@@ -1090,7 +1172,6 @@ class BNode<K,V> {
   // If key not found, returns i^failXor where i is the insertion index.
   // Callers that don't care whether there was a match will set failXor=0.
   indexOf(key: K, failXor: number, cmp: (a:K, b:K) => number): index {
-    // TODO: benchmark multiple search strategies
     const keys = this.keys;
     var lo = 0, hi = keys.length, mid = hi >> 1;
     while(lo < hi) {
