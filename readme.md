@@ -38,6 +38,8 @@ Features
 - Throws an exception if you try to use `NaN` as a key, but infinity is allowed.
 - No dependencies. 16K minified.
 - Includes a lattice of interfaces for TypeScript users (see below)
+- Supports diffing computation between two trees that is highly optimized for the case
+  in which a majority of nodes are shared (such as when persistent methods are used).
 
 ### Additional operations supported on this B+ tree ###
 
@@ -56,6 +58,7 @@ Features
 - Get largest key/pair that is lower than `k`: `t.nextLowerKey(k)`, `t.nextLowerPair(k)`
 - Freeze to prevent modifications: `t.freeze()` (you can also `t.unfreeze()`)
 - Fast clone: `t.clone()`
+- Compute a diff between two trees: `t.diffAgainst(otherTree, ...)`
 - For more information, **see [full documentation](https://github.com/qwertie/btree-typescript/blob/master/b%2Btree.ts) in the source code.**
 
 **Note:** Confusingly, the ES6 `Map.forEach(c)` method calls `c(value,key)` instead of `c(key,value)`, in contrast to other methods such as `set()` and `entries()` which put the key first. I can only assume that they reversed the order on the hypothesis that users would usually want to examine values and ignore keys. BTree's `forEach()` therefore works the same way, but there is a second method `.forEachPair((key,value)=>{...})` which sends you the key first and the value second; this method is slightly faster because it is the "native" for-each method for this class.
