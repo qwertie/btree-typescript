@@ -579,7 +579,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    * @param onlyOther Callback invoked for all keys only present in `other`.
    * @param different Callback invoked for all keys with differing values.
    */
-  diff<R>(
+  diffAgainst<R>(
     other: BTree<K, V>,
     onlyThis?: (k: K, v: V) => { break?: R } | void,
     onlyOther?: (k: K, v: V) => { break?: R } | void,

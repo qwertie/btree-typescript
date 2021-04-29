@@ -605,7 +605,7 @@ function testBTree(maxNodeSize: number)
 
     function expectDiffCorrect(treeThis: BTree<number, number>, treeOther: BTree<number, number>): void {
       reset();
-      treeThis.diff(treeOther, OnlyThis, OnlyOther, Different);
+      treeThis.diffAgainst(treeOther, OnlyThis, OnlyOther, Different);
       let onlyThisT: Map<number, number> = new Map();
       let onlyOtherT: Map<number, number> = new Map();
       let differentT: Map<number, string> = new Map();
@@ -631,7 +631,7 @@ function testBTree(maxNodeSize: number)
     test(`Diff of trees with different comparators is an error`, () => {
       const treeA = new BTree<number, number>([], compare);
       const treeB = new BTree<number, number>([], (a, b) => b - a);
-      expect(() => treeA.diff(treeB, OnlyThis, OnlyOther, Different)).toThrow('comparators');
+      expect(() => treeA.diffAgainst(treeB, OnlyThis, OnlyOther, Different)).toThrow('comparators');
     });
 
     const entriesGroup: [number, number][][] = [[], [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]];
@@ -691,7 +691,7 @@ function testBTree(maxNodeSize: number)
       const modifiedInB1 = 3, modifiedInB2 = maxKey - 2;
       treeB.set(modifiedInB1, differingValue);
       treeB.set(modifiedInB2, differingValue)
-      treeA.diff(treeB, OnlyThis, OnlyOther, Different);
+      treeA.diffAgainst(treeB, OnlyThis, OnlyOther, Different);
       expectDiffCorrect(treeA, treeB);
     }
 
@@ -723,19 +723,19 @@ function testBTree(maxNodeSize: number)
       tree2.set(110, -1);
       const ReturnKey = (key: number) => { return { break: key }; };
 
-      let val = tree.diff(tree2, OnlyThis, OnlyOther, ReturnKey);
+      let val = tree.diffAgainst(tree2, OnlyThis, OnlyOther, ReturnKey);
       expect(onlyOther.size).toEqual(1);
       expect(onlyThis.size).toEqual(0);
       expect(val).toEqual(20);
       reset();
 
-      val = tree.diff(tree2, OnlyThis, ReturnKey, Different);
+      val = tree.diffAgainst(tree2, OnlyThis, ReturnKey, Different);
       expect(different.size).toEqual(0);
       expect(onlyThis.size).toEqual(0);
       expect(val).toEqual(110);
       reset();
 
-      val = tree.diff(tree2, ReturnKey, OnlyOther, Different);
+      val = tree.diffAgainst(tree2, ReturnKey, OnlyOther, Different);
       expect(different.size).toEqual(1);
       expect(onlyOther.size).toEqual(1);
       expect(val).toEqual(10);

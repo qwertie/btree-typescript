@@ -495,12 +495,13 @@ var BTree = /** @class */ (function () {
      * of shared data (obtained by calling the `clone` or `with` APIs) and will avoid
      * any iteration of shared state.
      * The handlers can cause computation to early exit by returning {break: R}.
+     * Neither of the collections should be changed during the comparison process (in your callbacks), as this method assumes they will not be mutated.
      * @param other The tree to compute a diff against.
      * @param onlyThis Callback invoked for all keys only present in `this`.
      * @param onlyOther Callback invoked for all keys only present in `other`.
      * @param different Callback invoked for all keys with differing values.
      */
-    BTree.prototype.diff = function (other, onlyThis, onlyOther, different) {
+    BTree.prototype.diffAgainst = function (other, onlyThis, onlyOther, different) {
         if (other._compare !== this._compare) {
             throw new Error("Tree comparators are not the same.");
         }
