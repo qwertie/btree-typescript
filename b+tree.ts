@@ -1,5 +1,6 @@
 // B+ tree by David Piepgrass. License: MIT
 import { ISortedMap, ISortedMapF } from './interfaces';
+
 export {
   ISetSource, ISetSink, ISet, ISetF, ISortedSetSource, ISortedSet, ISortedSetF,
   IMapSource, IMapSink, IMap, IMapF, ISortedMapSource, ISortedMap, ISortedMapF
@@ -207,7 +208,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       this.setPairs(entries);
   }
   
-  // ES6 Map<K,V> methods ///////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
+  // ES6 Map<K,V> methods /////////////////////////////////////////////////////
 
   /** Gets the number of key-value pairs in the tree. */
   get size() { return this._size; }
@@ -313,7 +315,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return this.editRange(key, key, true, DeleteRange) !== 0;
   }
 
-  // Clone-mutators /////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
+  // Clone-mutators ///////////////////////////////////////////////////////////
 
   /** Returns a copy of the tree with the specified key set (the value is undefined). */
   with(key: K): BTree<K,V|undefined>;
@@ -419,7 +422,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return p;
   }
 
-  // Iterator methods ///////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
+  // Iterator methods /////////////////////////////////////////////////////////
 
   /** Returns an iterator that provides items in order (ascending order if
    *  the collection's comparator uses ascending order, as is the default.)
@@ -686,6 +690,9 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       return BTree.finishCursorWalk(otherCursor, thisCursor, _compare, onlyOther);
   }
 
+  ///////////////////////////////////////////////////////////////////////////
+  // Helper methods for diffAgainst /////////////////////////////////////////
+
   private static finishCursorWalk<K, V, R>(
     cursor: DiffCursor<K, V>,
     cursorFinished: DiffCursor<K, V>,
@@ -817,6 +824,9 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return depthANormalized - depthBNormalized;
   }
 
+  // End of helper methods for diffAgainst //////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////
+
   /** Returns a new iterator for iterating the keys of each pair in ascending order. 
    *  @param firstKey: Minimum key to include in the output. */
   keys(firstKey?: K): IterableIterator<K> {
@@ -839,7 +849,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     });
   }
 
-  // Additional methods /////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
+  // Additional methods ///////////////////////////////////////////////////////
 
   /** Returns the maximum number of children/values before nodes will split. */
   get maxNodeSize() {
@@ -1164,6 +1175,7 @@ class BNode<K,V> {
     this.isShared = undefined;
   }
 
+  ///////////////////////////////////////////////////////////////////////////
   // Shared methods /////////////////////////////////////////////////////////
 
   maxKey() {
@@ -1240,6 +1252,7 @@ class BNode<K,V> {
     return c === 0 ? i : i ^ failXor;*/
   }
 
+  /////////////////////////////////////////////////////////////////////////////
   // Leaf Node: misc //////////////////////////////////////////////////////////
 
   minKey() {
@@ -1273,6 +1286,7 @@ class BNode<K,V> {
     return kL;
   }
 
+  /////////////////////////////////////////////////////////////////////////////
   // Leaf Node: set & node splitting //////////////////////////////////////////
 
   set(key: K, value: V, overwrite: boolean|undefined, tree: BTree<K,V>): boolean|BNode<K,V> { 
@@ -1365,6 +1379,7 @@ class BNode<K,V> {
     return new BNode<K,V>(keys, values);
   }
 
+  /////////////////////////////////////////////////////////////////////////////
   // Leaf Node: scanning & deletions //////////////////////////////////////////
 
   forRange<R>(low: K, high: K, includeHigh: boolean|undefined, editMode: boolean, tree: BTree<K,V>, count: number,
@@ -1491,6 +1506,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     return size;
   }
 
+  /////////////////////////////////////////////////////////////////////////////
   // Internal Node: set & node splitting //////////////////////////////////////
 
   set(key: K, value: V, overwrite: boolean|undefined, tree: BTree<K,V>): boolean|BNodeInternal<K,V> {
@@ -1566,6 +1582,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     this.children.unshift((lhs as BNodeInternal<K,V>).children.pop()!);
   }
 
+  /////////////////////////////////////////////////////////////////////////////
   // Internal Node: scanning & deletions //////////////////////////////////////
 
   // Note: `count` is the next value of the third argument to `onFound`. 

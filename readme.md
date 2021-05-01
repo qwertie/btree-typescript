@@ -24,9 +24,9 @@ Features
 - Supports O(1) fast cloning with subtree sharing. This works by marking the
   root node as "shared between instances". This makes the tree read-only 
   with copy-on-edit behavior; both copies of the tree remain mutable.
-  I call this category of data structure "semi-persistent" because AFAIK no
-  one else has given it a name; it walks the line between mutating and 
-  [persistent](https://en.wikipedia.org/wiki/Persistent_data_structure).
+  I call this category of data structure "dynamically persistent" because 
+  AFAIK no one else has given it a name; it walks the line between mutating 
+  and [persistent](https://en.wikipedia.org/wiki/Persistent_data_structure).
 - Includes persistent methods such as `with` and `without`, which return a
   modified tree without changing the original (in O(log(size)) time).
 - When a node fills up, items are shifted to siblings when possible to 
@@ -36,7 +36,7 @@ Features
   with all keys in a given node.
 - Includes neat stuff such as `Range` methods for batch operations
 - Throws an exception if you try to use `NaN` as a key, but infinity is allowed.
-- No dependencies. 16K minified.
+- No dependencies. 18K minified.
 - Includes a lattice of interfaces for TypeScript users (see below)
 - Supports diffing computation between two trees that is highly optimized for the case
   in which a majority of nodes are shared (such as when persistent methods are used).
@@ -58,7 +58,7 @@ Features
 - Get largest key/pair that is lower than `k`: `t.nextLowerKey(k)`, `t.nextLowerPair(k)`
 - Freeze to prevent modifications: `t.freeze()` (you can also `t.unfreeze()`)
 - Fast clone: `t.clone()`
-- Compute a diff between two trees: `t.diffAgainst(otherTree, ...)`
+- Compute a diff between two trees (quickly skipping shared subtrees): `t.diffAgainst(otherTree, ...)`
 - For more information, **see [full documentation](https://github.com/qwertie/btree-typescript/blob/master/b%2Btree.ts) in the source code.**
 
 **Note:** Confusingly, the ES6 `Map.forEach(c)` method calls `c(value,key)` instead of `c(key,value)`, in contrast to other methods such as `set()` and `entries()` which put the key first. I can only assume that they reversed the order on the hypothesis that users would usually want to examine values and ignore keys. BTree's `forEach()` therefore works the same way, but there is a second method `.forEachPair((key,value)=>{...})` which sends you the key first and the value second; this method is slightly faster because it is the "native" for-each method for this class.
@@ -375,6 +375,12 @@ Benchmarks (in milliseconds for integer keys/values)
 Version history
 ---------------
 
+### v1.5.0 ###
+
+- Added `BTree.diffAgainst` method (PR #16)
+- Added `simpleComparator` function (PR #15)
+- Improved `defaultComparator` (PR #15) to support edge cases better. Most notably, heterogenous key types will no longer cause trouble such as failure to find keys that are, in fact, present in the tree. `BTree` is slightly slower using the new default comparator, but the benchmarks above have not been refreshed. For maximum performance, use `simpleComparator` or a custom comparator as the second constructor parameter. The simplest possible comparator is `(a, b) => a - b`, which works for finite numbers only.
+
 ### v1.4.0 ###
 
 - Now built as CommonJS module instead of UMD module, for better compatibility with webpack. No semantic change.
@@ -419,7 +425,6 @@ Version history
 
 ♥ This package was made to help people [learn TypeScript & React](http://typescript-react-primer.loyc.net/).
 
-Are you a C# developer? You might like the similar data structures I made for C#: 
-BDictionary, BList, etc. See http://core.loyc.net/collections/
+Are you a C# developer? You might like the similar data structures I made for C# ([BDictionary, BList, etc.](core.loyc.net/collections/alists-part2)), and other [dynamically persistent collection types](http://core.loyc.net/collections/).
 
 You might think that the package name "sorted btree" is overly redundant, but I _did_ make a data structure similar to B+ Tree that is _not_ sorted. I called it the [A-List](http://core.loyc.net/collections/alists-part1) (C#). But yeah, the names `btree` and `bplustree` were already taken, so what was I supposed to do, right?
