@@ -160,7 +160,8 @@ var BTree = /** @class */ (function () {
             this.setPairs(entries);
     }
     Object.defineProperty(BTree.prototype, "size", {
-        // ES6 Map<K,V> methods ///////////////////////////////////////////////////
+        /////////////////////////////////////////////////////////////////////////////
+        // ES6 Map<K,V> methods /////////////////////////////////////////////////////
         /** Gets the number of key-value pairs in the tree. */
         get: function () { return this._size; },
         enumerable: false,
@@ -345,7 +346,8 @@ var BTree = /** @class */ (function () {
             p = callback(p, next.value, i++, this);
         return p;
     };
-    // Iterator methods ///////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////
+    // Iterator methods /////////////////////////////////////////////////////////
     /** Returns an iterator that provides items in order (ascending order if
      *  the collection's comparator uses ascending order, as is the default.)
      *  @param lowestKey First key to be iterated, or undefined to start at
@@ -418,7 +420,7 @@ var BTree = /** @class */ (function () {
         var _a = this.findPath(highestKey) || this.findPath(this.maxKey()), nodequeue = _a.nodequeue, nodeindex = _a.nodeindex, leaf = _a.leaf;
         check(!nodequeue[0] || leaf === nodequeue[0][nodeindex[0]], "wat!");
         var i = leaf.indexOf(highestKey, 0, this._compare);
-        if (!(skipHighest || this._compare(leaf.keys[i], highestKey) > 0))
+        if (!skipHighest && i < leaf.keys.length && this._compare(leaf.keys[i], highestKey) <= 0)
             i++;
         var state = reusedArray !== undefined ? 1 : 0;
         return iterator(function () {
@@ -603,6 +605,8 @@ var BTree = /** @class */ (function () {
         if (otherSuccess && onlyOther)
             return BTree.finishCursorWalk(otherCursor, thisCursor, _compare, onlyOther);
     };
+    ///////////////////////////////////////////////////////////////////////////
+    // Helper methods for diffAgainst /////////////////////////////////////////
     BTree.finishCursorWalk = function (cursor, cursorFinished, compareKeys, callback) {
         var compared = BTree.compare(cursor, cursorFinished, compareKeys);
         if (compared === 0) {
@@ -725,6 +729,8 @@ var BTree = /** @class */ (function () {
         var depthBNormalized = levelIndicesB.length - (heightB - heightMin);
         return depthANormalized - depthBNormalized;
     };
+    // End of helper methods for diffAgainst //////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
     /** Returns a new iterator for iterating the keys of each pair in ascending order.
      *  @param firstKey: Minimum key to include in the output. */
     BTree.prototype.keys = function (firstKey) {
@@ -748,7 +754,8 @@ var BTree = /** @class */ (function () {
         });
     };
     Object.defineProperty(BTree.prototype, "maxNodeSize", {
-        // Additional methods /////////////////////////////////////////////////////
+        /////////////////////////////////////////////////////////////////////////////
+        // Additional methods ///////////////////////////////////////////////////////
         /** Returns the maximum number of children/values before nodes will split. */
         get: function () {
             return this._maxNodeSize;
@@ -832,13 +839,21 @@ var BTree = /** @class */ (function () {
      *  If key === undefined, this function returns the highest pair.
      */
     BTree.prototype.nextLowerPair = function (key) {
-        var it = this.entriesReversed(key, ReusedArray, true);
-        return it.next().value;
+        if (key === undefined) {
+            var maxKey = this.maxKey();
+            if (maxKey === undefined)
+                return undefined;
+            return [maxKey, this.get(maxKey)];
+        }
+        return this._root.getOrNextLower(key, this, false);
     };
     /** Returns the next key smaller than the specified key (or undefined if there is none) */
     BTree.prototype.nextLowerKey = function (key) {
         var p = this.nextLowerPair(key);
         return p ? p[0] : p;
+    };
+    BTree.prototype.getOrNextLower = function (key) {
+        return this._root.getOrNextLower(key, this, true);
     };
     /** Edits the value associated with a key in the tree, if it already exists.
      * @returns true if the key existed, false if not.
@@ -1053,6 +1068,7 @@ var BNode = /** @class */ (function () {
         enumerable: false,
         configurable: true
     });
+    ///////////////////////////////////////////////////////////////////////////
     // Shared methods /////////////////////////////////////////////////////////
     BNode.prototype.maxKey = function () {
         return this.keys[this.keys.length - 1];
@@ -1125,6 +1141,7 @@ var BNode = /** @class */ (function () {
         }
         return c === 0 ? i : i ^ failXor;*/
     };
+    /////////////////////////////////////////////////////////////////////////////
     // Leaf Node: misc //////////////////////////////////////////////////////////
     BNode.prototype.minKey = function () {
         return this.keys[0];
@@ -1140,6 +1157,11 @@ var BNode = /** @class */ (function () {
         var i = this.indexOf(key, -1, tree._compare);
         return i < 0 ? defaultValue : this.values[i];
     };
+    BNode.prototype.getOrNextLower = function (key, tree, inclusive) {
+        var i = this.indexOf(key, -1, tree._compare);
+        var indexOrLower = i < 0 ? (i ^ -1) - 1 : (inclusive ? i : i - 1);
+        return indexOrLower >= 0 ? [this.keys[indexOrLower], this.values[indexOrLower]] : undefined;
+    };
     BNode.prototype.checkValid = function (depth, tree, baseIndex) {
         var kL = this.keys.length, vL = this.values.length;
         check(this.values === undefVals ? kL <= vL : kL === vL, "keys/values length mismatch: depth", depth, "with lengths", kL, vL, "and baseIndex", baseIndex);
@@ -1151,6 +1173,7 @@ var BNode = /** @class */ (function () {
         check(depth == 0 || kL > 0, "empty leaf at depth", depth, "and baseIndex", baseIndex);
         return kL;
     };
+    /////////////////////////////////////////////////////////////////////////////
     // Leaf Node: set & node splitting //////////////////////////////////////////
     BNode.prototype.set = function (key, value, overwrite, tree) {
         var i = this.indexOf(key, -1, tree._compare);
@@ -1240,6 +1263,7 @@ var BNode = /** @class */ (function () {
         var values = this.values === undefVals ? undefVals : this.values.splice(half);
         return new BNode(keys, values);
     };
+    /////////////////////////////////////////////////////////////////////////////
     // Leaf Node: scanning & deletions //////////////////////////////////////////
     BNode.prototype.forRange = function (low, high, includeHigh, editMode, tree, count, onFound) {
         var cmp = tree._compare;
@@ -1336,6 +1360,18 @@ var BNodeInternal = /** @class */ (function (_super) {
         var i = this.indexOf(key, 0, tree._compare), children = this.children;
         return i < children.length ? children[i].get(key, defaultValue, tree) : undefined;
     };
+    BNodeInternal.prototype.getOrNextLower = function (key, tree, inclusive) {
+        var i = this.indexOf(key, 0, tree._compare), children = this.children;
+        if (i > children.length)
+            return undefined;
+        var result = children[i].getOrNextLower(key, tree, inclusive);
+        if (result === undefined && i > 0) {
+            var child = children[i - 1];
+            var maxKey = child.maxKey();
+            return [maxKey, child.get(maxKey, undefined, tree)];
+        }
+        return result;
+    };
     BNodeInternal.prototype.checkValid = function (depth, tree, baseIndex) {
         var kL = this.keys.length, cL = this.children.length;
         check(kL === cL, "keys/children length mismatch: depth", depth, "lengths", kL, cL, "baseIndex", baseIndex);
@@ -1358,6 +1394,7 @@ var BNodeInternal = /** @class */ (function (_super) {
             check(false, toofew ? "too few" : "too many", "children (", childSize, size, ") at depth", depth, "maxNodeSize:", tree.maxNodeSize, "children.length:", cL, "baseIndex:", baseIndex);
         return size;
     };
+    /////////////////////////////////////////////////////////////////////////////
     // Internal Node: set & node splitting //////////////////////////////////////
     BNodeInternal.prototype.set = function (key, value, overwrite, tree) {
         var c = this.children, max = tree._maxNodeSize, cmp = tree._compare;
@@ -1426,6 +1463,7 @@ var BNodeInternal = /** @class */ (function (_super) {
         this.keys.unshift(lhs.keys.pop());
         this.children.unshift(lhs.children.pop());
     };
+    /////////////////////////////////////////////////////////////////////////////
     // Internal Node: scanning & deletions //////////////////////////////////////
     // Note: `count` is the next value of the third argument to `onFound`. 
     //       A leaf node's `forRange` function returns a new value for this counter,

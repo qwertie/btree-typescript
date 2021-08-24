@@ -421,6 +421,26 @@ function testBTree(maxNodeSize: number)
     });
   }
 
+  for (let size of [5, 10, 300]) {
+    const tree = new BTree<number,number>(undefined, undefined, maxNodeSize);
+    const pairs: [number,number][] = [];
+    for (let i = 0; i < size; i++) {
+      const value = randInt(size * 2);
+      tree.set(i, value);
+      pairs.push([i, value]);
+    }
+    test(`nextLowerPair/nextHigherPair for tree of size ${size}`, () => {
+      for (let i = 0; i < size; i++) {
+        if (i > 0) {
+          expect(tree.nextLowerPair(i)).toEqual(pairs[i - 1]);
+        }
+        if (i < size - 1) {
+          expect(tree.nextHigherPair(i)).toEqual(pairs[i + 1]);
+        }
+      }
+    })
+  }
+
   for (let size of [6, 36, 216]) {
     test(`setPairs & deleteRange [size ${size}]`, () => {
       // Store numbers in descending order
@@ -758,6 +778,12 @@ function testBTree(maxNodeSize: number)
     }
   });
 
+  test("entriesReversed when highest key does not exist", () => {
+    const entries: [{ key: number}, number][] = [[{ key: 10 }, 0], [{ key: 20 }, 0], [{ key: 30 }, 0]];
+    const tree = new BTree<{ key: number }, number>(entries, (a, b) => a.key - b.key);
+    expect(Array.from(tree.entriesReversed({ key: 40 }))).toEqual(entries.reverse());
+  });
+
   test("nextLowerPair/nextHigherPair and issue #9: nextLowerPair returns highest pair if key is 0", () => {
     const tree = new BTree<number,number>(undefined, undefined, maxNodeSize);
     tree.set(-2, 123);
@@ -776,7 +802,7 @@ function testBTree(maxNodeSize: number)
     expect(tree.nextLowerPair(undefined)).toEqual([2, 12345]);
     expect(tree.nextHigherPair(undefined)).toEqual([-2, 123]);
 
-    for (var i = -10; i <= 300; i++) // embiggen the tree
+    for (let i = -10; i <= 300; i++) // embiggen the tree
       tree.set(i, i*2);
     expect(tree.nextLowerPair(-1)).toEqual([-2, -4]);
     expect(tree.nextLowerPair(0)).toEqual([-1, -2]);

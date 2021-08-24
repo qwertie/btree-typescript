@@ -497,7 +497,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     var {nodequeue,nodeindex,leaf} = this.findPath(highestKey) || this.findPath(this.maxKey())!;
     check(!nodequeue[0] || leaf === nodequeue[0][nodeindex[0]], "wat!");
     var i = leaf.indexOf(highestKey, 0, this._compare);
-    if (!(skipHighest || this._compare(leaf.keys[i], highestKey) > 0))
+    if (!skipHighest && i < leaf.keys.length && this._compare(leaf.keys[i], highestKey) <= 0)
       i++;
     var state = reusedArray !== undefined ? 1 : 0;
 
@@ -945,14 +945,23 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    *  If key === undefined, this function returns the highest pair.
    */
   nextLowerPair(key: K|undefined): [K,V]|undefined {
-    var it = this.entriesReversed(key, ReusedArray, true);
-    return it.next().value;
+    if (key === undefined) {
+      const maxKey = this.maxKey();
+      if (maxKey === undefined)
+        return undefined;
+      return [maxKey, this.get(maxKey) as V];
+    }
+    return this._root.getOrNextLower(key, this, false);
   }
   
   /** Returns the next key smaller than the specified key (or undefined if there is none) */
   nextLowerKey(key: K|undefined): K|undefined {
     var p = this.nextLowerPair(key);
     return p ? p[0] : p;
+  }
+
+  getOrNextLower(key: K): [K,V]|undefined {
+    return this._root.getOrNextLower(key, this, true);
   }
 
   /** Edits the value associated with a key in the tree, if it already exists. 
@@ -1273,6 +1282,12 @@ class BNode<K,V> {
     return i < 0 ? defaultValue : this.values[i];
   }
 
+  getOrNextLower(key: K, tree: BTree<K,V>, inclusive: boolean): [K,V]|undefined {
+    var i = this.indexOf(key, -1, tree._compare);
+    const indexOrLower = i < 0 ? (i ^ -1) - 1 : (inclusive ? i : i - 1);
+    return indexOrLower >= 0 ? [this.keys[indexOrLower], this.values[indexOrLower]] : undefined;
+  }
+
   checkValid(depth: number, tree: BTree<K,V>, baseIndex: number): number {
     var kL = this.keys.length, vL = this.values.length;
     check(this.values === undefVals ? kL <= vL : kL === vL,
@@ -1481,6 +1496,19 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   get(key: K, defaultValue: V|undefined, tree: BTree<K,V>): V|undefined {
     var i = this.indexOf(key, 0, tree._compare), children = this.children;
     return i < children.length ? children[i].get(key, defaultValue, tree) : undefined;
+  }
+
+  getOrNextLower(key: K, tree: BTree<K,V>, inclusive: boolean): [K,V]|undefined {
+    var i = this.indexOf(key, 0, tree._compare), children = this.children;
+    if (i > children.length)
+      return undefined;
+    const result = children[i].getOrNextLower(key, tree, inclusive);
+    if (result === undefined && i > 0) {
+      const child = children[i - 1];
+      const maxKey = child.maxKey();
+      return [maxKey, child.get(maxKey, undefined, tree) as V];
+    }
+    return result;
   }
 
   checkValid(depth: number, tree: BTree<K,V>, baseIndex: number): number {
