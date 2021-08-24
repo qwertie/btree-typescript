@@ -852,6 +852,7 @@ var BTree = /** @class */ (function () {
         var p = this.nextLowerPair(key);
         return p ? p[0] : p;
     };
+    /** Returns the key-value pair associated with the supplied key if it exists and the next lower pair otherwise (or undefined if there is none) */
     BTree.prototype.getOrNextLower = function (key) {
         return this._root.getOrNextLower(key, this, true);
     };

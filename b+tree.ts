@@ -960,6 +960,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return p ? p[0] : p;
   }
 
+  /** Returns the key-value pair associated with the supplied key if it exists and the next lower pair otherwise (or undefined if there is none) */
   getOrNextLower(key: K): [K,V]|undefined {
     return this._root.getOrNextLower(key, this, true);
   }

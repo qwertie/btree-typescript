@@ -338,6 +338,7 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
     nextLowerPair(key: K | undefined): [K, V] | undefined;
     /** Returns the next key smaller than the specified key (or undefined if there is none) */
     nextLowerKey(key: K | undefined): K | undefined;
+    /** Returns the key-value pair associated with the supplied key if it exists and the next lower pair otherwise (or undefined if there is none) */
     getOrNextLower(key: K): [K, V] | undefined;
     /** Edits the value associated with a key in the tree, if it already exists.
      * @returns true if the key existed, false if not.
