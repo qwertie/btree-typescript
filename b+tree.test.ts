@@ -430,6 +430,7 @@ function testBTree(maxNodeSize: number)
       pairs.push([i, value]);
     }
     test(`nextLowerPair/nextHigherPair for tree of size ${size}`, () => {
+      expect(tree.nextHigherPair(undefined)).toEqual([tree.minKey()!, tree.get(tree.minKey()!)]);
       for (let i = 0; i < size; i++) {
         if (i > 0) {
           expect(tree.nextLowerPair(i)).toEqual(pairs[i - 1]);
@@ -438,6 +439,7 @@ function testBTree(maxNodeSize: number)
           expect(tree.nextHigherPair(i)).toEqual(pairs[i + 1]);
         }
       }
+      expect(tree.nextLowerPair(undefined)).toEqual([tree.maxKey()!, tree.get(tree.maxKey()!)]);
     })
   }
 

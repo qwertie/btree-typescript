@@ -821,40 +821,49 @@ var BTree = /** @class */ (function () {
         return this.set(key, value, false);
     };
     /** Returns the next pair whose key is larger than the specified key (or undefined if there is none).
-     *  If key === undefined, this function returns the lowest pair.
+     * If key === undefined, this function returns the lowest pair.
+     * @param key The key to search for.
+     * @param reusedArray Optional array used repeatedly to store key-value pairs, to
+     * avoid creating a new array on every iteration.
      */
-    BTree.prototype.nextHigherPair = function (key) {
-        var it = this.entries(key, ReusedArray);
-        var r = it.next();
-        if (!r.done && key !== undefined && this._compare(r.value[0], key) <= 0)
-            r = it.next();
-        return r.value;
+    BTree.prototype.nextHigherPair = function (key, reusedArray) {
+        var pair = reusedArray !== null && reusedArray !== void 0 ? reusedArray : [];
+        if (key === undefined) {
+            return this._root.minPair(pair);
+        }
+        return this._root.getPairOrNextHigher(key, this, false, pair);
     };
     /** Returns the next key larger than the specified key (or undefined if there is none) */
     BTree.prototype.nextHigherKey = function (key) {
-        var p = this.nextHigherPair(key);
+        var p = this.nextHigherPair(key, ReusedArray);
         return p ? p[0] : p;
     };
     /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none).
      *  If key === undefined, this function returns the highest pair.
+     * @param key The key to search for.
+     * @param reusedArray Optional array used repeatedly to store key-value pairs, to
+     * avoid creating a new array on every iteration.
      */
-    BTree.prototype.nextLowerPair = function (key) {
+    BTree.prototype.nextLowerPair = function (key, reusedArray) {
+        var pair = reusedArray !== null && reusedArray !== void 0 ? reusedArray : [];
         if (key === undefined) {
-            var maxKey = this.maxKey();
-            if (maxKey === undefined)
-                return undefined;
-            return [maxKey, this.get(maxKey)];
+            return this._root.maxPair(pair);
         }
-        return this._root.getOrNextLower(key, this, false);
+        return this._root.getPairOrNextLower(key, this, false, pair);
     };
     /** Returns the next key smaller than the specified key (or undefined if there is none) */
     BTree.prototype.nextLowerKey = function (key) {
-        var p = this.nextLowerPair(key);
+        var p = this.nextLowerPair(key, ReusedArray);
         return p ? p[0] : p;
     };
-    /** Returns the key-value pair associated with the supplied key if it exists and the next lower pair otherwise (or undefined if there is none) */
-    BTree.prototype.getOrNextLower = function (key) {
-        return this._root.getOrNextLower(key, this, true);
+    /** Returns the key-value pair associated with the supplied key if it exists
+     * and the next lower pair otherwise (or undefined if there is none)
+     * @param key The key to search for.
+     * @param reusedArray Optional array used repeatedly to store key-value pairs, to
+     * avoid creating a new array on every iteration.
+     * */
+    BTree.prototype.getPairOrNextLower = function (key, reusedArray) {
+        return this._root.getPairOrNextLower(key, this, true, reusedArray !== null && reusedArray !== void 0 ? reusedArray : []);
     };
     /** Edits the value associated with a key in the tree, if it already exists.
      * @returns true if the key existed, false if not.
@@ -1147,6 +1156,21 @@ var BNode = /** @class */ (function () {
     BNode.prototype.minKey = function () {
         return this.keys[0];
     };
+    BNode.prototype.minPair = function (reusedArray) {
+        if (this.keys.length === 0)
+            return undefined;
+        reusedArray[0] = this.keys[0];
+        reusedArray[1] = this.values[0];
+        return reusedArray;
+    };
+    BNode.prototype.maxPair = function (reusedArray) {
+        if (this.keys.length === 0)
+            return undefined;
+        var lastIndex = this.keys.length - 1;
+        reusedArray[0] = this.keys[lastIndex];
+        reusedArray[1] = this.values[lastIndex];
+        return reusedArray;
+    };
     BNode.prototype.clone = function () {
         var v = this.values;
         return new BNode(this.keys.slice(0), v === undefVals ? v : v.slice(0));
@@ -1158,10 +1182,26 @@ var BNode = /** @class */ (function () {
         var i = this.indexOf(key, -1, tree._compare);
         return i < 0 ? defaultValue : this.values[i];
     };
-    BNode.prototype.getOrNextLower = function (key, tree, inclusive) {
+    BNode.prototype.getPairOrNextLower = function (key, tree, inclusive, reusedArray) {
         var i = this.indexOf(key, -1, tree._compare);
         var indexOrLower = i < 0 ? (i ^ -1) - 1 : (inclusive ? i : i - 1);
-        return indexOrLower >= 0 ? [this.keys[indexOrLower], this.values[indexOrLower]] : undefined;
+        if (indexOrLower >= 0) {
+            reusedArray[0] = this.keys[indexOrLower];
+            reusedArray[1] = this.values[indexOrLower];
+            return reusedArray;
+        }
+        return undefined;
+    };
+    BNode.prototype.getPairOrNextHigher = function (key, tree, inclusive, reusedArray) {
+        var i = this.indexOf(key, -1, tree._compare);
+        var indexOrLower = i < 0 ? i ^ -1 : (inclusive ? i : i + 1);
+        var keys = this.keys;
+        if (indexOrLower < keys.length) {
+            reusedArray[0] = keys[indexOrLower];
+            reusedArray[1] = this.values[indexOrLower];
+            return reusedArray;
+        }
+        return undefined;
     };
     BNode.prototype.checkValid = function (depth, tree, baseIndex) {
         var kL = this.keys.length, vL = this.values.length;
@@ -1357,19 +1397,33 @@ var BNodeInternal = /** @class */ (function (_super) {
     BNodeInternal.prototype.minKey = function () {
         return this.children[0].minKey();
     };
+    BNodeInternal.prototype.minPair = function (reusedArray) {
+        return this.children[0].minPair(reusedArray);
+    };
+    BNodeInternal.prototype.maxPair = function (reusedArray) {
+        return this.children[this.children.length - 1].maxPair(reusedArray);
+    };
     BNodeInternal.prototype.get = function (key, defaultValue, tree) {
         var i = this.indexOf(key, 0, tree._compare), children = this.children;
         return i < children.length ? children[i].get(key, defaultValue, tree) : undefined;
     };
-    BNodeInternal.prototype.getOrNextLower = function (key, tree, inclusive) {
+    BNodeInternal.prototype.getPairOrNextLower = function (key, tree, inclusive, reusedArray) {
         var i = this.indexOf(key, 0, tree._compare), children = this.children;
-        if (i > children.length)
+        if (i >= children.length)
             return undefined;
-        var result = children[i].getOrNextLower(key, tree, inclusive);
+        var result = children[i].getPairOrNextLower(key, tree, inclusive, reusedArray);
         if (result === undefined && i > 0) {
-            var child = children[i - 1];
-            var maxKey = child.maxKey();
-            return [maxKey, child.get(maxKey, undefined, tree)];
+            return children[i - 1].maxPair(reusedArray);
+        }
+        return result;
+    };
+    BNodeInternal.prototype.getPairOrNextHigher = function (key, tree, inclusive, reusedArray) {
+        var i = this.indexOf(key, 0, tree._compare), children = this.children, length = children.length;
+        if (i >= length)
+            return undefined;
+        var result = children[i].getPairOrNextHigher(key, tree, inclusive, reusedArray);
+        if (result === undefined && i < length - 1) {
+            return children[i + 1].minPair(reusedArray);
         }
         return result;
     };

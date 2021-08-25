@@ -327,19 +327,30 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
     */
     setIfNotPresent(key: K, value: V): boolean;
     /** Returns the next pair whose key is larger than the specified key (or undefined if there is none).
-     *  If key === undefined, this function returns the lowest pair.
+     * If key === undefined, this function returns the lowest pair.
+     * @param key The key to search for.
+     * @param reusedArray Optional array used repeatedly to store key-value pairs, to
+     * avoid creating a new array on every iteration.
      */
-    nextHigherPair(key: K | undefined): [K, V] | undefined;
+    nextHigherPair(key: K | undefined, reusedArray?: [K, V]): [K, V] | undefined;
     /** Returns the next key larger than the specified key (or undefined if there is none) */
     nextHigherKey(key: K | undefined): K | undefined;
     /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none).
      *  If key === undefined, this function returns the highest pair.
+     * @param key The key to search for.
+     * @param reusedArray Optional array used repeatedly to store key-value pairs, to
+     * avoid creating a new array on every iteration.
      */
-    nextLowerPair(key: K | undefined): [K, V] | undefined;
+    nextLowerPair(key: K | undefined, reusedArray?: [K, V]): [K, V] | undefined;
     /** Returns the next key smaller than the specified key (or undefined if there is none) */
     nextLowerKey(key: K | undefined): K | undefined;
-    /** Returns the key-value pair associated with the supplied key if it exists and the next lower pair otherwise (or undefined if there is none) */
-    getOrNextLower(key: K): [K, V] | undefined;
+    /** Returns the key-value pair associated with the supplied key if it exists
+     * and the next lower pair otherwise (or undefined if there is none)
+     * @param key The key to search for.
+     * @param reusedArray Optional array used repeatedly to store key-value pairs, to
+     * avoid creating a new array on every iteration.
+     * */
+    getPairOrNextLower(key: K, reusedArray?: [K, V]): [K, V] | undefined;
     /** Edits the value associated with a key in the tree, if it already exists.
      * @returns true if the key existed, false if not.
     */
