@@ -36,7 +36,7 @@ Features
   with all keys in a given node.
 - Includes neat stuff such as `Range` methods for batch operations
 - Throws an exception if you try to use `NaN` as a key, but infinity is allowed.
-- No dependencies. 18K minified.
+- No dependencies. 19K minified.
 - Includes a lattice of interfaces for TypeScript users (see below)
 - Supports diffing computation between two trees that is highly optimized for the case
   in which a majority of nodes are shared (such as when persistent methods are used).
