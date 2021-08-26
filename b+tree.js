@@ -640,14 +640,13 @@ var BTree = /** @class */ (function () {
      * @returns true if the step was completed and false if the step would have caused the cursor to move beyond the end of the tree.
      */
     BTree.step = function (cursor, stepToNode) {
-        if (stepToNode === void 0) { stepToNode = false; }
         var internalSpine = cursor.internalSpine, levelIndices = cursor.levelIndices, leaf = cursor.leaf;
-        if (stepToNode || leaf) {
+        if (stepToNode === true || leaf) {
             var levelsLength = levelIndices.length;
             // Step to the next node only if:
             // - We are explicitly directed to via stepToNode, or
             // - There are no key/value pairs left to step to in this leaf
-            if (stepToNode || levelIndices[levelsLength - 1] === 0) {
+            if (stepToNode === true || levelIndices[levelsLength - 1] === 0) {
                 var spineLength = internalSpine.length;
                 // Root is leaf
                 if (spineLength === 0)
@@ -656,19 +655,17 @@ var BTree = /** @class */ (function () {
                 var nodeLevelIndex = spineLength - 1;
                 var levelIndexWalkBack = nodeLevelIndex;
                 while (levelIndexWalkBack >= 0) {
-                    var childIndex = levelIndices[levelIndexWalkBack];
-                    if (childIndex > 0) {
+                    if (levelIndices[levelIndexWalkBack] > 0) {
                         if (levelIndexWalkBack < levelsLength - 1) {
                             // Remove leaf state from cursor
                             cursor.leaf = undefined;
-                            levelIndices.splice(levelIndexWalkBack + 1, levelsLength - levelIndexWalkBack);
+                            levelIndices.pop();
                         }
-                        // If we walked upwards past any internal node, splice them out
+                        // If we walked upwards past any internal node, slice them out
                         if (levelIndexWalkBack < nodeLevelIndex)
-                            internalSpine.splice(levelIndexWalkBack + 1, spineLength - levelIndexWalkBack);
+                            cursor.internalSpine = internalSpine.slice(0, levelIndexWalkBack + 1);
                         // Move to new internal node
-                        var nodeIndex = --levelIndices[levelIndexWalkBack];
-                        cursor.currentKey = internalSpine[levelIndexWalkBack][nodeIndex].maxKey();
+                        cursor.currentKey = internalSpine[levelIndexWalkBack][--levelIndices[levelIndexWalkBack]].maxKey();
                         return true;
                     }
                     levelIndexWalkBack--;
