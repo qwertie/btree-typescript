@@ -329,7 +329,7 @@ console.log("### Delta between B+ trees");
       for (let k of makeArray(otherSize, true))
         otherTree.set(k, k * 10);
 
-      measure(() => `Delta between B+tree with ${size} nodes and B+tree with ${otherSize} nodes`, () => {
+      measure(() => `Delta between B+ trees with ${size} nodes and B+tree with ${otherSize} nodes`, () => {
         tree.diffAgainst(otherTree);
       });
     }
@@ -337,7 +337,7 @@ console.log("### Delta between B+ trees");
 
   console.log();
   sizes.forEach((size, i) => {
-    for (let j = i; j < sizes.length; j++) {
+    for (let j = 0; j < sizes.length; j++) {
       const otherSize = sizes[j];
       const keys = makeArray(size + otherSize, true);
       const tree = new BTree();
@@ -348,7 +348,7 @@ console.log("### Delta between B+ trees");
       for (let k of keys.slice(size))
         tree.set(k, k * 10);
 
-      measure(() => `Delta between B+tree with ${size} nodes and cheap cloned B+tree with ${otherSize} additional nodes`, () => {
+      measure(() => `Delta between B+ trees with ${size} nodes and cheap cloned B+tree with ${otherSize} additional nodes`, () => {
         tree.diffAgainst(otherTree);
       });
     }
