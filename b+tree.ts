@@ -1678,7 +1678,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
  * - Leaf is only populated if the cursor points to a KVP. If this is the case, levelIndices.length === internalSpine.length + 1
  *    and levelIndices[levelIndices.length - 1] is the index of the value.
  */
-type DiffCursor<K,V> = { height: number, internalSpine: BNode<K,V>[][], levelIndices: number[],  leaf: BNode<K,V> | undefined, currentKey: K };
+type DiffCursor<K,V> = { height: number, internalSpine: BNode<K,V>[][], levelIndices: number[], leaf: BNode<K,V> | undefined, currentKey: K };
 
 // Optimization: this array of `undefined`s is used instead of a normal
 // array of values in nodes where `undefined` is the only value.
