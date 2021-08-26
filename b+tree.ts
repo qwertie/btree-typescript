@@ -739,14 +739,14 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    * @param stepToNode If true, the cursor will be advanced to the next node (skipping values)
    * @returns true if the step was completed and false if the step would have caused the cursor to move beyond the end of the tree.
    */ 
-  private static step<K, V>(cursor: DiffCursor<K, V>, stepToNode: boolean = false): boolean {
+  private static step<K, V>(cursor: DiffCursor<K, V>, stepToNode?: boolean): boolean {
     const { internalSpine, levelIndices, leaf } = cursor;
-    if (stepToNode || leaf) {
+    if (stepToNode === true || leaf) {
       const levelsLength = levelIndices.length;
       // Step to the next node only if:
       // - We are explicitly directed to via stepToNode, or
       // - There are no key/value pairs left to step to in this leaf
-      if (stepToNode || levelIndices[levelsLength - 1] === 0) {
+      if (stepToNode === true || levelIndices[levelsLength - 1] === 0) {
         const spineLength = internalSpine.length;
         // Root is leaf
         if (spineLength === 0)
@@ -755,19 +755,17 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
         const nodeLevelIndex = spineLength - 1;
         let levelIndexWalkBack = nodeLevelIndex;
         while (levelIndexWalkBack >= 0) {
-          const childIndex = levelIndices[levelIndexWalkBack]
-          if (childIndex > 0) {
+          if (levelIndices[levelIndexWalkBack] > 0) {
             if (levelIndexWalkBack < levelsLength - 1) {
               // Remove leaf state from cursor
               cursor.leaf = undefined;
-              levelIndices.splice(levelIndexWalkBack + 1, levelsLength - levelIndexWalkBack);
+              levelIndices.pop();
             }
-            // If we walked upwards past any internal node, splice them out
+            // If we walked upwards past any internal node, slice them out
             if (levelIndexWalkBack < nodeLevelIndex)
-              internalSpine.splice(levelIndexWalkBack + 1, spineLength - levelIndexWalkBack);
+              cursor.internalSpine = internalSpine.slice(0, levelIndexWalkBack + 1);
             // Move to new internal node
-            const nodeIndex = --levelIndices[levelIndexWalkBack];
-            cursor.currentKey = internalSpine[levelIndexWalkBack][nodeIndex].maxKey();
+            cursor.currentKey = internalSpine[levelIndexWalkBack][--levelIndices[levelIndexWalkBack]].maxKey();
             return true;
           }
           levelIndexWalkBack--;

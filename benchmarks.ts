@@ -311,3 +311,46 @@ console.log("### Measure effect of max node size ###");
     console.log(`${timer.restart()}\tInsert ${tree.size} keys in B+tree with node size ${tree.maxNodeSize}`);
   }
 }
+
+console.log();
+console.log("### Delta between B+ trees");
+{
+  console.log();
+  const sizes = [100, 1000, 10000, 100000, 1000000];
+
+  sizes.forEach((size, i) => {
+    for (let j = i; j < sizes.length; j++) {
+      const tree = new BTree();
+      for (let k of makeArray(size, true))
+        tree.set(k, k * 10);
+
+      const otherSize = sizes[j];
+      const otherTree = new BTree();
+      for (let k of makeArray(otherSize, true))
+        otherTree.set(k, k * 10);
+
+      measure(() => `Delta between B+ trees with ${size} nodes and B+tree with ${otherSize} nodes`, () => {
+        tree.diffAgainst(otherTree);
+      });
+    }
+  })
+
+  console.log();
+  sizes.forEach((size, i) => {
+    for (let j = 0; j < sizes.length; j++) {
+      const otherSize = sizes[j];
+      const keys = makeArray(size + otherSize, true);
+      const tree = new BTree();
+      for (let k of keys.slice(0, size))
+        tree.set(k, k * 10);
+      
+      const otherTree = tree.clone();
+      for (let k of keys.slice(size))
+        tree.set(k, k * 10);
+
+      measure(() => `Delta between B+ trees with ${size} nodes and cheap cloned B+tree with ${otherSize} additional nodes`, () => {
+        tree.diffAgainst(otherTree);
+      });
+    }
+  })
+}
