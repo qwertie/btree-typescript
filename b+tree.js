@@ -827,11 +827,11 @@ var BTree = /** @class */ (function () {
      * avoid creating a new array on every iteration.
      */
     BTree.prototype.nextHigherPair = function (key, reusedArray) {
-        var pair = reusedArray !== null && reusedArray !== void 0 ? reusedArray : [];
+        reusedArray = reusedArray || [];
         if (key === undefined) {
-            return this._root.minPair(pair);
+            return this._root.minPair(reusedArray);
         }
-        return this._root.getPairOrNextHigher(key, this, false, pair);
+        return this._root.getPairOrNextHigher(key, this, false, reusedArray);
     };
     /** Returns the next key larger than the specified key (or undefined if there is none) */
     BTree.prototype.nextHigherKey = function (key) {
@@ -842,14 +842,14 @@ var BTree = /** @class */ (function () {
      *  If key === undefined, this function returns the highest pair.
      * @param key The key to search for.
      * @param reusedArray Optional array used repeatedly to store key-value pairs, to
-     * avoid creating a new array on every iteration.
+     *        avoid creating a new array each time you call this method.
      */
     BTree.prototype.nextLowerPair = function (key, reusedArray) {
-        var pair = reusedArray !== null && reusedArray !== void 0 ? reusedArray : [];
+        reusedArray = reusedArray || [];
         if (key === undefined) {
-            return this._root.maxPair(pair);
+            return this._root.maxPair(reusedArray);
         }
-        return this._root.getPairOrNextLower(key, this, false, pair);
+        return this._root.getPairOrNextLower(key, this, false, reusedArray);
     };
     /** Returns the next key smaller than the specified key (or undefined if there is none) */
     BTree.prototype.nextLowerKey = function (key) {
@@ -860,10 +860,10 @@ var BTree = /** @class */ (function () {
      * and the next lower pair otherwise (or undefined if there is none)
      * @param key The key to search for.
      * @param reusedArray Optional array used repeatedly to store key-value pairs, to
-     * avoid creating a new array on every iteration.
+     *        avoid creating a new array each time you call this method.
      * */
     BTree.prototype.getPairOrNextLower = function (key, reusedArray) {
-        return this._root.getPairOrNextLower(key, this, true, reusedArray !== null && reusedArray !== void 0 ? reusedArray : []);
+        return this._root.getPairOrNextLower(key, this, true, reusedArray || []);
     };
     /** Edits the value associated with a key in the tree, if it already exists.
      * @returns true if the key existed, false if not.
@@ -1184,7 +1184,7 @@ var BNode = /** @class */ (function () {
     };
     BNode.prototype.getPairOrNextLower = function (key, tree, inclusive, reusedArray) {
         var i = this.indexOf(key, -1, tree._compare);
-        var indexOrLower = i < 0 ? (i ^ -1) - 1 : (inclusive ? i : i - 1);
+        var indexOrLower = i < 0 ? ~i - 1 : (inclusive ? i : i - 1);
         if (indexOrLower >= 0) {
             reusedArray[0] = this.keys[indexOrLower];
             reusedArray[1] = this.values[indexOrLower];
@@ -1194,7 +1194,7 @@ var BNode = /** @class */ (function () {
     };
     BNode.prototype.getPairOrNextHigher = function (key, tree, inclusive, reusedArray) {
         var i = this.indexOf(key, -1, tree._compare);
-        var indexOrLower = i < 0 ? i ^ -1 : (inclusive ? i : i + 1);
+        var indexOrLower = i < 0 ? ~i : (inclusive ? i : i + 1);
         var keys = this.keys;
         if (indexOrLower < keys.length) {
             reusedArray[0] = keys[indexOrLower];

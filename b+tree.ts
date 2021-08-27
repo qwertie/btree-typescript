@@ -931,11 +931,11 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    * avoid creating a new array on every iteration.
    */
   nextHigherPair(key: K|undefined, reusedArray?: [K,V]): [K,V]|undefined {
-    const pair = reusedArray ?? ([] as unknown as [K,V]);
+    reusedArray = reusedArray || ([] as unknown as [K,V]);
     if (key === undefined) {
-      return this._root.minPair(pair);
+      return this._root.minPair(reusedArray);
     }
-    return this._root.getPairOrNextHigher(key, this, false, pair);
+    return this._root.getPairOrNextHigher(key, this, false, reusedArray);
   }
   
   /** Returns the next key larger than the specified key (or undefined if there is none) */
@@ -948,14 +948,14 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    *  If key === undefined, this function returns the highest pair.
    * @param key The key to search for.
    * @param reusedArray Optional array used repeatedly to store key-value pairs, to 
-   * avoid creating a new array on every iteration.
+   *        avoid creating a new array each time you call this method.
    */
   nextLowerPair(key: K|undefined, reusedArray?: [K,V]): [K,V]|undefined {
-    const pair = reusedArray ?? ([] as unknown as [K,V]);
+    reusedArray = reusedArray || ([] as unknown as [K,V]);
     if (key === undefined) {
-      return this._root.maxPair(pair);
+      return this._root.maxPair(reusedArray);
     }
-    return this._root.getPairOrNextLower(key, this, false, pair);
+    return this._root.getPairOrNextLower(key, this, false, reusedArray);
   }
   
   /** Returns the next key smaller than the specified key (or undefined if there is none) */
@@ -968,10 +968,10 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    * and the next lower pair otherwise (or undefined if there is none)
    * @param key The key to search for.
    * @param reusedArray Optional array used repeatedly to store key-value pairs, to 
-   * avoid creating a new array on every iteration.
+   *        avoid creating a new array each time you call this method.
    * */
   getPairOrNextLower(key: K, reusedArray?: [K,V]): [K,V]|undefined {
-    return this._root.getPairOrNextLower(key, this, true, reusedArray ?? ([] as unknown as [K,V]));
+    return this._root.getPairOrNextLower(key, this, true, reusedArray || ([] as unknown as [K,V]));
   }
 
   /** Edits the value associated with a key in the tree, if it already exists. 
@@ -1311,7 +1311,7 @@ class BNode<K,V> {
 
   getPairOrNextLower(key: K, tree: BTree<K,V>, inclusive: boolean, reusedArray: [K,V]): [K,V]|undefined {
     var i = this.indexOf(key, -1, tree._compare);
-    const indexOrLower = i < 0 ? (i ^ -1) - 1 : (inclusive ? i : i - 1);
+    const indexOrLower = i < 0 ? ~i - 1 : (inclusive ? i : i - 1);
     if (indexOrLower >= 0) {
       reusedArray[0] = this.keys[indexOrLower];
       reusedArray[1] = this.values[indexOrLower];
@@ -1322,7 +1322,7 @@ class BNode<K,V> {
 
   getPairOrNextHigher(key: K, tree: BTree<K,V>, inclusive: boolean, reusedArray: [K,V]): [K,V]|undefined {
     var i = this.indexOf(key, -1, tree._compare);
-    const indexOrLower = i < 0 ? i ^ -1 : (inclusive ? i : i + 1);
+    const indexOrLower = i < 0 ? ~i : (inclusive ? i : i + 1);
     const keys = this.keys;
     if (indexOrLower < keys.length) {
       reusedArray[0] = keys[indexOrLower];

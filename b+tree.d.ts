@@ -339,7 +339,7 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      *  If key === undefined, this function returns the highest pair.
      * @param key The key to search for.
      * @param reusedArray Optional array used repeatedly to store key-value pairs, to
-     * avoid creating a new array on every iteration.
+     *        avoid creating a new array each time you call this method.
      */
     nextLowerPair(key: K | undefined, reusedArray?: [K, V]): [K, V] | undefined;
     /** Returns the next key smaller than the specified key (or undefined if there is none) */
@@ -348,7 +348,7 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      * and the next lower pair otherwise (or undefined if there is none)
      * @param key The key to search for.
      * @param reusedArray Optional array used repeatedly to store key-value pairs, to
-     * avoid creating a new array on every iteration.
+     *        avoid creating a new array each time you call this method.
      * */
     getPairOrNextLower(key: K, reusedArray?: [K, V]): [K, V] | undefined;
     /** Edits the value associated with a key in the tree, if it already exists.
