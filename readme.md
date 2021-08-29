@@ -377,8 +377,9 @@ Version history
 
 ### v1.6.0 ###
 
-- Added optional second parameter `reusedArray` to `nextHigherPair` and `nextLowerPair` 
-- Optimized 
+- Added `BTree.getPairOrNextLower` and `BTree.getPairOrNextHigher` methods (PR #23)
+- Added optional second parameter `reusedArray` to `nextHigherPair` and `nextLowerPair` (PR #23)
+- Optimizations added in `diffAgainst` (PR #24) and `nextLowerPair` (PR #23)
 
 ### v1.5.0 ###
 

@@ -1,6 +1,6 @@
 {
   "name": "sorted-btree",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "A sorted list of key-value pairs in a fast, typed in-memory B+ tree with a powerful API.",
   "main": "b+tree.js",
   "typings": "b+tree",
@@ -88,8 +88,8 @@
       }
     },
     "install": [
-      "ts-jest",
-      "typescript"
+      "ts-jest@26.4.3",
+      "typescript@3.8.3"
     ],
     "verbose": true,
     "test-folder": ".testpack",
