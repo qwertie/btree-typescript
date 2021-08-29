@@ -1422,7 +1422,7 @@ var BNodeInternal = /** @class */ (function (_super) {
     BNodeInternal.prototype.getPairOrNextLower = function (key, compare, inclusive, reusedArray) {
         var i = this.indexOf(key, 0, compare), children = this.children;
         if (i >= children.length)
-            return undefined;
+            return this.maxPair(reusedArray);
         var result = children[i].getPairOrNextLower(key, compare, inclusive, reusedArray);
         if (result === undefined && i > 0) {
             return children[i - 1].maxPair(reusedArray);
@@ -1620,6 +1620,10 @@ var BNodeInternal = /** @class */ (function (_super) {
 // increase, never decrease. Its type should be undefined[] but strangely
 // TypeScript won't allow the comparison V[] === undefined[]. To prevent
 // users from making this array too large, BTree has a maximum node size.
+//
+// FAQ: undefVals[i] is already undefined, so why increase the array size?
+// Reading outside the bounds of an array is relatively slow because it
+// has the side effect of scanning the prototype chain.
 var undefVals = [];
 var Delete = { delete: true }, DeleteRange = function () { return Delete; };
 var Break = { break: true };

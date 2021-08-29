@@ -1567,7 +1567,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   getPairOrNextLower(key: K, compare: (a: K, b: K) => number, inclusive: boolean, reusedArray: [K,V]): [K,V]|undefined {
     var i = this.indexOf(key, 0, compare), children = this.children;
     if (i >= children.length)
-      return undefined;
+      return this.maxPair(reusedArray);
     const result = children[i].getPairOrNextLower(key, compare, inclusive, reusedArray);
     if (result === undefined && i > 0) {
       return children[i - 1].maxPair(reusedArray);
