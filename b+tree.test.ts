@@ -421,27 +421,63 @@ function testBTree(maxNodeSize: number)
     });
   }
 
-  for (let size of [5, 10, 300]) {
-    const tree = new BTree<number,number>(undefined, undefined, maxNodeSize);
-    const pairs: [number,number][] = [];
-    for (let i = 0; i < size; i++) {
-      const value = randInt(size * 2);
-      tree.set(i, value);
-      pairs.push([i, value]);
-    }
-    test(`nextLowerPair/nextHigherPair for tree of size ${size}`, () => {
-      expect(tree.nextHigherPair(undefined)).toEqual([tree.minKey()!, tree.get(tree.minKey()!)]);
+  describe(`Next higher/lower methods`, () => {
+    test(`nextLower/nextHigher methods return undefined in an empty tree`, () => {
+      const tree = new BTree<number,number>(undefined, undefined, maxNodeSize);
+      expect(tree.nextLowerPair(undefined)).toEqual(undefined);
+      expect(tree.nextHigherPair(undefined)).toEqual(undefined);
+      expect(tree.getPairOrNextLower(1)).toEqual(undefined);
+      expect(tree.getPairOrNextHigher(2)).toEqual(undefined);
+      
+      // This shouldn't make a difference
+      tree.set(5, 55);
+      tree.delete(5);
+      
+      expect(tree.nextLowerPair(undefined)).toEqual(undefined);
+      expect(tree.nextHigherPair(undefined)).toEqual(undefined);
+      expect(tree.nextLowerPair(3)).toEqual(undefined);
+      expect(tree.nextHigherPair(4)).toEqual(undefined);
+      expect(tree.getPairOrNextLower(5)).toEqual(undefined);
+      expect(tree.getPairOrNextHigher(6)).toEqual(undefined);
+    });
+
+    for (let size of [5, 10, 300]) {
+      // Build a tree and list with pairs whose keys are even numbers: 0, 2, 4, 6, 8, 10...
+      const tree = new BTree<number,number>(undefined, undefined, maxNodeSize);
+      const pairs: [number,number][] = [];
       for (let i = 0; i < size; i++) {
-        if (i > 0) {
-          expect(tree.nextLowerPair(i)).toEqual(pairs[i - 1]);
-        }
-        if (i < size - 1) {
-          expect(tree.nextHigherPair(i)).toEqual(pairs[i + 1]);
-        }
+        const value = i;
+        tree.set(i * 2, value);
+        pairs.push([i * 2, value]);
       }
-      expect(tree.nextLowerPair(undefined)).toEqual([tree.maxKey()!, tree.get(tree.maxKey()!)]);
-    })
-  }
+
+      test(`nextLowerPair/nextHigherPair for tree of size ${size}`, () => {
+        expect(tree.nextHigherPair(undefined)).toEqual([tree.minKey()!, tree.get(tree.minKey()!)]);
+        expect(tree.nextHigherPair(tree.maxKey())).toEqual(undefined);
+        for (let i = 0; i < size * 2; i++) {
+          if (i > 0) {
+            expect(tree.nextLowerPair(i)).toEqual(pairs[((i + 1) >> 1) - 1]);
+          }
+          if (i < size - 1) {
+            expect(tree.nextHigherPair(i)).toEqual(pairs[(i >> 1) + 1]);
+          }
+        }
+        expect(tree.nextLowerPair(undefined)).toEqual([tree.maxKey()!, tree.get(tree.maxKey()!)]);
+        expect(tree.nextLowerPair(tree.minKey())).toEqual(undefined);
+      })
+
+      test(`getPairOrNextLower/getPairOrNextHigher for tree of size ${size}`, () => {
+        for (let i = 0; i < size * 2; i++) {
+          if (i > 0) {
+            expect(tree.getPairOrNextLower(i)).toEqual(pairs[i >> 1]);
+          }
+          if (i < size - 1) {
+            expect(tree.getPairOrNextHigher(i)).toEqual(pairs[(i + 1) >> 1]);
+          }
+        }
+      })
+    }
+  });
 
   for (let size of [6, 36, 216]) {
     test(`setPairs & deleteRange [size ${size}]`, () => {

@@ -333,7 +333,9 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      * avoid creating a new array on every iteration.
      */
     nextHigherPair(key: K | undefined, reusedArray?: [K, V]): [K, V] | undefined;
-    /** Returns the next key larger than the specified key (or undefined if there is none) */
+    /** Returns the next key larger than the specified key, or undefined if there is none.
+     *  Also, nextHigherKey(undefined) returns the lowest key.
+     */
     nextHigherKey(key: K | undefined): K | undefined;
     /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none).
      *  If key === undefined, this function returns the highest pair.
@@ -342,15 +344,26 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      *        avoid creating a new array each time you call this method.
      */
     nextLowerPair(key: K | undefined, reusedArray?: [K, V]): [K, V] | undefined;
-    /** Returns the next key smaller than the specified key (or undefined if there is none) */
+    /** Returns the next key smaller than the specified key, or undefined if there is none.
+     *  Also, nextLowerKey(undefined) returns the highest key.
+     */
     nextLowerKey(key: K | undefined): K | undefined;
     /** Returns the key-value pair associated with the supplied key if it exists
-     * and the next lower pair otherwise (or undefined if there is none)
+     *  or the pair associated with the next lower pair otherwise. If there is no
+     *  next lower pair, undefined is returned.
      * @param key The key to search for.
      * @param reusedArray Optional array used repeatedly to store key-value pairs, to
      *        avoid creating a new array each time you call this method.
      * */
     getPairOrNextLower(key: K, reusedArray?: [K, V]): [K, V] | undefined;
+    /** Returns the key-value pair associated with the supplied key if it exists
+     *  or the pair associated with the next lower pair otherwise. If there is no
+     *  next lower pair, undefined is returned.
+     * @param key The key to search for.
+     * @param reusedArray Optional array used repeatedly to store key-value pairs, to
+     *        avoid creating a new array each time you call this method.
+     * */
+    getPairOrNextHigher(key: K, reusedArray?: [K, V]): [K, V] | undefined;
     /** Edits the value associated with a key in the tree, if it already exists.
      * @returns true if the key existed, false if not.
     */

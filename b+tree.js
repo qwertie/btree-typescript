@@ -553,7 +553,7 @@ var BTree = /** @class */ (function () {
                             var valOther = otherLeaf.values[otherLevelIndices[otherLevelIndices.length - 1]];
                             if (!Object.is(valThis, valOther)) {
                                 var result = different(thisCursor.currentKey, valThis, valOther);
-                                if (result && (result === null || result === void 0 ? void 0 : result.break))
+                                if (result && result.break)
                                     return result.break;
                             }
                         }
@@ -828,12 +828,14 @@ var BTree = /** @class */ (function () {
         if (key === undefined) {
             return this._root.minPair(reusedArray);
         }
-        return this._root.getPairOrNextHigher(key, this, false, reusedArray);
+        return this._root.getPairOrNextHigher(key, this._compare, false, reusedArray);
     };
-    /** Returns the next key larger than the specified key (or undefined if there is none) */
+    /** Returns the next key larger than the specified key, or undefined if there is none.
+     *  Also, nextHigherKey(undefined) returns the lowest key.
+     */
     BTree.prototype.nextHigherKey = function (key) {
         var p = this.nextHigherPair(key, ReusedArray);
-        return p ? p[0] : p;
+        return p && p[0];
     };
     /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none).
      *  If key === undefined, this function returns the highest pair.
@@ -846,21 +848,34 @@ var BTree = /** @class */ (function () {
         if (key === undefined) {
             return this._root.maxPair(reusedArray);
         }
-        return this._root.getPairOrNextLower(key, this, false, reusedArray);
+        return this._root.getPairOrNextLower(key, this._compare, false, reusedArray);
     };
-    /** Returns the next key smaller than the specified key (or undefined if there is none) */
+    /** Returns the next key smaller than the specified key, or undefined if there is none.
+     *  Also, nextLowerKey(undefined) returns the highest key.
+     */
     BTree.prototype.nextLowerKey = function (key) {
         var p = this.nextLowerPair(key, ReusedArray);
-        return p ? p[0] : p;
+        return p && p[0];
     };
     /** Returns the key-value pair associated with the supplied key if it exists
-     * and the next lower pair otherwise (or undefined if there is none)
+     *  or the pair associated with the next lower pair otherwise. If there is no
+     *  next lower pair, undefined is returned.
      * @param key The key to search for.
      * @param reusedArray Optional array used repeatedly to store key-value pairs, to
      *        avoid creating a new array each time you call this method.
      * */
     BTree.prototype.getPairOrNextLower = function (key, reusedArray) {
-        return this._root.getPairOrNextLower(key, this, true, reusedArray || []);
+        return this._root.getPairOrNextLower(key, this._compare, true, reusedArray || []);
+    };
+    /** Returns the key-value pair associated with the supplied key if it exists
+     *  or the pair associated with the next lower pair otherwise. If there is no
+     *  next lower pair, undefined is returned.
+     * @param key The key to search for.
+     * @param reusedArray Optional array used repeatedly to store key-value pairs, to
+     *        avoid creating a new array each time you call this method.
+     * */
+    BTree.prototype.getPairOrNextHigher = function (key, reusedArray) {
+        return this._root.getPairOrNextHigher(key, this._compare, true, reusedArray || []);
     };
     /** Edits the value associated with a key in the tree, if it already exists.
      * @returns true if the key existed, false if not.
@@ -1179,8 +1194,8 @@ var BNode = /** @class */ (function () {
         var i = this.indexOf(key, -1, tree._compare);
         return i < 0 ? defaultValue : this.values[i];
     };
-    BNode.prototype.getPairOrNextLower = function (key, tree, inclusive, reusedArray) {
-        var i = this.indexOf(key, -1, tree._compare);
+    BNode.prototype.getPairOrNextLower = function (key, compare, inclusive, reusedArray) {
+        var i = this.indexOf(key, -1, compare);
         var indexOrLower = i < 0 ? ~i - 1 : (inclusive ? i : i - 1);
         if (indexOrLower >= 0) {
             reusedArray[0] = this.keys[indexOrLower];
@@ -1189,8 +1204,8 @@ var BNode = /** @class */ (function () {
         }
         return undefined;
     };
-    BNode.prototype.getPairOrNextHigher = function (key, tree, inclusive, reusedArray) {
-        var i = this.indexOf(key, -1, tree._compare);
+    BNode.prototype.getPairOrNextHigher = function (key, compare, inclusive, reusedArray) {
+        var i = this.indexOf(key, -1, compare);
         var indexOrLower = i < 0 ? ~i : (inclusive ? i : i + 1);
         var keys = this.keys;
         if (indexOrLower < keys.length) {
@@ -1404,21 +1419,21 @@ var BNodeInternal = /** @class */ (function (_super) {
         var i = this.indexOf(key, 0, tree._compare), children = this.children;
         return i < children.length ? children[i].get(key, defaultValue, tree) : undefined;
     };
-    BNodeInternal.prototype.getPairOrNextLower = function (key, tree, inclusive, reusedArray) {
-        var i = this.indexOf(key, 0, tree._compare), children = this.children;
+    BNodeInternal.prototype.getPairOrNextLower = function (key, compare, inclusive, reusedArray) {
+        var i = this.indexOf(key, 0, compare), children = this.children;
         if (i >= children.length)
             return undefined;
-        var result = children[i].getPairOrNextLower(key, tree, inclusive, reusedArray);
+        var result = children[i].getPairOrNextLower(key, compare, inclusive, reusedArray);
         if (result === undefined && i > 0) {
             return children[i - 1].maxPair(reusedArray);
         }
         return result;
     };
-    BNodeInternal.prototype.getPairOrNextHigher = function (key, tree, inclusive, reusedArray) {
-        var i = this.indexOf(key, 0, tree._compare), children = this.children, length = children.length;
+    BNodeInternal.prototype.getPairOrNextHigher = function (key, compare, inclusive, reusedArray) {
+        var i = this.indexOf(key, 0, compare), children = this.children, length = children.length;
         if (i >= length)
             return undefined;
-        var result = children[i].getPairOrNextHigher(key, tree, inclusive, reusedArray);
+        var result = children[i].getPairOrNextHigher(key, compare, inclusive, reusedArray);
         if (result === undefined && i < length - 1) {
             return children[i + 1].minPair(reusedArray);
         }
