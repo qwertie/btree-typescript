@@ -371,6 +371,49 @@ describe('Simple tests on leaf nodes', () =>
   });
 });
 
+// Tests relating to `isShared` and cloning.
+// Tests on this subject that do not care about the specific interior structure of the tree
+// (and are thus maxNodeSize agnostic) can be added to testBTree to be testing on different branching factors instead.
+describe("cloning and sharing tests", () => {
+  test("Regression test for failing to propagate shared when removing top two layers", () => {
+    // This tests make a full 3 layer tree (height = 2), so use a small branching factor.
+    const maxNodeSize = 4;
+    const tree = new BTree<number, number>(
+    undefined,
+    simpleComparator,
+    maxNodeSize
+    );
+    // Build a 3 layer complete tree, all values 0.
+    for (
+    let index = 0;
+    index < maxNodeSize * maxNodeSize * maxNodeSize;
+    index++
+    ) {
+    tree.set(index, 0);
+    }
+    // Leaf nodes don't count, so this is depth 2
+    expect(tree.height).toBe(2);
+  
+    // Edit the tree so it has a node in the second layer with exactly one child (key 0).
+    tree.deleteRange(1, maxNodeSize * maxNodeSize, false);
+    expect(tree.height).toBe(2);
+  
+    // Make a clone that should never be mutated.
+    const clone = tree.clone();
+  
+    // Mutate the original tree in such a way that clone gets mutated due to incorrect is shared tracking.
+    // Delete everything outside of the internal node with only one child, so its child becomes the new root.
+    tree.deleteRange(maxNodeSize, Number.POSITIVE_INFINITY, false);
+    expect(tree.height).toBe(0);
+  
+    // Modify original
+    tree.set(0, 1);
+  
+    // Check that clone is not modified as well:
+    expect(clone.get(0)).toBe(0);
+  });
+});
+
 describe('B+ tree with fanout 32', testBTree.bind(null, 32));
 describe('B+ tree with fanout 10', testBTree.bind(null, 10));
 describe('B+ tree with fanout 4',  testBTree.bind(null, 4));
