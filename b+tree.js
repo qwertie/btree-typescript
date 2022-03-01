@@ -981,7 +981,7 @@ var BTree = /** @class */ (function () {
             return typeof r === "number" ? r : r.break;
         }
         finally {
-            var isShared = undefined;
+            var isShared = void 0;
             while (root.keys.length <= 1 && !root.isLeaf) {
                 isShared || (isShared = root.isShared);
                 this._root = root = root.keys.length === 0 ? EmptyLeaf :

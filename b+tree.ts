@@ -1094,7 +1094,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       var r = root.forRange(low, high, includeHigh, true, this, initialCounter || 0, onFound);
       return typeof r === "number" ? r : r.break!;
     } finally {
-      let isShared: undefined | true = undefined;
+      let isShared;
       while (root.keys.length <= 1 && !root.isLeaf) {
         isShared ||= root.isShared;
         this._root = root = root.keys.length === 0 ? EmptyLeaf :
