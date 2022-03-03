@@ -1530,15 +1530,14 @@ var BNodeInternal = /** @class */ (function (_super) {
         this.children.splice(i, 0, child);
         this.keys.splice(i, 0, child.maxKey());
     };
+    /**
+     * Split this node.
+     * Modifies this to remove the second half of the items, returning a separate node containing them.
+     */
     BNodeInternal.prototype.splitOffRightSide = function () {
+        // assert !this.isShared;
         var half = this.children.length >> 1;
-        var halfChildren = this.children.splice(half);
-        // These children are already have a parent (`this`),
-        // and we are creating a new parent (the returned node),
-        // so mark them as shared.
-        for (var i = 0; i < halfChildren.length; i++)
-            halfChildren[i].isShared = true;
-        return new BNodeInternal(halfChildren, this.keys.splice(half));
+        return new BNodeInternal(this.children.splice(half), this.keys.splice(half));
     };
     BNodeInternal.prototype.takeFromRight = function (rhs) {
         // Reminder: parent node must update its copy of key for this node

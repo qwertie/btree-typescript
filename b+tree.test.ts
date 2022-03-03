@@ -478,7 +478,7 @@ describe("cloning and sharing tests", () => {
       maxNodeSize
     );
     // Build a 3 layer tree
-    const count =maxNodeSize * maxNodeSize * maxNodeSize;
+    const count = maxNodeSize * maxNodeSize * maxNodeSize;
     for (
       let index = 0;
       index < count;
@@ -492,7 +492,7 @@ describe("cloning and sharing tests", () => {
     // Delete most of the keys so merging interior nodes is possible, marking all nodes as shared.
     for (
       let index = 0;
-      index < maxNodeSize * maxNodeSize * maxNodeSize;
+      index < count;
       index++
     ) {
       if (index % 4 !== 0) {
@@ -507,11 +507,10 @@ describe("cloning and sharing tests", () => {
     // The bug this is testing for resulted in the cheap clone getting modified:
     // we will compare it against the deep clone to confirm it does not.
 
-
     // Delete a bunch more nodes, causing merging.
     for (
       let index = 0;
-      index < maxNodeSize * maxNodeSize * maxNodeSize;
+      index < count;
       index++
     ) {
       if (index % 16 !== 0) {
@@ -520,7 +519,7 @@ describe("cloning and sharing tests", () => {
     }
 
     const different: number[] = [];
-    const onDiff = (k) => { different.push(k); }
+    const onDiff = (k: number) => { different.push(k); }
     deepClone.diffAgainst(cheapClone, onDiff, onDiff, onDiff);
     expect(different).toEqual([]);
   });

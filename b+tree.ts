@@ -1682,15 +1682,14 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     this.keys.splice(i, 0, child.maxKey());
   }
 
+  /**
+   * Split this node.
+   * Modifies this to remove the second half of the items, returning a separate node containing them.
+   */
   splitOffRightSide() {
-    const half = this.children.length >> 1;
-    const halfChildren = this.children.splice(half);
-    // These children are already have a parent (`this`),
-    // and we are creating a new parent (the returned node),
-    // so mark them as shared.
-    for (var i = 0; i < halfChildren.length; i++)
-      halfChildren[i].isShared = true;
-    return new BNodeInternal<K,V>(halfChildren, this.keys.splice(half));
+    // assert !this.isShared;
+    var half = this.children.length >> 1;
+    return new BNodeInternal<K,V>(this.children.splice(half), this.keys.splice(half));
   }
 
   takeFromRight(rhs: BNode<K,V>) {
