@@ -440,35 +440,6 @@ describe("cloning and sharing tests", () => {
     expect((clone['_root'] as any).children[0].children[0]).not.toBe((tree['_root'] as any).children[0].children[0]);
   });
 
-  test("Regression test for greedyClone(true) not copying all nodes", () => {
-    // This tests make a 3 layer tree (height = 2), so use a small branching factor.
-    const maxNodeSize = 4;
-    const tree = new BTree<number, number>(
-      undefined,
-      simpleComparator,
-      maxNodeSize
-    );
-    // Build a 3 layer tree.
-    for (
-      let index = 0;
-      index < maxNodeSize * maxNodeSize + 1;
-      index++
-    ) {
-      tree.set(index, 0);
-    }
-    // Leaf nodes don't count, so this is depth 2
-    expect(tree.height).toBe(2);
-
-    const clone = tree.greedyClone(true);
-
-    // The bug was that `force` was not passed down. This meant that non-shared nodes below the second layer would not be cloned.
-    // Thus we check that the third layer of this tree did get cloned.
-    // Since this depends on private APIs and types,
-    // and this package currently has no way to expose them to tests without exporting them from the package,
-    // do some private field access and any casts to make it work.
-    expect((clone['_root'] as any).children[0].children[0]).not.toBe((tree['_root'] as any).children[0].children[0]);
-  });
-
   test("Regression test for mergeSibling setting isShared", () => {
     // This tests make a 3 layer tree (height = 2), so use a small branching factor.
     const maxNodeSize = 4;
