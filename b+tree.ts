@@ -1206,6 +1206,8 @@ class BNode<K,V> {
   // If this is an internal node, _keys[i] is the highest key in children[i].
   keys: K[];
   values: V[];
+  // True if this node might multiple parents (equivalently: could be in multiple b-trees).
+  // This means it must be cloned before being mutated to avoid changing an unrelated tree.
   isShared: true | undefined;
   get isLeaf() { return (this as any).children === undefined; }
   
@@ -1528,6 +1530,10 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   // keys[i] caches the value of children[i].maxKey().
   children: BNode<K,V>[];
 
+  /** 
+   * This does not mark `children` as shared, so it is the responsibility of the caller
+   * to ensure that either children are marked shared, or it are not included in another tree.
+   */
   constructor(children: BNode<K,V>[], keys?: K[]) {
     if (!keys) {
       keys = [];
@@ -1666,17 +1672,25 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     }
   }
 
+  /** 
+   * Inserts `child` at index `i`.
+   * This does not mark `child` as shared, so it is the responsibility of the caller
+   * to ensure that either child is marked shared, or it is not included in another tree.
+   */
   insert(i: index, child: BNode<K,V>) {
     this.children.splice(i, 0, child);
     this.keys.splice(i, 0, child.maxKey());
   }
 
   splitOffRightSide() {
-    const children = this.children;
-    var half = children.length >> 1;
-    for (var i = 0; i < children.length; i++)
-      children[i].isShared = true;
-    return new BNodeInternal<K,V>(children.splice(half), this.keys.splice(half));
+    const half = this.children.length >> 1;
+    const halfChildren = this.children.splice(half);
+    // These children are already have a parent (`this`),
+    // and we are creating a new parent (the returned node),
+    // so mark them as shared.
+    for (var i = 0; i < halfChildren.length; i++)
+      halfChildren[i].isShared = true;
+    return new BNodeInternal<K,V>(halfChildren, this.keys.splice(half));
   }
 
   takeFromRight(rhs: BNode<K,V>) {
@@ -1768,6 +1782,11 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     return false;
   }
 
+  /**
+   * Move children from `rhs` into this.
+   * `rhs` must be part of this tree, and be removed from it after this call
+   * (otherwise isShared for its children could be incorrect).
+   */
   mergeSibling(rhs: BNode<K,V>, maxNodeSize: number) {
     // assert !this.isShared;
     var oldLength = this.keys.length;
@@ -1775,9 +1794,10 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     const rhsChildren = (rhs as any as BNodeInternal<K,V>).children;
     this.children.push.apply(this.children, rhsChildren);
 
-    if (this.isShared) {
-      // Because rhs might continue to be used in another tree since this is shared,
-      // and its contents now have an additional parent, mark them as shared.
+    if (rhs.isShared) {
+      // Because rhs might continue to be used in another tree since it is shared,
+      // this is adding a parent to its children instead of just changing what their parent is.
+      // Thus they need to be marked as shared.
       for (var i = 0; i < rhsChildren.length; i++)
         rhsChildren[i].isShared = true;
     }
