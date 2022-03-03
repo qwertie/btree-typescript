@@ -379,38 +379,94 @@ describe("cloning and sharing tests", () => {
     // This tests make a full 3 layer tree (height = 2), so use a small branching factor.
     const maxNodeSize = 4;
     const tree = new BTree<number, number>(
-    undefined,
-    simpleComparator,
-    maxNodeSize
+      undefined,
+      simpleComparator,
+      maxNodeSize
     );
     // Build a 3 layer complete tree, all values 0.
     for (
-    let index = 0;
-    index < maxNodeSize * maxNodeSize * maxNodeSize;
-    index++
+      let index = 0;
+      index < maxNodeSize * maxNodeSize * maxNodeSize;
+      index++
     ) {
-    tree.set(index, 0);
+      tree.set(index, 0);
     }
     // Leaf nodes don't count, so this is depth 2
     expect(tree.height).toBe(2);
-  
+
     // Edit the tree so it has a node in the second layer with exactly one child (key 0).
     tree.deleteRange(1, maxNodeSize * maxNodeSize, false);
     expect(tree.height).toBe(2);
-  
+
     // Make a clone that should never be mutated.
     const clone = tree.clone();
-  
+
     // Mutate the original tree in such a way that clone gets mutated due to incorrect is shared tracking.
     // Delete everything outside of the internal node with only one child, so its child becomes the new root.
     tree.deleteRange(maxNodeSize, Number.POSITIVE_INFINITY, false);
     expect(tree.height).toBe(0);
-  
+
     // Modify original
     tree.set(0, 1);
-  
+
     // Check that clone is not modified as well:
     expect(clone.get(0)).toBe(0);
+  });
+
+  test("Regression test for greedyClone(true) not copying all nodes", () => {
+    const maxNodeSize = 4;
+    const tree = new BTree<number, number>(
+      undefined,
+      simpleComparator,
+      maxNodeSize
+    );
+    // Build a 3 layer tree.
+    for (
+      let index = 0;
+      index < maxNodeSize * maxNodeSize + 1;
+      index++
+    ) {
+      tree.set(index, 0);
+    }
+    // Leaf nodes don't count, so this is depth 2
+    expect(tree.height).toBe(2);
+    const clone = tree.greedyClone(true);
+
+    // The bug was that `force` was not passed down. This meant that non-shared nodes below the second layer would not be cloned.
+    // Thus we check that the third layer of this tree did get cloned.
+    // Since this depends on private APIs and types,
+    // and this package currently has no way to expose them to tests without exporting them from the package,
+    // do some private field access and any casts to make it work.
+    expect((clone['_root'] as any).children[0].children[0]).not.toBe((tree['_root'] as any).children[0].children[0]);
+  });
+
+  test("Regression test for greedyClone(true) not copying all nodes", () => {
+    // This tests make a 3 layer tree (height = 2), so use a small branching factor.
+    const maxNodeSize = 4;
+    const tree = new BTree<number, number>(
+      undefined,
+      simpleComparator,
+      maxNodeSize
+    );
+    // Build a 3 layer tree.
+    for (
+      let index = 0;
+      index < maxNodeSize * maxNodeSize + 1;
+      index++
+    ) {
+      tree.set(index, 0);
+    }
+    // Leaf nodes don't count, so this is depth 2
+    expect(tree.height).toBe(2);
+
+    const clone = tree.greedyClone(true);
+
+    // The bug was that `force` was not passed down. This meant that non-shared nodes below the second layer would not be cloned.
+    // Thus we check that the third layer of this tree did get cloned.
+    // Since this depends on private APIs and types,
+    // and this package currently has no way to expose them to tests without exporting them from the package,
+    // do some private field access and any casts to make it work.
+    expect((clone['_root'] as any).children[0].children[0]).not.toBe((tree['_root'] as any).children[0].children[0]);
   });
 });
 
