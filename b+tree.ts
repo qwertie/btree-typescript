@@ -1550,7 +1550,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
       return this;
     var nu = new BNodeInternal<K,V>(this.children.slice(0), this.keys.slice(0));
     for (var i = 0; i < nu.children.length; i++)
-      nu.children[i] = nu.children[i].greedyClone();
+      nu.children[i] = nu.children[i].greedyClone(force);
     return nu;
   }
 
@@ -1672,8 +1672,11 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   }
 
   splitOffRightSide() {
-    var half = this.children.length >> 1;
-    return new BNodeInternal<K,V>(this.children.splice(half), this.keys.splice(half));
+    const children = this.children;
+    var half = children.length >> 1;
+    for (var i = 0; i < children.length; i++)
+      children[i].isShared = true;
+    return new BNodeInternal<K,V>(children.splice(half), this.keys.splice(half));
   }
 
   takeFromRight(rhs: BNode<K,V>) {
@@ -1769,7 +1772,16 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     // assert !this.isShared;
     var oldLength = this.keys.length;
     this.keys.push.apply(this.keys, rhs.keys);
-    this.children.push.apply(this.children, (rhs as any as BNodeInternal<K,V>).children);
+    const rhsChildren = (rhs as any as BNodeInternal<K,V>).children;
+    this.children.push.apply(this.children, rhsChildren);
+
+    if (this.isShared) {
+      // Because rhs might continue to be used in another tree since this is shared,
+      // and its contents now have an additional parent, mark them as shared.
+      for (var i = 0; i < rhsChildren.length; i++)
+        rhsChildren[i].isShared = true;
+    }
+
     // If our children are themselves almost empty due to a mass-delete,
     // they may need to be merged too (but only the oldLength-1 and its
     // right sibling should need this).

@@ -1412,7 +1412,7 @@ var BNodeInternal = /** @class */ (function (_super) {
             return this;
         var nu = new BNodeInternal(this.children.slice(0), this.keys.slice(0));
         for (var i = 0; i < nu.children.length; i++)
-            nu.children[i] = nu.children[i].greedyClone();
+            nu.children[i] = nu.children[i].greedyClone(force);
         return nu;
     };
     BNodeInternal.prototype.minKey = function () {
@@ -1522,8 +1522,11 @@ var BNodeInternal = /** @class */ (function (_super) {
         this.keys.splice(i, 0, child.maxKey());
     };
     BNodeInternal.prototype.splitOffRightSide = function () {
-        var half = this.children.length >> 1;
-        return new BNodeInternal(this.children.splice(half), this.keys.splice(half));
+        var children = this.children;
+        var half = children.length >> 1;
+        for (var i = 0; i < children.length; i++)
+            children[i].isShared = true;
+        return new BNodeInternal(children.splice(half), this.keys.splice(half));
     };
     BNodeInternal.prototype.takeFromRight = function (rhs) {
         // Reminder: parent node must update its copy of key for this node
@@ -1614,7 +1617,14 @@ var BNodeInternal = /** @class */ (function (_super) {
         // assert !this.isShared;
         var oldLength = this.keys.length;
         this.keys.push.apply(this.keys, rhs.keys);
-        this.children.push.apply(this.children, rhs.children);
+        var rhsChildren = rhs.children;
+        this.children.push.apply(this.children, rhsChildren);
+        if (this.isShared) {
+            // Because rhs might continue to be used in another tree since this is shared,
+            // and its contents now have an additional parent, mark them as shared.
+            for (var i = 0; i < rhsChildren.length; i++)
+                rhsChildren[i].isShared = true;
+        }
         // If our children are themselves almost empty due to a mass-delete,
         // they may need to be merged too (but only the oldLength-1 and its
         // right sibling should need this).
