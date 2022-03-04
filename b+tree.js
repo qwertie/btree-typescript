@@ -1390,6 +1390,10 @@ var BNode = /** @class */ (function () {
 /** Internal node (non-leaf node) ********************************************/
 var BNodeInternal = /** @class */ (function (_super) {
     __extends(BNodeInternal, _super);
+    /**
+     * This does not mark `children` as shared, so it is the responsibility of the caller
+     * to ensure that either children are marked shared, or it are not included in another tree.
+     */
     function BNodeInternal(children, keys) {
         var _this = this;
         if (!keys) {
@@ -1412,7 +1416,7 @@ var BNodeInternal = /** @class */ (function (_super) {
             return this;
         var nu = new BNodeInternal(this.children.slice(0), this.keys.slice(0));
         for (var i = 0; i < nu.children.length; i++)
-            nu.children[i] = nu.children[i].greedyClone();
+            nu.children[i] = nu.children[i].greedyClone(force);
         return nu;
     };
     BNodeInternal.prototype.minKey = function () {
@@ -1517,11 +1521,21 @@ var BNodeInternal = /** @class */ (function (_super) {
             return newRightSibling;
         }
     };
+    /**
+     * Inserts `child` at index `i`.
+     * This does not mark `child` as shared, so it is the responsibility of the caller
+     * to ensure that either child is marked shared, or it is not included in another tree.
+     */
     BNodeInternal.prototype.insert = function (i, child) {
         this.children.splice(i, 0, child);
         this.keys.splice(i, 0, child.maxKey());
     };
+    /**
+     * Split this node.
+     * Modifies this to remove the second half of the items, returning a separate node containing them.
+     */
     BNodeInternal.prototype.splitOffRightSide = function () {
+        // assert !this.isShared;
         var half = this.children.length >> 1;
         return new BNodeInternal(this.children.splice(half), this.keys.splice(half));
     };
@@ -1610,11 +1624,24 @@ var BNodeInternal = /** @class */ (function (_super) {
         }
         return false;
     };
+    /**
+     * Move children from `rhs` into this.
+     * `rhs` must be part of this tree, and be removed from it after this call
+     * (otherwise isShared for its children could be incorrect).
+     */
     BNodeInternal.prototype.mergeSibling = function (rhs, maxNodeSize) {
         // assert !this.isShared;
         var oldLength = this.keys.length;
         this.keys.push.apply(this.keys, rhs.keys);
-        this.children.push.apply(this.children, rhs.children);
+        var rhsChildren = rhs.children;
+        this.children.push.apply(this.children, rhsChildren);
+        if (rhs.isShared) {
+            // Because rhs might continue to be used in another tree since it is shared,
+            // this is adding a parent to its children instead of just changing what their parent is.
+            // Thus they need to be marked as shared.
+            for (var i = 0; i < rhsChildren.length; i++)
+                rhsChildren[i].isShared = true;
+        }
         // If our children are themselves almost empty due to a mass-delete,
         // they may need to be merged too (but only the oldLength-1 and its
         // right sibling should need this).
