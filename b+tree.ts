@@ -875,8 +875,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   }
 
   /** Performs a greedy clone, immediately duplicating any nodes that are 
-   *  not currently marked as shared, in order to avoid marking any nodes
-   *  as shared.
+   *  not currently marked as shared, in order to avoid marking any 
+   *  additional nodes as shared.
    *  @param force Clone all nodes, even shared ones.
    */
   greedyClone(force?: boolean): BTree<K,V> {
@@ -1206,8 +1206,10 @@ class BNode<K,V> {
   // If this is an internal node, _keys[i] is the highest key in children[i].
   keys: K[];
   values: V[];
-  // True if this node might multiple parents (equivalently: could be in multiple b-trees).
-  // This means it must be cloned before being mutated to avoid changing an unrelated tree.
+  // True if this node might be within multiple `BTree`s (or have multiple parents).
+  // If so, it must be cloned before being mutated to avoid changing an unrelated tree.
+  // This is transitive: if it's true, children are also shared even if `isShared!=true`
+  // in those children. (Certain operations will propagate isShared=true to children.)
   isShared: true | undefined;
   get isLeaf() { return (this as any).children === undefined; }
   
@@ -1532,7 +1534,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
 
   /** 
    * This does not mark `children` as shared, so it is the responsibility of the caller
-   * to ensure that either children are marked shared, or it are not included in another tree.
+   * to ensure children are either marked shared, or aren't included in another tree.
    */
   constructor(children: BNode<K,V>[], keys?: K[]) {
     if (!keys) {
@@ -1793,10 +1795,9 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     const rhsChildren = (rhs as any as BNodeInternal<K,V>).children;
     this.children.push.apply(this.children, rhsChildren);
 
-    if (rhs.isShared) {
-      // Because rhs might continue to be used in another tree since it is shared,
-      // this is adding a parent to its children instead of just changing what their parent is.
-      // Thus they need to be marked as shared.
+    if (rhs.isShared && !this.isShared) {
+      // All children of a shared node are implicitly shared, and since their new
+      // parent is not shared, they must now be explicitly marked as shared.
       for (var i = 0; i < rhsChildren.length; i++)
         rhsChildren[i].isShared = true;
     }

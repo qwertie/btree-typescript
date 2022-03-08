@@ -430,6 +430,10 @@ describe("cloning and sharing tests", () => {
     }
     // Leaf nodes don't count, so this is depth 2
     expect(tree.height).toBe(2);
+
+    // To trigger the bug, mark children of the root node as shared (not just the root)
+    tree.clone().set(1, 1);
+    
     const clone = tree.greedyClone(true);
 
     // The bug was that `force` was not passed down. This meant that non-shared nodes below the second layer would not be cloned.

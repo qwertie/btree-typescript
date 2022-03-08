@@ -779,8 +779,8 @@ var BTree = /** @class */ (function () {
         return result;
     };
     /** Performs a greedy clone, immediately duplicating any nodes that are
-     *  not currently marked as shared, in order to avoid marking any nodes
-     *  as shared.
+     *  not currently marked as shared, in order to avoid marking any
+     *  additional nodes as shared.
      *  @param force Clone all nodes, even shared ones.
      */
     BTree.prototype.greedyClone = function (force) {
@@ -1392,7 +1392,7 @@ var BNodeInternal = /** @class */ (function (_super) {
     __extends(BNodeInternal, _super);
     /**
      * This does not mark `children` as shared, so it is the responsibility of the caller
-     * to ensure that either children are marked shared, or it are not included in another tree.
+     * to ensure children are either marked shared, or aren't included in another tree.
      */
     function BNodeInternal(children, keys) {
         var _this = this;
@@ -1635,10 +1635,9 @@ var BNodeInternal = /** @class */ (function (_super) {
         this.keys.push.apply(this.keys, rhs.keys);
         var rhsChildren = rhs.children;
         this.children.push.apply(this.children, rhsChildren);
-        if (rhs.isShared) {
-            // Because rhs might continue to be used in another tree since it is shared,
-            // this is adding a parent to its children instead of just changing what their parent is.
-            // Thus they need to be marked as shared.
+        if (rhs.isShared && !this.isShared) {
+            // All children of a shared node are implicitly shared, and since their new
+            // parent is not shared, they must now be explicitly marked as shared.
             for (var i = 0; i < rhsChildren.length; i++)
                 rhsChildren[i].isShared = true;
         }

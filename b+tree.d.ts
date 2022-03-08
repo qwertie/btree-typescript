@@ -309,8 +309,8 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      *  This is known as copy-on-write behavior, or "lazy copying". */
     clone(): BTree<K, V>;
     /** Performs a greedy clone, immediately duplicating any nodes that are
-     *  not currently marked as shared, in order to avoid marking any nodes
-     *  as shared.
+     *  not currently marked as shared, in order to avoid marking any
+     *  additional nodes as shared.
      *  @param force Clone all nodes, even shared ones.
      */
     greedyClone(force?: boolean): BTree<K, V>;

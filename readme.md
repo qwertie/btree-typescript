@@ -23,10 +23,10 @@ Features
   constructor argument).
 - Supports O(1) fast cloning with subtree sharing. This works by marking the
   root node as "shared between instances". This makes the tree read-only 
-  with copy-on-edit behavior; both copies of the tree remain mutable.
-  I call this category of data structure "dynamically persistent" because 
-  AFAIK no one else has given it a name; it walks the line between mutating 
-  and [persistent](https://en.wikipedia.org/wiki/Persistent_data_structure).
+  with copy-on-edit behavior; both copies of the tree remain mutable. I call 
+  this category of data structure "dynamically persistent" or "mutably 
+  persistent" because AFAIK no one else has given it a name; it walks the line 
+  between mutating and [persistent](https://en.wikipedia.org/wiki/Persistent_data_structure).
 - Includes persistent methods such as `with` and `without`, which return a
   modified tree without changing the original (in O(log(size)) time).
 - When a node fills up, items are shifted to siblings when possible to 
@@ -374,6 +374,11 @@ Benchmarks (in milliseconds for integer keys/values)
 
 Version history
 ---------------
+
+### v1.6.2 ###
+
+- Bug fixes: two rare situations were discovered in which shared nodes could fail to be marked as shared, and as a result, mutations could affect copies that should have been completely separate.
+- Bug fix: greedyClone(true) did not clone shared nodes recursively.
 
 ### v1.6.0 ###
 
