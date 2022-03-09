@@ -1,5 +1,5 @@
 // B+ tree by David Piepgrass. License: MIT
-import { ISortedMap, ISortedMapF } from './interfaces';
+import { ISortedMap, ISortedMapF, ISortedSet } from './interfaces';
 
 export {
   ISetSource, ISetSink, ISet, ISetF, ISortedSetSource, ISortedSet, ISortedSetF,
@@ -1173,6 +1173,15 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   /** Returns true if the tree appears to be frozen. */
   get isFrozen() {
     return this.hasOwnProperty('editRange');
+  }
+
+  /** A TypeScript helper function that returns `this as ISortedSet<K>` if this
+   *  BTree implements it, which it does if `V extends undefined`. If `V` cannot 
+   *  be `undefined`, it returns `unknown` instead. Or at least, that was the
+   *  intention, but TypeScript is acting weird and may return `ISortedSet<K>` 
+   *  even if `V` can't be `undefined` (discussion: btree-typescript issue #14) */
+  get asSet(): undefined extends V ? ISortedSet<K> : unknown {
+    return this as any;
   }
 
   /** Scans the tree for signs of serious bugs (e.g. this.size doesn't match

@@ -36,7 +36,7 @@ Features
   with all keys in a given node.
 - Includes neat stuff such as `Range` methods for batch operations
 - Throws an exception if you try to use `NaN` as a key, but infinity is allowed.
-- No dependencies. 19.5K minified.
+- No dependencies. 19.8K minified.
 - Includes a lattice of interfaces for TypeScript users (see below)
 - Supports diffing computation between two trees that is highly optimized for the case
   in which a majority of nodes are shared (such as when persistent methods are used).
@@ -145,7 +145,7 @@ t.editRange(t.minKey(), t.maxKey(), true, (k, v) => {
 Interface lattice
 -----------------
 
-BTree includes a lattice of interface types representing subsets of BTree's interface. I would encourage other authors of map/dictionary/tree/hashtable types to utilize these interfaces. These interfaces can be divided along three dimensions:
+BTree includes a [lattice of interface types](https://github.com/qwertie/btree-typescript/blob/master/interfaces.d.ts) representing subsets of BTree's interface. I would encourage other authors of map/dictionary/tree/hashtable types to utilize these interfaces. These interfaces can be divided along three dimensions:
 
 ### 1. Read/write access ###
 
@@ -160,6 +160,8 @@ I have defined several kinds of interfaces along the read/write access dimension
 
 The `Sorted` interfaces extend the non-sorted interfaces with queries that only a sorted collection can perform efficiently, such as `minKey()` and `nextHigherKey(k)`. At minimum, sorted interfaces add methods `minKey`, `maxKey`, `nextHigherKey`, `nextLowerKey`, and `forRange`, plus iterators that return keys/values/pairs in sorted order and accept a `firstKey` parameter to control the starting point of iteration.
 
+**Note:** in sorted-btree ≤ v1.7.x, these interfaces have methods `nextHigherKey(key: K)` and `nextLowerKey(key: K)` which should be `nextHigherKey(key: K|undefined)` and `nextLowerKey(key: K|undefined)`. These signatures are changed in the next version.
+
 ### 3. Set versus map ###
 
 A map is a collection of keys with values, while a set is a collection of keys without values.
@@ -168,7 +170,7 @@ For the most part, each `Set` interface is a subset of the corresponding `Map` i
 
 ### List of interfaces ###
 
-All of these interfaces use `any` as the default type of `K` and `V`.
+All of these [interfaces](https://github.com/qwertie/btree-typescript/blob/master/interfaces.d.ts) use `any` as the default type of `K` and `V`.
 
 - `ISetSource<K>`
 - `ISetSink<K>`
@@ -185,9 +187,9 @@ All of these interfaces use `any` as the default type of `K` and `V`.
 - `ISortedSetF<K>        extends ISetF<K>, ISortedSetSource<K>`
 - `ISortedMapF<K,V>      extends ISortedSetF<K>, IMapF<K,V>, ISortedMapSource<K,V>`
 
-If the lattice were complete there would be 16 interfaces (4*2*2). In fact there are only 14 interfaces because `ISortedMapSink<K,V>` and `ISortedSetSink<K, V>` don't exist, because sorted sinks are indistinguishable from unsorted sinks.
+If the lattice were complete there would be 16 interfaces (`4*2*2`). In fact there are only 14 interfaces because `ISortedMapSink<K,V>` and `ISortedSetSink<K, V>` don't exist, because sorted sinks are indistinguishable from unsorted sinks.
 
-`BTree<K,V>` implements all of these interfaces except `ISetSink<K>`, `ISet<K>`, and `ISortedSet<K>`.
+`BTree<K,V>` implements all of these interfaces except `ISetSink<K>`, `ISet<K>`, and `ISortedSet<K>`. However, `BTree<K,V>` may be _compatible_ with these interfaces even if TypeScript doesn't realize it. Therefore, if `V` includes `undefined`, the `BTree<K,V>.asSet` property is provided to cast the `BTree` to a set type. The `asSet` property returns the same `BTree` as type `ISortedSet<K>` (which is assignable to `ISetSink<K>`, `ISet<K>` and `ISortedSetSource<K>`).
 
 ### ES6 Map/Set compatibility ###
 
