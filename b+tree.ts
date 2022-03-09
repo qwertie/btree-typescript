@@ -1175,15 +1175,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return this.hasOwnProperty('editRange');
   }
 
-  /** A TypeScript helper function that returns `this as ISortedSet<K>` if this
-   *  BTree implements it, which it does if `V extends undefined`. If `V` cannot 
-   *  be `undefined`, it returns `unknown` instead. Or at least, that was the
-   *  intention, but TypeScript is acting weird and may return `ISortedSet<K>` 
-   *  even if `V` can't be `undefined` (discussion: btree-typescript issue #14) */
-  get asSet(): undefined extends V ? ISortedSet<K> : unknown {
-    return this as any;
-  }
-
   /** Scans the tree for signs of serious bugs (e.g. this.size doesn't match
    *  number of elements, internal nodes not caching max element properly...)
    *  Computational complexity: O(number of nodes), i.e. O(size). This method
@@ -1195,12 +1186,21 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   }
 }
 
+/** A TypeScript helper function that simply returns its argument, typed as 
+ *  `ISortedSet<K>` if the BTree implements it, as it does if `V extends undefined`.
+ *  If `V` cannot be `undefined`, it returns `unknown` instead. Or at least, that
+ *  was the intention, but TypeScript is acting weird and may return `ISortedSet<K>` 
+ *  even if `V` can't be `undefined` (discussion: btree-typescript issue #14) */
+export function asSet<K,V>(btree: BTree<K,V>): undefined extends V ? ISortedSet<K> : unknown {
+  return btree as any;
+}
+
 declare const Symbol: any;
 if (Symbol && Symbol.iterator) // iterator is equivalent to entries()
   (BTree as any).prototype[Symbol.iterator] = BTree.prototype.entries;
 (BTree as any).prototype.where = BTree.prototype.filter;
 (BTree as any).prototype.setRange = BTree.prototype.setPairs;
-(BTree as any).prototype.add = BTree.prototype.set;
+(BTree as any).prototype.add = BTree.prototype.set; // for compatibility with ISetSink<K>
 
 function iterator<T>(next: () => IteratorResult<T> = (() => ({ done:true, value:undefined }))): IterableIterator<T> {
   var result: any = { next };
@@ -1208,7 +1208,7 @@ function iterator<T>(next: () => IteratorResult<T> = (() => ({ done:true, value:
     result[Symbol.iterator] = function() { return this; };
   return result;
 }
-  
+
 
 /** Leaf node / base class. **************************************************/
 class BNode<K,V> {

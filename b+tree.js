@@ -15,7 +15,7 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EmptyBTree = exports.simpleComparator = exports.defaultComparator = void 0;
+exports.EmptyBTree = exports.asSet = exports.simpleComparator = exports.defaultComparator = void 0;
 /**
  * Compares DefaultComparables to form a strict partial ordering.
  *
@@ -1074,11 +1074,20 @@ var BTree = /** @class */ (function () {
     return BTree;
 }());
 exports.default = BTree;
+/** A TypeScript helper function that simply returns its argument, typed as
+ *  `ISortedSet<K>` if the BTree implements it, as it does if `V extends undefined`.
+ *  If `V` cannot be `undefined`, it returns `unknown` instead. Or at least, that
+ *  was the intention, but TypeScript is acting weird and may return `ISortedSet<K>`
+ *  even if `V` can't be `undefined` (discussion: btree-typescript issue #14) */
+function asSet(btree) {
+    return btree;
+}
+exports.asSet = asSet;
 if (Symbol && Symbol.iterator) // iterator is equivalent to entries()
     BTree.prototype[Symbol.iterator] = BTree.prototype.entries;
 BTree.prototype.where = BTree.prototype.filter;
 BTree.prototype.setRange = BTree.prototype.setPairs;
-BTree.prototype.add = BTree.prototype.set;
+BTree.prototype.add = BTree.prototype.set; // for compatibility with ISetSink<K>
 function iterator(next) {
     if (next === void 0) { next = (function () { return ({ done: true, value: undefined }); }); }
     var result = { next: next };
