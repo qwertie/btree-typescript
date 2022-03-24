@@ -84,10 +84,12 @@ export interface ISortedSetSource<K=any> extends ISetSource<K>
   minKey(): K | undefined;
   /** Gets the highest key in the collection. */
   maxKey(): K | undefined;
-  /** Returns the next key larger than the specified key (or undefined if there is none) */
-  nextHigherKey(key: K): K|undefined;
-  /** Returns the next key smaller than the specified key (or undefined if there is none) */
-  nextLowerKey(key: K): K|undefined;
+  /** Returns the next key larger than the specified key (or undefined if there is none).
+   *  Also, nextHigherKey(undefined) returns the lowest key. */
+  nextHigherKey(key?: K): K|undefined;
+  /** Returns the next key smaller than the specified key (or undefined if there is none).
+   *  Also, nextLowerKey(undefined) returns the highest key. */
+  nextLowerKey(key?: K): K|undefined;
   /** Calls `callback` on the specified range of keys, in ascending order by key.
    * @param low The first key scanned will be greater than or equal to `low`.
    * @param high Scanning stops when a key larger than this is reached.
@@ -109,10 +111,12 @@ export interface ISortedSetSource<K=any> extends ISetSource<K>
 /** An data source that provides read-only access to items in sorted order. */
 export interface ISortedMapSource<K=any, V=any> extends IMapSource<K, V>, ISortedSetSource<K>
 {
-  /** Returns the next pair whose key is larger than the specified key (or undefined if there is none) */
-  nextHigherPair(key: K): [K,V]|undefined;
-  /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none) */
-  nextLowerPair(key: K): [K,V]|undefined;
+  /** Returns the next pair whose key is larger than the specified key (or undefined 
+   *  if there is none). If key === undefined, this function returns the lowest pair. */
+  nextHigherPair(key?: K): [K,V]|undefined;
+  /** Returns the next pair whose key is smaller than the specified key (or undefined
+   *  if there is none). If key === undefined, this function returns the highest pair. */
+  nextLowerPair(key?: K): [K,V]|undefined;
   /** Builds an array of pairs from the specified range of keys, sorted by key.
    * Each returned pair is also an array: pair[0] is the key, pair[1] is the value.
    * @param low The first key in the array will be greater than or equal to `low`.

@@ -9,10 +9,10 @@ This is a fast B+ tree implementation, largely compatible with the standard Map,
 
 Use `npm install sorted-btree` in a terminal to install it in your npm-based project.
 
-Ukraine
--------
+Ukraine is still under attack
+-----------------------------
 
-I'm writing this on the one-month anniversary of the full-scale invasion of Ukraine.
+I'm writing this on March 24, 2022: the one-month anniversary of the full-scale invasion of Ukraine.
 
 ![Mariupol](http://david.loyc.net/misc/ukraine/Mariupol-from-above.webp)
 
@@ -28,7 +28,7 @@ Without electricity, reports from Mariupol have been limited, but certainly ther
 
 ![Mariupol apartment bombed](http://david.loyc.net/misc/ukraine/Mariupol-explosion.webp)
 
-Here you can see the famous theatre labeled "Children" in huge letters, which Russia bombed anyway.
+Here you can see the famous Donetsk Academic Regional Drama Theatre, labeled "дети" ("children") in huge letters, which held over 1,000 civilians. Russia bombed it anyway.
 
 ![Mariupol theatre](http://david.loyc.net/misc/ukraine/Mariupol-theatre-children.webp)
 ![Mariupol theatre before](http://david.loyc.net/misc/ukraine/Mariupol-theatre-children-before.jpg)
@@ -48,7 +48,7 @@ Or in these other places...
 ![Kharkiv](http://david.loyc.net/misc/ukraine/Kharkiv-firefighters-rubble.webp)
 ![Kharkiv](http://david.loyc.net/misc/ukraine/Kharkiv-two-dead.webp)
 
-What's that? You just wanted a B+ tree? Fair enough. I hope it meets your needs.
+What's that? You just wanted a B+ tree? Well, you're in for a treat.
 
 Features
 --------
@@ -417,6 +417,17 @@ Benchmarks (in milliseconds for integer keys/values)
 
 Version history
 ---------------
+
+### v1.8.0 ###
+
+- Argument of `ISortedSetSource.nextHigherKey(key: K)` changed to `key?: K`
+- Argument of `ISortedSetSource.nextLowerKey(key: K)` changed to `key?: K`
+- Argument of `ISortedMapSource.nextHigherPair(key: K)` changed to `key?: K`
+- Argument of `ISortedMapSource.nextLowerPair(key: K)` changed to `key?: K`
+
+### v1.7.0 ###
+
+- Added `asSet` method, defined as follows: `asSet<K,V>(btree: BTree<K,V>): undefined extends V ? ISortedSet<K> : unknown { return btree as any; }`
 
 ### v1.6.2 ###
 
