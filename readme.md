@@ -9,6 +9,47 @@ This is a fast B+ tree implementation, largely compatible with the standard Map,
 
 Use `npm install sorted-btree` in a terminal to install it in your npm-based project.
 
+Ukraine
+-------
+
+I'm writing this on the one-month anniversary of the full-scale invasion of Ukraine.
+
+![Mariupol](http://david.loyc.net/misc/ukraine/Mariupol-from-above.webp)
+
+This is the city of Mariupol, which Russia badly damaged after cutting off electricity, water and heat on March 1. Pre-war population: 431,859. Do you see any military targets here? No, these are homes that many people still live in. Russia has even made it [dangerous to leave](https://www.bbc.com/news/world-europe-60629851). [An official told NPR:](https://www.dailymail.co.uk/news/article-10580113/All-people-die-Zelensky-slams-NATOs-refusal-establish-no-fly-zone.html) 'When the people organised in evacuation points, they [Russians] started attack on evacuation points. Not all the city. Just evacuation points.'
+
+Officially, [as of 9 days ago, 2,400 civilians had been killed](https://www.nytimes.com/2022/03/15/world/europe/mariupol-death-toll-ukraine.html), but this is said to be an underestimate and the actual number of murders may have been as high as 20,000... nine days ago.
+
+Now, I'm just a lowly programming-language designer with no real following on [Twitter](https://twitter.com/DPiepgrass), so I'm venting here.
+
+I have donated to the Red Cross in support of Ukraine, and also to AVD-Info and Meduza in order to help give Russians access to information (the Russian internet is heavily censored, and independent media are banned). For more donation ideas, [see here](https://forum.effectivealtruism.org/posts/qkhoBJRNQT4EFWos7/what-are-effective-ways-to-help-ukrainians-right-now). Personally, I would like people to ask their government to [offer large rewards to those who desert from the Russian military](https://betonit.blog/2022/03/02/make-desertion-fast/) (plus large rewards for delivering Russian military hardware to Ukraine). The free world is already spending billions of dollars on military aid to Ukraine, but buying out soldiers can be cheaper than killing them. For talented Russian professionals, rewards should be offered for leaving Russia. Bring a brain drain to Putinland.
+
+Without electricity, reports from Mariupol have been limited, but certainly there is enough information to see that the situation is very bad.
+
+![Mariupol apartment bombed](http://david.loyc.net/misc/ukraine/Mariupol-explosion.webp)
+
+Here you can see the famous theatre labeled "Children" in huge letters, which Russia bombed anyway.
+
+![Mariupol theatre](http://david.loyc.net/misc/ukraine/Mariupol-theatre-children.webp)
+![Mariupol theatre before](http://david.loyc.net/misc/ukraine/Mariupol-theatre-children-before.jpg)
+
+For more images and stories from Mariupol, [see here](https://twitter.com/DPiepgrass/status/1506642788074536965).
+
+Meanwhile, I hope you don't live in an apartment in [Borodyanka](https://euromaidanpress.com/2022/03/06/close-the-sky-or-how-russia-bombed-out-my-town-of-borodyanka), near Kyiv...
+
+![Borodyanka 1](http://david.loyc.net/misc/ukraine/central-Borodyanka-after.jpeg)
+![Borodyanka 2](http://david.loyc.net/misc/ukraine/Borodyanka.png)
+
+Or in these other places...
+
+![Before/after](http://david.loyc.net/misc/ukraine/before-after.jpg)
+![Chernihiv](http://david.loyc.net/misc/ukraine/Chernihiv-before-after.webp)
+![Irpin](http://david.loyc.net/misc/ukraine/Irpin-burns.webp)
+![Kharkiv](http://david.loyc.net/misc/ukraine/Kharkiv-firefighters-rubble.webp)
+![Kharkiv](http://david.loyc.net/misc/ukraine/Kharkiv-two-dead.webp)
+
+What's that? You just wanted a B+ tree? Fair enough. I hope it meets your needs.
+
 Features
 --------
 
