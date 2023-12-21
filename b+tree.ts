@@ -1555,14 +1555,14 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     this.children = children;
   }
 
-  clone(): BNode<K,V> {
+  override clone(): BNode<K,V> {
     var children = this.children.slice(0);
     for (var i = 0; i < children.length; i++)
       children[i].isShared = true;
     return new BNodeInternal<K,V>(children, this.keys.slice(0));
   }
 
-  greedyClone(force?: boolean): BNode<K,V> {
+  override greedyClone(force?: boolean): BNode<K,V> {
     if (this.isShared && !force)
       return this;
     var nu = new BNodeInternal<K,V>(this.children.slice(0), this.keys.slice(0));
@@ -1571,24 +1571,24 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     return nu;
   }
 
-  minKey() {
+  override minKey() {
     return this.children[0].minKey();
   }
 
-  minPair(reusedArray: [K,V]): [K,V] | undefined {
+  override minPair(reusedArray: [K,V]): [K,V] | undefined {
     return this.children[0].minPair(reusedArray);
   }
 
-  maxPair(reusedArray: [K,V]): [K,V] | undefined {
+  override maxPair(reusedArray: [K,V]): [K,V] | undefined {
     return this.children[this.children.length - 1].maxPair(reusedArray);
   }
 
-  get(key: K, defaultValue: V|undefined, tree: BTree<K,V>): V|undefined {
+  override get(key: K, defaultValue: V|undefined, tree: BTree<K,V>): V|undefined {
     var i = this.indexOf(key, 0, tree._compare), children = this.children;
     return i < children.length ? children[i].get(key, defaultValue, tree) : undefined;
   }
 
-  getPairOrNextLower(key: K, compare: (a: K, b: K) => number, inclusive: boolean, reusedArray: [K,V]): [K,V]|undefined {
+  override getPairOrNextLower(key: K, compare: (a: K, b: K) => number, inclusive: boolean, reusedArray: [K,V]): [K,V]|undefined {
     var i = this.indexOf(key, 0, compare), children = this.children;
     if (i >= children.length)
       return this.maxPair(reusedArray);
@@ -1599,7 +1599,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     return result;
   }
 
-  getPairOrNextHigher(key: K, compare: (a: K, b: K) => number, inclusive: boolean, reusedArray: [K,V]): [K,V]|undefined {
+  override getPairOrNextHigher(key: K, compare: (a: K, b: K) => number, inclusive: boolean, reusedArray: [K,V]): [K,V]|undefined {
     var i = this.indexOf(key, 0, compare), children = this.children, length = children.length;
     if (i >= length)
       return undefined;
@@ -1610,7 +1610,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     return result;
   }
 
-  checkValid(depth: number, tree: BTree<K,V>, baseIndex: number): number {
+  override checkValid(depth: number, tree: BTree<K,V>, baseIndex: number): number {
     let kL = this.keys.length, cL = this.children.length;
     check(kL === cL, "keys/children length mismatch: depth", depth, "lengths", kL, cL, "baseIndex", baseIndex);
     check(kL > 1 || depth > 0, "internal node has length", kL, "at depth", depth, "baseIndex", baseIndex);
@@ -1636,7 +1636,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   /////////////////////////////////////////////////////////////////////////////
   // Internal Node: set & node splitting //////////////////////////////////////
 
-  set(key: K, value: V, overwrite: boolean|undefined, tree: BTree<K,V>): boolean|BNodeInternal<K,V> {
+  override set(key: K, value: V, overwrite: boolean|undefined, tree: BTree<K,V>): boolean|BNodeInternal<K,V> {
     var c = this.children, max = tree._maxNodeSize, cmp = tree._compare;
     var i = Math.min(this.indexOf(key, 0, cmp), c.length - 1), child = c[i];
 
@@ -1697,13 +1697,13 @@ class BNodeInternal<K,V> extends BNode<K,V> {
    * Split this node.
    * Modifies this to remove the second half of the items, returning a separate node containing them.
    */
-  splitOffRightSide() {
+  override splitOffRightSide() {
     // assert !this.isShared;
     var half = this.children.length >> 1;
     return new BNodeInternal<K,V>(this.children.splice(half), this.keys.splice(half));
   }
 
-  takeFromRight(rhs: BNode<K,V>) {
+  override takeFromRight(rhs: BNode<K,V>) {
     // Reminder: parent node must update its copy of key for this node
     // assert: neither node is shared
     // assert rhs.keys.length > (maxNodeSize/2 && this.keys.length<maxNodeSize)
@@ -1711,7 +1711,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     this.children.push((rhs as BNodeInternal<K,V>).children.shift()!);
   }
 
-  takeFromLeft(lhs: BNode<K,V>) {
+  override takeFromLeft(lhs: BNode<K,V>) {
     // Reminder: parent node must update its copy of key for this node
     // assert: neither node is shared
     // assert rhs.keys.length > (maxNodeSize/2 && this.keys.length<maxNodeSize)
@@ -1725,7 +1725,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   // Note: `count` is the next value of the third argument to `onFound`.
   //       A leaf node's `forRange` function returns a new value for this counter,
   //       unless the operation is to stop early.
-  forRange<R>(low: K, high: K, includeHigh: boolean|undefined, editMode: boolean, tree: BTree<K,V>, count: number,
+  override forRange<R>(low: K, high: K, includeHigh: boolean|undefined, editMode: boolean, tree: BTree<K,V>, count: number,
     onFound?: (k:K, v:V, counter:number) => EditRangeResult<V,R>|void): EditRangeResult<V,R>|number
   {
     var cmp = tree._compare;
@@ -1797,7 +1797,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
    * `rhs` must be part of this tree, and be removed from it after this call
    * (otherwise isShared for its children could be incorrect).
    */
-  mergeSibling(rhs: BNode<K,V>, maxNodeSize: number) {
+  override mergeSibling(rhs: BNode<K,V>, maxNodeSize: number) {
     // assert !this.isShared;
     var oldLength = this.keys.length;
     this.keys.push.apply(this.keys, rhs.keys);
