@@ -39,19 +39,19 @@ export type DefaultComparable = number | string | Date | boolean | null | undefi
 
 /**
  * Compares DefaultComparables to form a strict partial ordering.
- * 
+ *
  * Handles +/-0 and NaN like Map: NaN is equal to NaN, and -0 is equal to +0.
- * 
+ *
  * Arrays are compared using '<' and '>', which may cause unexpected equality:
  * for example [1] will be considered equal to ['1'].
- * 
+ *
  * Two objects with equal valueOf compare the same, but compare unequal to
  * primitives that have the same value.
  */
 export function defaultComparator(a: DefaultComparable, b: DefaultComparable): number {
   // Special case finite numbers first for performance.
   // Note that the trick of using 'a - b' and checking for NaN to detect non-numbers
-  // does not work if the strings are numeric (ex: "5"). This would leading most 
+  // does not work if the strings are numeric (ex: "5"). This would leading most
   // comparison functions using that approach to fail to have transitivity.
   if (Number.isFinite(a as any) && Number.isFinite(b as any)) {
     return a as number - (b as number);
@@ -82,7 +82,7 @@ export function defaultComparator(a: DefaultComparable, b: DefaultComparable): n
     }
   }
 
-  // a and b are now the same type, and will be a number, string or array 
+  // a and b are now the same type, and will be a number, string or array
   // (which we assume holds numbers or strings), or something unsupported.
   if (a! < b!) return -1;
   if (a! > b!) return 1;
@@ -98,15 +98,15 @@ export function defaultComparator(a: DefaultComparable, b: DefaultComparable): n
 };
 
 /**
- * Compares items using the < and > operators. This function is probably slightly 
- * faster than the defaultComparator for Dates and strings, but has not been benchmarked. 
- * Unlike defaultComparator, this comparator doesn't support mixed types correctly, 
+ * Compares items using the < and > operators. This function is probably slightly
+ * faster than the defaultComparator for Dates and strings, but has not been benchmarked.
+ * Unlike defaultComparator, this comparator doesn't support mixed types correctly,
  * i.e. use it with `BTree<string>` or `BTree<number>` but not `BTree<string|number>`.
- * 
+ *
  * NaN is not supported.
- * 
- * Note: null is treated like 0 when compared with numbers or Date, but in general 
- *   null is not ordered with respect to strings (neither greater nor less), and 
+ *
+ * Note: null is treated like 0 when compared with numbers or Date, but in general
+ *   null is not ordered with respect to strings (neither greater nor less), and
  *   undefined is not ordered with other types.
  */
 export function simpleComparator(a: string, b:string): number;
@@ -118,38 +118,38 @@ export function simpleComparator(a: any, b: any): number {
 };
 
 /**
- * A reasonably fast collection of key-value pairs with a powerful API. 
+ * A reasonably fast collection of key-value pairs with a powerful API.
  * Largely compatible with the standard Map. BTree is a B+ tree data structure,
  * so the collection is sorted by key.
- * 
+ *
  * B+ trees tend to use memory more efficiently than hashtables such as the
- * standard Map, especially when the collection contains a large number of 
- * items. However, maintaining the sort order makes them modestly slower: 
+ * standard Map, especially when the collection contains a large number of
+ * items. However, maintaining the sort order makes them modestly slower:
  * O(log size) rather than O(1). This B+ tree implementation supports O(1)
  * fast cloning. It also supports freeze(), which can be used to ensure that
  * a BTree is not changed accidentally.
- * 
+ *
  * Confusingly, the ES6 Map.forEach(c) method calls c(value,key) instead of
  * c(key,value), in contrast to other methods such as set() and entries()
- * which put the key first. I can only assume that the order was reversed on 
+ * which put the key first. I can only assume that the order was reversed on
  * the theory that users would usually want to examine values and ignore keys.
- * BTree's forEach() therefore works the same way, but a second method 
+ * BTree's forEach() therefore works the same way, but a second method
  * `.forEachPair((key,value)=>{...})` is provided which sends you the key
- * first and the value second; this method is slightly faster because it is 
+ * first and the value second; this method is slightly faster because it is
  * the "native" for-each method for this class.
- * 
- * Out of the box, BTree supports keys that are numbers, strings, arrays of 
- * numbers/strings, Date, and objects that have a valueOf() method returning a 
+ *
+ * Out of the box, BTree supports keys that are numbers, strings, arrays of
+ * numbers/strings, Date, and objects that have a valueOf() method returning a
  * number or string. Other data types, such as arrays of Date or custom
- * objects, require a custom comparator, which you must pass as the second 
- * argument to the constructor (the first argument is an optional list of 
+ * objects, require a custom comparator, which you must pass as the second
+ * argument to the constructor (the first argument is an optional list of
  * initial items). Symbols cannot be used as keys because they are unordered
  * (one Symbol is never "greater" or "less" than another).
- * 
+ *
  * @example
  * Given a {name: string, age: number} object, you can create a tree sorted by
  * name and then by age like this:
- *   
+ *
  *     var tree = new BTree(undefined, (a, b) => {
  *       if (a.name > b.name)
  *         return 1; // Return a number >0 when a > b
@@ -158,30 +158,30 @@ export function simpleComparator(a: any, b: any): number {
  *       else // names are equal (or incomparable)
  *         return a.age - b.age; // Return >0 when a.age > b.age
  *     });
- * 
+ *
  *     tree.set({name:"Bill", age:17}, "happy");
  *     tree.set({name:"Fran", age:40}, "busy & stressed");
  *     tree.set({name:"Bill", age:55}, "recently laid off");
  *     tree.forEachPair((k, v) => {
  *       console.log(`Name: ${k.name} Age: ${k.age} Status: ${v}`);
  *     });
- * 
+ *
  * @description
  * The "range" methods (`forEach, forRange, editRange`) will return the number
  * of elements that were scanned. In addition, the callback can return {break:R}
  * to stop early and return R from the outer function.
- * 
+ *
  * - TODO: Test performance of preallocating values array at max size
  * - TODO: Add fast initialization when a sorted array is provided to constructor
- * 
+ *
  * For more documentation see https://github.com/qwertie/btree-typescript
  *
- * Are you a C# developer? You might like the similar data structures I made for C#: 
+ * Are you a C# developer? You might like the similar data structures I made for C#:
  * BDictionary, BList, etc. See http://core.loyc.net/collections/
- * 
+ *
  * @author David Piepgrass
  */
-export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap<K,V>
+export class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap<K,V>
 {
   private _root: BNode<K, V> = EmptyLeaf as BNode<K,V>;
   _size: number = 0;
@@ -192,7 +192,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    * @returns a negative value if a < b, 0 if a === b and a positive value if a > b
    */
   _compare: (a:K, b:K) => number;
-  
+
   /**
    * Initializes an empty B+ tree.
    * @param compare Custom function to compare pairs of elements in the tree.
@@ -207,7 +207,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     if (entries)
       this.setPairs(entries);
   }
-  
+
   /////////////////////////////////////////////////////////////////////////////
   // ES6 Map<K,V> methods /////////////////////////////////////////////////////
 
@@ -226,9 +226,9 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
   forEach(callback: (v:V, k:K, tree:BTree<K,V>) => void, thisArg?: any): number;
 
-  /** Runs a function for each key-value pair, in order from smallest to 
+  /** Runs a function for each key-value pair, in order from smallest to
    *  largest key. For compatibility with ES6 Map, the argument order to
-   *  the callback is backwards: value first, then key. Call forEachPair 
+   *  the callback is backwards: value first, then key. Call forEachPair
    *  instead to receive the key as the first argument.
    * @param thisArg If provided, this parameter is assigned as the `this`
    *        value for each callback.
@@ -240,16 +240,16 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return this.forEachPair((k, v) => callback(v, k, this));
   }
 
-  /** Runs a function for each key-value pair, in order from smallest to 
+  /** Runs a function for each key-value pair, in order from smallest to
    *  largest key. The callback can return {break:R} (where R is any value
    *  except undefined) to stop immediately and return R from forEachPair.
-   * @param onFound A function that is called for each key-value pair. This 
+   * @param onFound A function that is called for each key-value pair. This
    *        function can return {break:R} to stop early with result R.
-   *        The reason that you must return {break:R} instead of simply R 
-   *        itself is for consistency with editRange(), which allows 
+   *        The reason that you must return {break:R} instead of simply R
+   *        itself is for consistency with editRange(), which allows
    *        multiple actions, not just breaking.
-   * @param initialCounter This is the value of the third argument of 
-   *        `onFound` the first time it is called. The counter increases 
+   * @param initialCounter This is the value of the third argument of
+   *        `onFound` the first time it is called. The counter increases
    *        by one each time `onFound` is called. Default value: 0
    * @returns the number of pairs sent to the callback (plus initialCounter,
    *        if you provided one). If the callback returned {break:R} then
@@ -268,13 +268,13 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   get(key: K, defaultValue?: V): V | undefined {
     return this._root.get(key, defaultValue, this);
   }
-  
+
   /**
    * Adds or overwrites a key-value pair in the B+ tree.
    * @param key the key is used to determine the sort order of
    *        data in the tree.
    * @param value data to associate with the key (optional)
-   * @param overwrite Whether to overwrite an existing key-value pair 
+   * @param overwrite Whether to overwrite an existing key-value pair
    *        (default: true). If this is false and there is an existing
    *        key-value pair then this method has no effect.
    * @returns true if a new key-value pair was added.
@@ -283,7 +283,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    * as well as the value. This has no effect unless the new key
    * has data that does not affect its sort order.
    */
-  set(key: K, value: V, overwrite?: boolean): boolean { 
+  set(key: K, value: V, overwrite?: boolean): boolean {
     if (this._root.isShared)
       this._root = this._root.clone();
     var result = this._root.set(key, value, overwrite, this);
@@ -301,7 +301,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    * @param key Key to detect
    * @description Computational complexity: O(log size)
    */
-  has(key: K): boolean { 
+  has(key: K): boolean {
     return this.forRange(key, key, true, undefined) !== 0;
   }
 
@@ -333,10 +333,10 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return nu.setPairs(pairs, overwrite) !== 0 || overwrite ? nu : this;
   }
 
-  /** Returns a copy of the tree with the specified keys present. 
+  /** Returns a copy of the tree with the specified keys present.
    *  @param keys The keys to add. If a key is already present in the tree,
    *         neither the existing key nor the existing value is modified.
-   *  @param returnThisIfUnchanged if true, returns this if all keys already 
+   *  @param returnThisIfUnchanged if true, returns this if all keys already
    *  existed. Performance note: due to the architecture of this class, all
    *  node(s) leading to existing keys are cloned even if the collection is
    *  ultimately unchanged.
@@ -348,7 +348,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return returnThisIfUnchanged && !changed ? this : nu;
   }
 
-  /** Returns a copy of the tree with the specified key removed. 
+  /** Returns a copy of the tree with the specified key removed.
    * @param returnThisIfUnchanged if true, returns this if the key didn't exist.
    *  Performance note: due to the architecture of this class, node(s) leading
    *  to where the key would have been stored are cloned even when the key
@@ -377,7 +377,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return nu;
   }
 
-  /** Returns a copy of the tree with pairs removed whenever the callback 
+  /** Returns a copy of the tree with pairs removed whenever the callback
    *  function returns false. `where()` is a synonym for this method. */
   filter(callback: (k:K,v:V,counter:number) => boolean, returnThisIfUnchanged?: boolean): BTree<K,V> {
     var nu = this.greedyClone();
@@ -400,16 +400,16 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return nu as any as BTree<K,R>;
   }
 
-  /** Performs a reduce operation like the `reduce` method of `Array`. 
-   *  It is used to combine all pairs into a single value, or perform 
+  /** Performs a reduce operation like the `reduce` method of `Array`.
+   *  It is used to combine all pairs into a single value, or perform
    *  conversions. `reduce` is best understood by example. For example,
-   *  `tree.reduce((P, pair) => P * pair[0], 1)` multiplies all keys 
-   *  together. It means "start with P=1, and for each pair multiply 
-   *  it by the key in pair[0]". Another example would be converting 
+   *  `tree.reduce((P, pair) => P * pair[0], 1)` multiplies all keys
+   *  together. It means "start with P=1, and for each pair multiply
+   *  it by the key in pair[0]". Another example would be converting
    *  the tree to a Map (in this example, note that M.set returns M):
-   *  
+   *
    *  var M = tree.reduce((M, pair) => M.set(pair[0],pair[1]), new Map())
-   *  
+   *
    *  **Note**: the same array is sent to the callback on every iteration.
    */
   reduce<R>(callback: (previous:R,currentPair:[K,V],counter:number,tree:BTree<K,V>) => R, initialValue: R): R;
@@ -479,7 +479,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   }
 
   /** Returns an iterator that provides items in reversed order.
-   *  @param highestKey Key at which to start iterating, or undefined to 
+   *  @param highestKey Key at which to start iterating, or undefined to
    *         start at maxKey(). If the specified key doesn't exist then iteration
    *         starts at the next lower key (according to the comparator).
    *  @param reusedArray Optional array used repeatedly to store key-value
@@ -541,9 +541,9 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
   /* Used by entries() and entriesReversed() to prepare to start iterating.
    * It develops a "node queue" for each non-leaf level of the tree.
-   * Levels are numbered "bottom-up" so that level 0 is a list of leaf 
+   * Levels are numbered "bottom-up" so that level 0 is a list of leaf
    * nodes from a low-level non-leaf node. The queue at a given level L
-   * consists of nodequeue[L] which is the children of a BNodeInternal, 
+   * consists of nodequeue[L] which is the children of a BNodeInternal,
    * and nodeindex[L], the current index within that child list, such
    * such that nodequeue[L-1] === nodequeue[L][nodeindex[L]].children.
    * (However inside this function the order is reversed.)
@@ -573,8 +573,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   /**
    * Computes the differences between `this` and `other`.
    * For efficiency, the diff is returned via invocations of supplied handlers.
-   * The computation is optimized for the case in which the two trees have large amounts 
-   * of shared data (obtained by calling the `clone` or `with` APIs) and will avoid 
+   * The computation is optimized for the case in which the two trees have large amounts
+   * of shared data (obtained by calling the `clone` or `with` APIs) and will avoid
    * any iteration of shared state.
    * The handlers can cause computation to early exit by returning {break: R}.
    * Neither of the collections should be changed during the comparison process (in your callbacks), as this method assumes they will not be mutated.
@@ -610,14 +610,14 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     //    - If either cursor points to a key/value pair:
     //      - If thisCursor === otherCursor and the values differ, it is a Different.
     //      - If thisCursor > otherCursor and otherCursor is at a key/value pair, it is an OnlyOther.
-    //      - If thisCursor < otherCursor and thisCursor is at a key/value pair, it is an OnlyThis as long as the most recent 
-    //        cursor step was *not* otherCursor advancing from a tie. The extra condition avoids erroneous OnlyOther calls 
+    //      - If thisCursor < otherCursor and thisCursor is at a key/value pair, it is an OnlyThis as long as the most recent
+    //        cursor step was *not* otherCursor advancing from a tie. The extra condition avoids erroneous OnlyOther calls
     //        that would occur due to otherCursor being the "leader".
     //    - Otherwise, if both cursors point to nodes, compare them. If they are equal by reference (shared), skip
     //      both cursors to the next node in the walk.
     // - Once one cursor has finished stepping, any remaining steps (if any) are taken and key/value pairs are logged
     //   as OnlyOther (if otherCursor is stepping) or OnlyThis (if thisCursor is stepping).
-    // This algorithm gives the critical guarantee that all locations (both nodes and key/value pairs) in both trees that 
+    // This algorithm gives the critical guarantee that all locations (both nodes and key/value pairs) in both trees that
     // are identical by value (and possibly by reference) will be visited *at the same time* by the cursors.
     // This removes the possibility of emitting incorrect diffs, as well as allowing for skipping shared nodes.
     const { _compare } = this;
@@ -738,7 +738,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    * @param cursor The cursor to step
    * @param stepToNode If true, the cursor will be advanced to the next node (skipping values)
    * @returns true if the step was completed and false if the step would have caused the cursor to move beyond the end of the tree.
-   */ 
+   */
   private static step<K, V>(cursor: DiffCursor<K, V>, stepToNode?: boolean): boolean {
     const { internalSpine, levelIndices, leaf } = cursor;
     if (stepToNode === true || leaf) {
@@ -825,7 +825,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   // End of helper methods for diffAgainst //////////////////////////////////
   ///////////////////////////////////////////////////////////////////////////
 
-  /** Returns a new iterator for iterating the keys of each pair in ascending order. 
+  /** Returns a new iterator for iterating the keys of each pair in ascending order.
    *  @param firstKey: Minimum key to include in the output. */
   keys(firstKey?: K): IterableIterator<K> {
     var it = this.entries(firstKey, ReusedArray);
@@ -835,8 +835,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       return n;
     });
   }
-  
-  /** Returns a new iterator for iterating the values of each pair in order by key. 
+
+  /** Returns a new iterator for iterating the values of each pair in order by key.
    *  @param firstKey: Minimum key whose associated value is included in the output. */
   values(firstKey?: K): IterableIterator<V> {
     var it = this.entries(firstKey, ReusedArray);
@@ -857,11 +857,11 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
   /** Gets the lowest key in the tree. Complexity: O(log size) */
   minKey(): K | undefined { return this._root.minKey(); }
-  
+
   /** Gets the highest key in the tree. Complexity: O(1) */
   maxKey(): K | undefined { return this._root.maxKey(); }
 
-  /** Quickly clones the tree by marking the root node as shared. 
+  /** Quickly clones the tree by marking the root node as shared.
    *  Both copies remain editable. When you modify either copy, any
    *  nodes that are shared (or potentially shared) between the two
    *  copies are cloned so that the changes do not affect other copies.
@@ -874,8 +874,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return result;
   }
 
-  /** Performs a greedy clone, immediately duplicating any nodes that are 
-   *  not currently marked as shared, in order to avoid marking any 
+  /** Performs a greedy clone, immediately duplicating any nodes that are
+   *  not currently marked as shared, in order to avoid marking any
    *  additional nodes as shared.
    *  @param force Clone all nodes, even shared ones.
    */
@@ -897,11 +897,11 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   /** Gets an array of all keys, sorted */
   keysArray() {
     var results: K[] = [];
-    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this, 0, 
+    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this, 0,
       (k,v) => { results.push(k); });
     return results;
   }
-  
+
   /** Gets an array of all values, sorted by key */
   valuesArray() {
     var results: V[] = [];
@@ -915,7 +915,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return this.toArray().toString();
   }
 
-  /** Stores a key-value pair only if the key doesn't already exist in the tree. 
+  /** Stores a key-value pair only if the key doesn't already exist in the tree.
    * @returns true if a new key was added
   */
   setIfNotPresent(key: K, value: V): boolean {
@@ -925,7 +925,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   /** Returns the next pair whose key is larger than the specified key (or undefined if there is none).
    * If key === undefined, this function returns the lowest pair.
    * @param key The key to search for.
-   * @param reusedArray Optional array used repeatedly to store key-value pairs, to 
+   * @param reusedArray Optional array used repeatedly to store key-value pairs, to
    * avoid creating a new array on every iteration.
    */
   nextHigherPair(key: K|undefined, reusedArray?: [K,V]): [K,V]|undefined {
@@ -935,7 +935,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     }
     return this._root.getPairOrNextHigher(key, this._compare, false, reusedArray);
   }
-  
+
   /** Returns the next key larger than the specified key, or undefined if there is none.
    *  Also, nextHigherKey(undefined) returns the lowest key.
    */
@@ -947,7 +947,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   /** Returns the next pair whose key is smaller than the specified key (or undefined if there is none).
    *  If key === undefined, this function returns the highest pair.
    * @param key The key to search for.
-   * @param reusedArray Optional array used repeatedly to store key-value pairs, to 
+   * @param reusedArray Optional array used repeatedly to store key-value pairs, to
    *        avoid creating a new array each time you call this method.
    */
   nextLowerPair(key: K|undefined, reusedArray?: [K,V]): [K,V]|undefined {
@@ -957,7 +957,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     }
     return this._root.getPairOrNextLower(key, this._compare, false, reusedArray);
   }
-  
+
   /** Returns the next key smaller than the specified key, or undefined if there is none.
    *  Also, nextLowerKey(undefined) returns the highest key.
    */
@@ -966,32 +966,32 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return p && p[0];
   }
 
-  /** Returns the key-value pair associated with the supplied key if it exists 
+  /** Returns the key-value pair associated with the supplied key if it exists
    *  or the pair associated with the next lower pair otherwise. If there is no
    *  next lower pair, undefined is returned.
    * @param key The key to search for.
-   * @param reusedArray Optional array used repeatedly to store key-value pairs, to 
+   * @param reusedArray Optional array used repeatedly to store key-value pairs, to
    *        avoid creating a new array each time you call this method.
    * */
   getPairOrNextLower(key: K, reusedArray?: [K,V]): [K,V]|undefined {
     return this._root.getPairOrNextLower(key, this._compare, true, reusedArray || ([] as unknown as [K,V]));
   }
 
-  /** Returns the key-value pair associated with the supplied key if it exists 
+  /** Returns the key-value pair associated with the supplied key if it exists
    *  or the pair associated with the next lower pair otherwise. If there is no
    *  next lower pair, undefined is returned.
    * @param key The key to search for.
-   * @param reusedArray Optional array used repeatedly to store key-value pairs, to 
+   * @param reusedArray Optional array used repeatedly to store key-value pairs, to
    *        avoid creating a new array each time you call this method.
    * */
   getPairOrNextHigher(key: K, reusedArray?: [K,V]): [K,V]|undefined {
     return this._root.getPairOrNextHigher(key, this._compare, true, reusedArray || ([] as unknown as [K,V]));
   }
 
-  /** Edits the value associated with a key in the tree, if it already exists. 
+  /** Edits the value associated with a key in the tree, if it already exists.
    * @returns true if the key existed, false if not.
   */
-  changeIfPresent(key: K, value: V): boolean { 
+  changeIfPresent(key: K, value: V): boolean {
     return this.editRange(key, key, true, (k,v) => ({value})) !== 0;
   }
 
@@ -1003,7 +1003,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    * @param includeHigh If the `high` key is present, its pair will be included
    *        in the output if and only if this parameter is true. Note: if the
    *        `low` key is present, it is always included in the output.
-   * @param maxLength Length limit. getRange will stop scanning the tree when 
+   * @param maxLength Length limit. getRange will stop scanning the tree when
    *                  the array reaches this size.
    * @description Computational complexity: O(result.length + log size)
    */
@@ -1017,8 +1017,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   }
 
   /** Adds all pairs from a list of key-value pairs.
-   * @param pairs Pairs to add to this tree. If there are duplicate keys, 
-   *        later pairs currently overwrite earlier ones (e.g. [[0,1],[0,7]] 
+   * @param pairs Pairs to add to this tree. If there are duplicate keys,
+   *        later pairs currently overwrite earlier ones (e.g. [[0,1],[0,7]]
    *        associates 0 with 7.)
    * @param overwrite Whether to overwrite pairs that already exist (if false,
    *        pairs[i] is ignored when the key pairs[i][0] already exists.)
@@ -1038,17 +1038,17 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   /**
    * Scans the specified range of keys, in ascending order by key.
    * Note: the callback `onFound` must not insert or remove items in the
-   * collection. Doing so may cause incorrect data to be sent to the 
+   * collection. Doing so may cause incorrect data to be sent to the
    * callback afterward.
    * @param low The first key scanned will be greater than or equal to `low`.
    * @param high Scanning stops when a key larger than this is reached.
    * @param includeHigh If the `high` key is present, `onFound` is called for
    *        that final pair if and only if this parameter is true.
-   * @param onFound A function that is called for each key-value pair. This 
+   * @param onFound A function that is called for each key-value pair. This
    *        function can return {break:R} to stop early with result R.
-   * @param initialCounter Initial third argument of onFound. This value 
+   * @param initialCounter Initial third argument of onFound. This value
    *        increases by one each time `onFound` is called. Default: 0
-   * @returns The number of values found, or R if the callback returned 
+   * @returns The number of values found, or R if the callback returned
    *        `{break:R}` to stop early.
    * @description Computational complexity: O(number of items scanned + log size)
    */
@@ -1059,31 +1059,31 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
   /**
    * Scans and potentially modifies values for a subsequence of keys.
-   * Note: the callback `onFound` should ideally be a pure function. 
-   *   Specfically, it must not insert items, call clone(), or change 
+   * Note: the callback `onFound` should ideally be a pure function.
+   *   Specfically, it must not insert items, call clone(), or change
    *   the collection except via return value; out-of-band editing may
    *   cause an exception or may cause incorrect data to be sent to
-   *   the callback (duplicate or missed items). It must not cause a 
+   *   the callback (duplicate or missed items). It must not cause a
    *   clone() of the collection, otherwise the clone could be modified
    *   by changes requested by the callback.
    * @param low The first key scanned will be greater than or equal to `low`.
    * @param high Scanning stops when a key larger than this is reached.
    * @param includeHigh If the `high` key is present, `onFound` is called for
    *        that final pair if and only if this parameter is true.
-   * @param onFound A function that is called for each key-value pair. This 
-   *        function can return `{value:v}` to change the value associated 
+   * @param onFound A function that is called for each key-value pair. This
+   *        function can return `{value:v}` to change the value associated
    *        with the current key, `{delete:true}` to delete the current pair,
    *        `{break:R}` to stop early with result R, or it can return nothing
    *        (undefined or {}) to cause no effect and continue iterating.
    *        `{break:R}` can be combined with one of the other two commands.
-   *        The third argument `counter` is the number of items iterated 
+   *        The third argument `counter` is the number of items iterated
    *        previously; it equals 0 when `onFound` is called the first time.
-   * @returns The number of values scanned, or R if the callback returned 
+   * @returns The number of values scanned, or R if the callback returned
    *        `{break:R}` to stop early.
-   * @description 
+   * @description
    *   Computational complexity: O(number of items scanned + log size)
    *   Note: if the tree has been cloned with clone(), any shared
-   *   nodes are copied before `onFound` is called. This takes O(n) time 
+   *   nodes are copied before `onFound` is called. This takes O(n) time
    *   where n is proportional to the amount of shared data scanned.
    */
   editRange<R=V>(low: K, high: K, includeHigh: boolean, onFound: (k:K,v:V,counter:number) => EditRangeResult<V,R>|void, initialCounter?: number): R|number {
@@ -1132,7 +1132,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return r;
   }
 
-  /** Gets the height of the tree: the number of internal nodes between the 
+  /** Gets the height of the tree: the number of internal nodes between the
    *  BTree object and its leaf nodes (zero if there are no internal nodes). */
   get height(): number {
     let node: BNode<K, V> | undefined = this._root;
@@ -1146,13 +1146,13 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
   /** Makes the object read-only to ensure it is not accidentally modified.
    *  Freezing does not have to be permanent; unfreeze() reverses the effect.
-   *  This is accomplished by replacing mutator functions with a function 
-   *  that throws an Error. Compared to using a property (e.g. this.isFrozen) 
+   *  This is accomplished by replacing mutator functions with a function
+   *  that throws an Error. Compared to using a property (e.g. this.isFrozen)
    *  this implementation gives better performance in non-frozen BTrees.
    */
   freeze() {
     var t = this as any;
-    // Note: all other mutators ultimately call set() or editRange() 
+    // Note: all other mutators ultimately call set() or editRange()
     //       so we don't need to override those others.
     t.clear = t.set = t.editRange = function() {
       throw new Error("Attempted to modify a frozen BTree");
@@ -1186,10 +1186,10 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   }
 }
 
-/** A TypeScript helper function that simply returns its argument, typed as 
+/** A TypeScript helper function that simply returns its argument, typed as
  *  `ISortedSet<K>` if the BTree implements it, as it does if `V extends undefined`.
  *  If `V` cannot be `undefined`, it returns `unknown` instead. Or at least, that
- *  was the intention, but TypeScript is acting weird and may return `ISortedSet<K>` 
+ *  was the intention, but TypeScript is acting weird and may return `ISortedSet<K>`
  *  even if `V` can't be `undefined` (discussion: btree-typescript issue #14) */
 export function asSet<K,V>(btree: BTree<K,V>): undefined extends V ? ISortedSet<K> : unknown {
   return btree as any;
@@ -1221,7 +1221,7 @@ class BNode<K,V> {
   // in those children. (Certain operations will propagate isShared=true to children.)
   isShared: true | undefined;
   get isLeaf() { return (this as any).children === undefined; }
-  
+
   constructor(keys: K[] = [], values?: V[]) {
     this.keys = keys;
     this.values = values || undefVals as any[];
@@ -1371,7 +1371,7 @@ class BNode<K,V> {
     check(this.values === undefVals ? kL <= vL : kL === vL,
       "keys/values length mismatch: depth", depth, "with lengths", kL, vL, "and baseIndex", baseIndex);
     // Note: we don't check for "node too small" because sometimes a node
-    // can legitimately have size 1. This occurs if there is a batch 
+    // can legitimately have size 1. This occurs if there is a batch
     // deletion, leaving a node of size 1, and the siblings are full so
     // it can't be merged with adjacent nodes. However, the parent will
     // verify that the average node size is at least half of the maximum.
@@ -1382,13 +1382,13 @@ class BNode<K,V> {
   /////////////////////////////////////////////////////////////////////////////
   // Leaf Node: set & node splitting //////////////////////////////////////////
 
-  set(key: K, value: V, overwrite: boolean|undefined, tree: BTree<K,V>): boolean|BNode<K,V> { 
+  set(key: K, value: V, overwrite: boolean|undefined, tree: BTree<K,V>): boolean|BNode<K,V> {
     var i = this.indexOf(key, -1, tree._compare);
     if (i < 0) {
       // key does not exist yet
       i = ~i;
       tree._size++;
-      
+
       if (this.keys.length < tree._maxNodeSize) {
         return this.insertInLeaf(i, key, value, tree);
       } else {
@@ -1434,7 +1434,7 @@ class BNode<K,V> {
     this.values.splice(i, 0, value);
     return true;
   }
-  
+
   takeFromRight(rhs: BNode<K,V>) {
     // Reminder: parent node must update its copy of key for this node
     // assert: neither node is shared
@@ -1536,12 +1536,12 @@ class BNode<K,V> {
 
 /** Internal node (non-leaf node) ********************************************/
 class BNodeInternal<K,V> extends BNode<K,V> {
-  // Note: conventionally B+ trees have one fewer key than the number of 
+  // Note: conventionally B+ trees have one fewer key than the number of
   // children, but I find it easier to keep the array lengths equal: each
   // keys[i] caches the value of children[i].maxKey().
   children: BNode<K,V>[];
 
-  /** 
+  /**
    * This does not mark `children` as shared, so it is the responsibility of the caller
    * to ensure children are either marked shared, or aren't included in another tree.
    */
@@ -1639,7 +1639,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   set(key: K, value: V, overwrite: boolean|undefined, tree: BTree<K,V>): boolean|BNodeInternal<K,V> {
     var c = this.children, max = tree._maxNodeSize, cmp = tree._compare;
     var i = Math.min(this.indexOf(key, 0, cmp), c.length - 1), child = c[i];
-    
+
     if (child.isShared)
       c[i] = child = child.clone();
     if (child.keys.length >= max) {
@@ -1683,7 +1683,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     }
   }
 
-  /** 
+  /**
    * Inserts `child` at index `i`.
    * This does not mark `child` as shared, so it is the responsibility of the caller
    * to ensure that either child is marked shared, or it is not included in another tree.
@@ -1722,7 +1722,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
   /////////////////////////////////////////////////////////////////////////////
   // Internal Node: scanning & deletions //////////////////////////////////////
 
-  // Note: `count` is the next value of the third argument to `onFound`. 
+  // Note: `count` is the next value of the third argument to `onFound`.
   //       A leaf node's `forRange` function returns a new value for this counter,
   //       unless the operation is to stop early.
   forRange<R>(low: K, high: K, includeHigh: boolean|undefined, editMode: boolean, tree: BTree<K,V>, count: number,
@@ -1820,13 +1820,13 @@ class BNodeInternal<K,V> extends BNode<K,V> {
 
 /**
  * A walkable pointer into a BTree for computing efficient diffs between trees with shared data.
- * - A cursor points to either a key/value pair (KVP) or a node (which can be either a leaf or an internal node). 
+ * - A cursor points to either a key/value pair (KVP) or a node (which can be either a leaf or an internal node).
  *    As a consequence, a cursor cannot be created for an empty tree.
- * - A cursor can be walked forwards using `step`. A cursor can be compared to another cursor to 
+ * - A cursor can be walked forwards using `step`. A cursor can be compared to another cursor to
  *    determine which is ahead in advancement.
- * - A cursor is valid only for the tree it was created from, and only until the first edit made to 
+ * - A cursor is valid only for the tree it was created from, and only until the first edit made to
  *    that tree since the cursor's creation.
- * - A cursor contains a key for the current location, which is the maxKey when the cursor points to a node 
+ * - A cursor contains a key for the current location, which is the maxKey when the cursor points to a node
  *    and a key corresponding to a value when pointing to a leaf.
  * - Leaf is only populated if the cursor points to a KVP. If this is the case, levelIndices.length === internalSpine.length + 1
  *    and levelIndices[levelIndices.length - 1] is the index of the value.
@@ -1848,7 +1848,7 @@ var undefVals: any[] = [];
 
 const Delete = {delete: true}, DeleteRange = () => Delete;
 const Break = {break: true};
-const EmptyLeaf = (function() { 
+const EmptyLeaf = (function() {
   var n = new BNode<any,any>(); n.isShared = true; return n;
 })();
 const EmptyArray: any[] = [];

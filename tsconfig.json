@@ -1,10 +1,10 @@
-{ // TypeScript configuration file: provides options to the TypeScript 
+{ // TypeScript configuration file: provides options to the TypeScript
   // compiler (tsc) and makes VSCode recognize this folder as a TS project,
   // enabling the VSCode build tasks "tsc: build" and "tsc: watch".
   "compilerOptions": {
-    "target": "es5",            // Compatible with older browsers
-    "module": "commonjs",       // Compatible with both Node.js and browser
-    "moduleResolution": "node", // Tell tsc to look in node_modules for modules
+    "target": "es2020",            // Compatible with older browsers
+    "module": "node16",       // Compatible with both Node.js and browser
+    "moduleResolution": "node16", // Tell tsc to look in node_modules for modules
     "sourceMap": false,         // Whether to create *.js.map files
     "jsx": "react",             // Causes inline XML (JSX code) to be expanded
     "strict": true,             // Strict types, eg. prohibits `var x=0; x=null`

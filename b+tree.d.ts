@@ -1,6 +1,6 @@
 import { ISortedMap, ISortedMapF, ISortedSet } from './interfaces';
 export { ISetSource, ISetSink, ISet, ISetF, ISortedSetSource, ISortedSet, ISortedSetF, IMapSource, IMapSink, IMap, IMapF, ISortedMapSource, ISortedMap, ISortedMapF } from './interfaces';
-export declare type EditRangeResult<V, R = number> = {
+export type EditRangeResult<V, R = number> = {
     value?: V;
     break?: R;
     delete?: boolean;
@@ -8,7 +8,7 @@ export declare type EditRangeResult<V, R = number> = {
 /**
  * Types that BTree supports by default
  */
-export declare type DefaultComparable = number | string | Date | boolean | null | undefined | (number | string)[] | {
+export type DefaultComparable = number | string | Date | boolean | null | undefined | (number | string)[] | {
     valueOf: () => number | string | Date | boolean | null | undefined | (number | string)[];
 };
 /**
@@ -103,7 +103,7 @@ export declare function simpleComparator(a: (number | string)[], b: (number | st
  *
  * @author David Piepgrass
  */
-export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISortedMap<K, V> {
+export declare class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISortedMap<K, V> {
     private _root;
     _size: number;
     _maxNodeSize: number;

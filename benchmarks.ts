@@ -1,9 +1,9 @@
 #!/usr/bin/env ts-node
-import BTree, {IMap} from '.';
+import { BTree, IMap} from '.';
 import SortedArray from './sorted-array';
 // Note: The `bintrees` package also includes a `BinTree` type which turned
 // out to be an unbalanced binary tree. It is faster than `RBTree` for
-// randomized data, but it becomes extremely slow when filled with sorted 
+// randomized data, but it becomes extremely slow when filled with sorted
 // data, so it's not usually a good choice.
 import {RBTree} from 'bintrees';
 const SortedSet = require("collections/sorted-set");         // Bad type definition: missing 'length'
@@ -29,7 +29,7 @@ function makeArray(size: number, randomOrder: boolean, spacing = 10) {
   for (i = 0, n = 0; i < size; i++, n += 1 + randInt(spacing))
     keys[i] = n;
   if (randomOrder)
-    for (i = 0; i < size; i++) 
+    for (i = 0; i < size; i++)
       swap(keys, i, randInt(size));
   return keys;
 }
@@ -153,10 +153,10 @@ for (let size of [9999, 1000, 10000, 100000, 1000000]) {
   //  return set;
   //});
 
-  // Bug fix: can't use measure() for deletions because the 
+  // Bug fix: can't use measure() for deletions because the
   //          trees aren't the same on the second iteration
   var timer = new Timer();
-  
+
   for (i = 0; i < keys.length; i += 2)
     btree.delete(keys[i]);
   log(`${timer.restart()}\tDelete every second item in B+ tree`);
@@ -195,7 +195,7 @@ for (let size of [9999, 1000, 10000, 100000, 1000000]) {
   var log = (size === 9999 ? () => {} : console.log);
   var keys = makeArray(size, true);
   log();
-  
+
   if (size <= 100000) {
     measure(list => `Insert ${list.size} pairs in sorted array`, () => {
       let list = new SortedArray();
@@ -291,7 +291,7 @@ for (let size of [1000, 10000, 100000, 1000000]) {
     for (i = keys.length-1; i >= 0; i -= 2)
       tree.delete(keys[i]);
   });
-  
+
   measure(() => `Delete every second item in Map hashtable`, () => {
     for (i = keys.length-1; i >= 0; i -= 2)
       map.delete(keys[i]);
@@ -343,7 +343,7 @@ console.log("### Delta between B+ trees");
       const tree = new BTree();
       for (let k of keys.slice(0, size))
         tree.set(k, k * 10);
-      
+
       const otherTree = tree.clone();
       for (let k of keys.slice(size))
         tree.set(k, k * 10);
