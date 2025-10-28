@@ -191,6 +191,35 @@ describe('height calculation', () =>
   });
 });
 
+describe('cached sizes', () =>
+{
+  function buildTestTree(entryCount: number, maxNodeSize: number) {
+    const tree = new BTree<number, number>(undefined, undefined, maxNodeSize);
+    for (let i = 0; i < entryCount; i++) {
+      tree.set(i, i);
+    }
+    return tree;
+  }
+
+  test('checkValid detects root size mismatch', () => {
+    const tree = buildTestTree(64, 8);
+    const root = (tree as any)._root;
+    expect(root.isLeaf).toBe(false);
+    (root as any).size = 0;
+    expect(() => tree.checkValid()).toThrow();
+  });
+
+  test('checkValid detects mismatched child sizes', () => {
+    const tree = buildTestTree(512, 8);
+    const root = (tree as any)._root;
+    expect(root.isLeaf).toBe(false);
+    const internalChild = (root as any).children.find((child: any) => !child.isLeaf);
+    expect(internalChild).toBeDefined();
+    (internalChild as any).size = 0;
+    expect(() => tree.checkValid()).toThrow();
+  });
+});
+
 describe('Simple tests on leaf nodes', () =>
 {
   test('A few insertions (fanout 8)', insert8.bind(null, 8));

@@ -105,7 +105,6 @@ export declare function simpleComparator(a: (number | string)[], b: (number | st
  */
 export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISortedMap<K, V> {
     private _root;
-    _size: number;
     _maxNodeSize: number;
     /**
      * provides a total order over keys (and a strict partial order over the type K)
