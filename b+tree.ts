@@ -865,14 +865,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
     // Fast path: destination within current leaf
     const leaf = cur.leaf;
-    {
-      const i = leaf.indexOf(targetKey, -1, cmp);
-      const destInLeaf = i < 0 ? ~i : (isInclusive ? i : i + 1);
-      if (destInLeaf < leaf.keys.length) {
-        cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, isInclusive, other);
-        cur.leafIndex = destInLeaf;
-        return false;
-      }
+    const i = leaf.indexOf(targetKey, -1, cmp);
+    const destInLeaf = i < 0 ? ~i : (isInclusive ? i : i + 1);
+    if (destInLeaf < leaf.keys.length) {
+      cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, isInclusive, other);
+      cur.leafIndex = destInLeaf;
+      return false;
     }
 
     // Find first ancestor with a viable right step
@@ -900,7 +898,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const startIndex = cur.leafIndex;
     cur.onExitLeaf(leaf, startIndex, isInclusive, cur.leafPayload, other);
     // Clear leaf payload after exit as specified
-    // @ts-ignore
     cur.leafPayload = undefined as any;
 
     if (descentLevel < 0) {
