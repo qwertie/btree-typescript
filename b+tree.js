@@ -496,7 +496,7 @@ var BTree = /** @class */ (function () {
      * Neither tree is modified.
      * @param other The other tree to intersect with this one.
      * @param intersection Called for keys that appear in both trees.
-     * @description Complexity: O(N) where N is the number of intersecting keys.
+     * @description Complexity: O(N + M), but often much faster in practice due to skipping any non-intersecting subtrees.
      */
     BTree.prototype.intersect = function (other, intersection) {
         var cmp = this._compare;
@@ -543,14 +543,13 @@ var BTree = /** @class */ (function () {
         }
     };
     /**
-     * Merges this tree with `other`, reusing subtrees wherever possible.
+     * Efficiently merges this tree with `other`, reusing subtrees wherever possible.
      * Neither input tree is modified.
      * @param other The other tree to merge into this one.
      * @param merge Called for keys that appear in both trees. Return the desired value, or
      *        `undefined` to omit the key from the result.
      * @returns A new BTree that contains the merged key/value pairs.
-     * @description Complexity: O(1) when the ranges do not overlap; otherwise
-     *        O(k · log n) where k is the number of overlapping keys.
+     * @description Complexity: O(N + M), but often much faster in practice due to skipping any non-intersecting subtrees.
      */
     BTree.prototype.merge = function (other, merge) {
         // Fast paths for empty trees
@@ -568,7 +567,10 @@ var BTree = /** @class */ (function () {
         var _a = BTree.decompose(this, other, merge), disjoint = _a.disjoint, tallestHeight = _a.tallestHeight, tallestIndex = _a.tallestIndex;
         throw new Error("Not yet implemented: BTree.merge");
     };
-    /** First pass of merge: decompose into disjoint reusable subtrees and merged leaves. */
+    /**
+     * Decomposes two BTrees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
+     * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
+     */
     BTree.decompose = function (left, right, mergeValues) {
         var cmp = left._compare;
         check(left._compare === right._compare, "merge: trees must share comparator");

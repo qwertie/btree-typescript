@@ -258,21 +258,23 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      * Neither tree is modified.
      * @param other The other tree to intersect with this one.
      * @param intersection Called for keys that appear in both trees.
-     * @description Complexity: O(N) where N is the number of intersecting keys.
+     * @description Complexity: O(N + M), but often much faster in practice due to skipping any non-intersecting subtrees.
      */
     intersect(other: BTree<K, V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void;
     /**
-     * Merges this tree with `other`, reusing subtrees wherever possible.
+     * Efficiently merges this tree with `other`, reusing subtrees wherever possible.
      * Neither input tree is modified.
      * @param other The other tree to merge into this one.
      * @param merge Called for keys that appear in both trees. Return the desired value, or
      *        `undefined` to omit the key from the result.
      * @returns A new BTree that contains the merged key/value pairs.
-     * @description Complexity: O(1) when the ranges do not overlap; otherwise
-     *        O(k · log n) where k is the number of overlapping keys.
+     * @description Complexity: O(N + M), but often much faster in practice due to skipping any non-intersecting subtrees.
      */
     merge(other: BTree<K, V>, merge: (key: K, leftValue: V, rightValue: V) => V | undefined): BTree<K, V>;
-    /** First pass of merge: decompose into disjoint reusable subtrees and merged leaves. */
+    /**
+     * Decomposes two BTrees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
+     * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
+     */
     private static decompose;
     /**
      * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.

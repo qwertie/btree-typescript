@@ -1113,6 +1113,230 @@ function testBTree(maxNodeSize: number)
   });
 }
 
+describe('BTree intersect tests with fanout 32', testIntersect.bind(null, 32));
+describe('BTree intersect tests with fanout 10', testIntersect.bind(null, 10));
+describe('BTree intersect tests with fanout 4',  testIntersect.bind(null, 4));
+
+function testIntersect(maxNodeSize: number) {
+  const compare = (a: number, b: number) => a - b;
+
+  const buildTree = (entries: Array<[number, number]>) =>
+    new BTree<number, number>(entries, compare, maxNodeSize);
+
+  const tuples = (...pairs: Array<[number, number]>) => pairs;
+
+  const collectCalls = (left: BTree<number, number>, right: BTree<number, number>) => {
+    const calls: Array<{ key: number, leftValue: number, rightValue: number }> = [];
+    left.intersect(right, (key, leftValue, rightValue) => {
+      calls.push({ key, leftValue, rightValue });
+    });
+    return calls;
+  };
+
+  test('Intersect two empty trees', () => {
+    const tree1 = buildTree([]);
+    const tree2 = buildTree([]);
+    expect(collectCalls(tree1, tree2)).toEqual([]);
+  });
+
+  test('Intersect empty tree with non-empty tree', () => {
+    const tree1 = buildTree([]);
+    const tree2 = buildTree(tuples([1, 10], [2, 20], [3, 30]));
+    expect(collectCalls(tree1, tree2)).toEqual([]);
+    expect(collectCalls(tree2, tree1)).toEqual([]);
+  });
+
+  test('Intersect with no overlapping keys', () => {
+    const tree1 = buildTree(tuples([1, 10], [3, 30], [5, 50]));
+    const tree2 = buildTree(tuples([2, 20], [4, 40], [6, 60]));
+    expect(collectCalls(tree1, tree2)).toEqual([]);
+  });
+
+  test('Intersect with single overlapping key', () => {
+    const tree1 = buildTree(tuples([1, 10], [2, 20], [3, 30]));
+    const tree2 = buildTree(tuples([0, 100], [2, 200], [4, 400]));
+    expect(collectCalls(tree1, tree2)).toEqual([{ key: 2, leftValue: 20, rightValue: 200 }]);
+  });
+
+  test('Intersect with multiple overlapping keys maintains tree contents', () => {
+    const leftEntries: Array<[number, number]> = [[1, 10], [2, 20], [3, 30], [4, 40], [5, 50]];
+    const rightEntries: Array<[number, number]> = [[0, 100], [2, 200], [4, 400], [6, 600]];
+    const tree1 = buildTree(leftEntries);
+    const tree2 = buildTree(rightEntries);
+    const leftBefore = tree1.toArray();
+    const rightBefore = tree2.toArray();
+    expect(collectCalls(tree1, tree2)).toEqual([
+      { key: 2, leftValue: 20, rightValue: 200 },
+      { key: 4, leftValue: 40, rightValue: 400 },
+    ]);
+    expect(tree1.toArray()).toEqual(leftBefore);
+    expect(tree2.toArray()).toEqual(rightBefore);
+    tree1.checkValid();
+    tree2.checkValid();
+  });
+
+  test('Intersect with contiguous overlap yields sorted keys', () => {
+    const tree1 = buildTree(tuples([1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6]));
+    const tree2 = buildTree(tuples([3, 30], [4, 40], [5, 50], [6, 60], [7, 70]));
+    const calls = collectCalls(tree1, tree2);
+    expect(calls.map(c => c.key)).toEqual([3, 4, 5, 6]);
+    expect(calls.map(c => c.leftValue)).toEqual([3, 4, 5, 6]);
+    expect(calls.map(c => c.rightValue)).toEqual([30, 40, 50, 60]);
+  });
+
+  test('Intersect large overlapping range counts each shared key once', () => {
+    const size = 1000;
+    const overlapStart = 500;
+    const leftEntries = Array.from({ length: size }, (_, i) => [i, i * 3] as [number, number]);
+    const rightEntries = Array.from({ length: size }, (_, i) => {
+      const key = i + overlapStart;
+      return [key, key * 7] as [number, number];
+    });
+    const tree1 = buildTree(leftEntries);
+    const tree2 = buildTree(rightEntries);
+    const calls = collectCalls(tree1, tree2);
+    expect(calls.length).toBe(size - overlapStart);
+    expect(calls[0]).toEqual({
+      key: overlapStart,
+      leftValue: overlapStart * 3,
+      rightValue: overlapStart * 7
+    });
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall.key).toBe(size - 1);
+    expect(lastCall.leftValue).toBe((size - 1) * 3);
+    expect(lastCall.rightValue).toBe((size - 1) * 7);
+  });
+
+  test('Intersect tree with itself visits each key once', () => {
+    const entries = Array.from({ length: 20 }, (_, i) => [i, i * 2] as [number, number]);
+    const tree = buildTree(entries);
+    const calls = collectCalls(tree, tree);
+    expect(calls.length).toBe(entries.length);
+    for (let i = 0; i < entries.length; i++) {
+      const [key, value] = entries[i];
+      expect(calls[i]).toEqual({ key, leftValue: value, rightValue: value });
+    }
+  });
+
+  test('Intersect arguments determine left/right values', () => {
+    const tree1 = buildTree(tuples([1, 100], [2, 200], [4, 400]));
+    const tree2 = buildTree(tuples([2, 20], [3, 30], [4, 40]));
+    const callsLeft = collectCalls(tree1, tree2);
+    const callsRight = collectCalls(tree2, tree1);
+    expect(callsLeft).toEqual([
+      { key: 2, leftValue: 200, rightValue: 20 },
+      { key: 4, leftValue: 400, rightValue: 40 },
+    ]);
+    expect(callsRight).toEqual([
+      { key: 2, leftValue: 20, rightValue: 200 },
+      { key: 4, leftValue: 40, rightValue: 400 },
+    ]);
+  });
+
+  test('Intersect throws for comparator mismatch', () => {
+    const compareA = (a: number, b: number) => a - b;
+    const compareB = (a: number, b: number) => a - b;
+    const tree1 = new BTree<number, number>([[1, 1]], compareA, maxNodeSize);
+    const tree2 = new BTree<number, number>([[1, 1]], compareB, maxNodeSize);
+    expect(() => tree1.intersect(tree2, () => {})).toThrow("Cannot merge BTrees with different comparators.");
+  });
+
+  test('Intersect throws for max node size mismatch', () => {
+    const tree1 = new BTree<number, number>([[1, 1]], compare, maxNodeSize);
+    const tree2 = new BTree<number, number>([[1, 1]], compare, maxNodeSize + 1);
+    expect(() => tree1.intersect(tree2, () => {})).toThrow("Cannot merge BTrees with different max node sizes.");
+  });
+}
+
+describe('BTree intersect fuzz tests', () => {
+  const compare = (a: number, b: number) => a - b;
+  const branchingFactors = [4, 8, 16, 32];
+  const seeds = [0x1234ABCD, 0x9ABCDEFF];
+  const FUZZ_SETTINGS = {
+    scenarioBudget: 2,
+    iterationsPerScenario: 3,
+    maxInsertSize: 200,
+    keyRange: 5_000,
+    valueRange: 1_000,
+    timeoutMs: 8_000
+  } as const;
+
+  test('randomized intersects across branching factors', () => {
+    jest.setTimeout(FUZZ_SETTINGS.timeoutMs);
+
+    const scenarioConfigs: Array<{ seedBase: number, maxNodeSize: number }> = [];
+    for (const seedBase of seeds)
+      for (const maxNodeSize of branchingFactors)
+        scenarioConfigs.push({ seedBase, maxNodeSize });
+
+    const scenariosToRun = Math.min(FUZZ_SETTINGS.scenarioBudget, scenarioConfigs.length);
+    const selectedScenarios = scenarioConfigs.slice(0, scenariosToRun);
+
+    for (const { seedBase, maxNodeSize } of selectedScenarios) {
+      const baseSeed = (seedBase ^ (maxNodeSize * 0x9E3779B1)) >>> 0;
+      const fuzzRand = new MersenneTwister(baseSeed);
+      const nextInt = (limit: number) => limit <= 0 ? 0 : Math.floor(fuzzRand.random() * limit);
+
+      for (let iteration = 0; iteration < FUZZ_SETTINGS.iterationsPerScenario; iteration++) {
+        const treeA = new BTree<number, number>([], compare, maxNodeSize);
+        const treeB = new BTree<number, number>([], compare, maxNodeSize);
+        const mapA = new Map<number, number>();
+        const mapB = new Map<number, number>();
+
+        const sizeA = nextInt(FUZZ_SETTINGS.maxInsertSize);
+        const sizeB = nextInt(FUZZ_SETTINGS.maxInsertSize);
+
+        for (let i = 0; i < sizeA; i++) {
+          const key = nextInt(FUZZ_SETTINGS.keyRange);
+          const value = nextInt(FUZZ_SETTINGS.valueRange);
+          treeA.set(key, value);
+          mapA.set(key, value);
+        }
+
+        for (let i = 0; i < sizeB; i++) {
+          const key = nextInt(FUZZ_SETTINGS.keyRange);
+          const value = nextInt(FUZZ_SETTINGS.valueRange);
+          treeB.set(key, value);
+          mapB.set(key, value);
+        }
+
+        const expected: Array<{ key: number, leftValue: number, rightValue: number }> = [];
+        mapA.forEach((leftValue, key) => {
+          const rightValue = mapB.get(key);
+          if (rightValue !== undefined) {
+            expected.push({ key, leftValue, rightValue });
+          }
+        });
+        expected.sort((a, b) => a.key - b.key);
+
+        const actual: Array<{ key: number, leftValue: number, rightValue: number }> = [];
+        treeA.intersect(treeB, (key, leftValue, rightValue) => {
+          actual.push({ key, leftValue, rightValue });
+        });
+        expect(actual).toEqual(expected);
+
+        const swapped: Array<{ key: number, leftValue: number, rightValue: number }> = [];
+        treeB.intersect(treeA, (key, leftValue, rightValue) => {
+          swapped.push({ key, leftValue, rightValue });
+        });
+        const swapExpected = expected.map(({ key, leftValue, rightValue }) => ({
+          key,
+          leftValue: rightValue,
+          rightValue: leftValue
+        }));
+        expect(swapped).toEqual(swapExpected);
+
+        const sortedA = Array.from(mapA.entries()).sort((a, b) => a[0] - b[0]);
+        const sortedB = Array.from(mapB.entries()).sort((a, b) => a[0] - b[0]);
+        expect(treeA.toArray()).toEqual(sortedA);
+        expect(treeB.toArray()).toEqual(sortedB);
+        treeA.checkValid();
+        treeB.checkValid();
+      }
+    }
+  });
+});
+
 describe('BTree merge tests with fanout 32', testMerge.bind(null, 32));
 describe('BTree merge tests with fanout 10', testMerge.bind(null, 10));
 describe('BTree merge tests with fanout 4',  testMerge.bind(null, 4));
