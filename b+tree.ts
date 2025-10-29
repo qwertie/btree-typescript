@@ -897,8 +897,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     // Exit leaf; we did walk out of it conceptually
     const startIndex = cur.leafIndex;
     cur.onExitLeaf(leaf, startIndex, isInclusive, cur.leafPayload, other);
-    // Clear leaf payload after exit as specified
-    cur.leafPayload = undefined as any;
 
     if (descentLevel < 0) {
       // No descent point; step up all the way; last callback gets Infinity

@@ -748,14 +748,12 @@ var BTree = /** @class */ (function () {
         check(isInclusive && keyPos < 0 || !isInclusive && keyPos <= 0, "moveTo precondition violated");
         // Fast path: destination within current leaf
         var leaf = cur.leaf;
-        {
-            var i = leaf.indexOf(targetKey, -1, cmp);
-            var destInLeaf = i < 0 ? ~i : (isInclusive ? i : i + 1);
-            if (destInLeaf < leaf.keys.length) {
-                cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, isInclusive, other);
-                cur.leafIndex = destInLeaf;
-                return false;
-            }
+        var i = leaf.indexOf(targetKey, -1, cmp);
+        var destInLeaf = i < 0 ? ~i : (isInclusive ? i : i + 1);
+        if (destInLeaf < leaf.keys.length) {
+            cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, isInclusive, other);
+            cur.leafIndex = destInLeaf;
+            return false;
         }
         // Find first ancestor with a viable right step
         var spine = cur.spine;
@@ -778,9 +776,6 @@ var BTree = /** @class */ (function () {
         // Exit leaf; we did walk out of it conceptually
         var startIndex = cur.leafIndex;
         cur.onExitLeaf(leaf, startIndex, isInclusive, cur.leafPayload, other);
-        // Clear leaf payload after exit as specified
-        // @ts-ignore
-        cur.leafPayload = undefined;
         if (descentLevel < 0) {
             // No descent point; step up all the way; last callback gets Infinity
             for (var s = spine.length - 1; s >= 0; --s) {
