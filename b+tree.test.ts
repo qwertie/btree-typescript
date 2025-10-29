@@ -201,22 +201,96 @@ describe('cached sizes', () =>
     return tree;
   }
 
-  test('checkValid detects root size mismatch', () => {
-    const tree = buildTestTree(64, 8);
-    const root = (tree as any)._root;
-    expect(root.isLeaf).toBe(false);
-    (root as any).size = 0;
-    expect(() => tree.checkValid()).toThrow();
-  });
+  function expectSize(tree: BTree<number, number>, size: number) {
+    expect(tree.size).toBe(size);
+    tree.checkValid();
+  }
 
-  test('checkValid detects mismatched child sizes', () => {
-    const tree = buildTestTree(512, 8);
-    const root = (tree as any)._root;
-    expect(root.isLeaf).toBe(false);
-    const internalChild = (root as any).children.find((child: any) => !child.isLeaf);
-    expect(internalChild).toBeDefined();
-    (internalChild as any).size = 0;
-    expect(() => tree.checkValid()).toThrow();
+  [4, 6, 8, 16].forEach(nodeSize => {
+    describe(`fanout ${nodeSize}`, () => {
+      test('checkValid detects root size mismatch', () => {
+        const tree = buildTestTree(nodeSize * 8, nodeSize);
+        const root = (tree as any)._root;
+        expect(root.isLeaf).toBe(false);
+        (root as any).size = 0;
+        expect(() => tree.checkValid()).toThrow();
+      });
+
+      test('checkValid detects mismatched child sizes', () => {
+        const tree = buildTestTree(nodeSize * nodeSize * 4, nodeSize);
+        const root = (tree as any)._root;
+        expect(root.isLeaf).toBe(false);
+        const internalChild = (root as any).children.find((child: any) => !child.isLeaf);
+        expect(internalChild).toBeDefined();
+        (internalChild as any).size = 0;
+        expect(() => tree.checkValid()).toThrow();
+      });
+
+      test('mutations preserve cached sizes', () => {
+        const tree = buildTestTree(nodeSize * 4, nodeSize);
+        const initialSize = tree.size;
+        const expectedKeys = new Set<number>();
+        for (let i = 0; i < initialSize; i++)
+          expectedKeys.add(i);
+        expectSize(tree, expectedKeys.size);
+
+        // Insert sequential items
+        const itemsToAdd = nodeSize * 2;
+        for (let i = 0; i < itemsToAdd; i++) {
+          const key = initialSize + i;
+          tree.set(key, key);
+          expectedKeys.add(key);
+        }
+        expectSize(tree, expectedKeys.size);
+
+        // Delete every third new item
+        let deleted = 0;
+        for (let i = 0; i < itemsToAdd; i += 3) {
+          const key = initialSize + i;
+          if (tree.delete(key)) {
+            deleted++;
+            expectedKeys.delete(key);
+          }
+        }
+        expectSize(tree, expectedKeys.size);
+
+        // Bulk delete a middle range
+        const low = Math.floor(initialSize / 2);
+        const high = low + nodeSize;
+        const rangeDeleted = tree.deleteRange(low, high, true);
+        const toRemove = Array.from(expectedKeys).filter(k => k >= low && k <= high);
+        expect(rangeDeleted).toBe(toRemove.length);
+        toRemove.forEach(k => expectedKeys.delete(k));
+        expectSize(tree, expectedKeys.size);
+
+        // Mix insertions and overwrites
+        const extra = nodeSize * 5;
+        for (let i = 0; i < extra; i++) {
+          const insertKey = -i - 1;
+          tree.set(insertKey, insertKey);
+          expectedKeys.add(insertKey);
+          const overwriteKey = i % (initialSize + 1);
+          tree.set(overwriteKey, 42); // overwrite existing keys
+          expectedKeys.add(overwriteKey);
+        }
+        expectSize(tree, expectedKeys.size);
+
+        // Clone should preserve size and cached metadata
+        const toClone = tree.clone();
+        expectSize(toClone, expectedKeys.size);
+
+        // Edit range deletes some entries, patches others
+        tree.editRange(-extra, extra, false, (k, v, counter) => {
+          if (counter % 11 === 0) {
+            expectedKeys.delete(k);
+            return { delete: true };
+          }
+          if (k % 5 === 0)
+            return { value: v + 1 };
+        });
+        expectSize(tree, expectedKeys.size);
+      });
+    });
   });
 });
 
