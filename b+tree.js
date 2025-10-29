@@ -492,6 +492,379 @@ var BTree = /** @class */ (function () {
         return { nodequeue: nodequeue, nodeindex: nodeindex, leaf: nextnode };
     };
     /**
+     * Intersects this tree with `other`, calling the supplied `intersection` callback for each intersecting key/value pair.
+     * Neither tree is modified.
+     * @param other The other tree to intersect with this one.
+     * @param intersection Called for keys that appear in both trees.
+     * @description Complexity: O(N) where N is the number of intersecting keys.
+     */
+    BTree.prototype.intersect = function (other, intersection) {
+        var cmp = this._compare;
+        // Ensure both trees share the same comparator reference
+        if (cmp !== other._compare)
+            throw new Error("Cannot merge BTrees with different comparators.");
+        if (this._maxNodeSize !== other._maxNodeSize)
+            throw new Error("Cannot merge BTrees with different max node sizes.");
+        if (other.size === 0 || this.size === 0)
+            return;
+        // Cursor payload factory
+        var mkPayload = function (_) { return undefined; };
+        // Callbacks
+        var empty = function () { };
+        // Initialize cursors at minimum keys.
+        var curA = BTree.createCursor(this, mkPayload, empty, empty, empty, empty, empty);
+        var curB = BTree.createCursor(other, mkPayload, empty, empty, empty, empty, empty);
+        // Walk both cursors
+        while (true) {
+            var order = cmp(BTree.getKey(curA), BTree.getKey(curB));
+            var trailing = curA, leading = curB;
+            if (order > 0) {
+                trailing = curB;
+                leading = curA;
+            }
+            var areEqual = order === 0;
+            if (areEqual) {
+                var key = BTree.getKey(leading);
+                var vA = curA.leaf.values[curA.leafIndex];
+                var vB = curB.leaf.values[curB.leafIndex];
+                intersection(key, vA, vB);
+                var outT = BTree.moveTo(trailing, leading, key, false, cmp);
+                var outL = BTree.moveTo(leading, trailing, key, false, cmp);
+                if (outT && outL)
+                    break;
+            }
+            else {
+                var out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, cmp);
+                if (out) {
+                    // We've reached the end of one tree, so intersections are guaranteed to be done.
+                    break;
+                }
+            }
+        }
+    };
+    /**
+     * Merges this tree with `other`, reusing subtrees wherever possible.
+     * Neither input tree is modified.
+     * @param other The other tree to merge into this one.
+     * @param merge Called for keys that appear in both trees. Return the desired value, or
+     *        `undefined` to omit the key from the result.
+     * @returns A new BTree that contains the merged key/value pairs.
+     * @description Complexity: O(1) when the ranges do not overlap; otherwise
+     *        O(k · log n) where k is the number of overlapping keys.
+     */
+    BTree.prototype.merge = function (other, merge) {
+        // Fast paths for empty trees
+        var sizeThis = this._root.size();
+        var sizeOther = other._root.size();
+        if (sizeThis === 0)
+            return other.clone();
+        if (sizeOther === 0)
+            return this.clone();
+        // Ensure both trees share the same comparator reference
+        if (this._compare !== other._compare)
+            throw new Error("Cannot merge BTrees with different comparators.");
+        if (this._maxNodeSize !== other._maxNodeSize)
+            throw new Error("Cannot merge BTrees with different max node sizes.");
+        var _a = BTree.decompose(this, other, merge), disjoint = _a.disjoint, tallestHeight = _a.tallestHeight, tallestIndex = _a.tallestIndex;
+        throw new Error("Not yet implemented: BTree.merge");
+    };
+    /** First pass of merge: decompose into disjoint reusable subtrees and merged leaves. */
+    BTree.decompose = function (left, right, mergeValues) {
+        var cmp = left._compare;
+        check(left._compare === right._compare, "merge: trees must share comparator");
+        check(left._maxNodeSize === right._maxNodeSize, "merge: trees must share max node size");
+        check(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
+        var disjoint = [];
+        var pending = [];
+        var tallestIndex = -1, tallestHeight = -1;
+        var flushPendingEntries = function () {
+            // Flush pending overlapped entries into new leaves
+            if (pending.length > 0) {
+                var max = left._maxNodeSize;
+                var total = pending.length;
+                var remaining = total;
+                var leafCount = Math.ceil(total / max);
+                var offset = 0;
+                while (leafCount > 0) {
+                    var newLeafSize = Math.ceil(remaining / leafCount);
+                    var slice = pending.slice(offset, offset + newLeafSize);
+                    offset += newLeafSize;
+                    remaining -= newLeafSize;
+                    var keys = slice.map(function (p) { return p[0]; });
+                    var vals = slice.map(function (p) { return p[1]; });
+                    var leaf = new BNode(keys, vals);
+                    disjoint.push([0, leaf]);
+                    if (0 > tallestHeight) {
+                        tallestIndex = disjoint.length - 1;
+                        tallestHeight = 0;
+                    }
+                    leafCount--;
+                }
+                pending.length = 0;
+            }
+        };
+        var addSharedNodeToDisjointSet = function (node, height) {
+            flushPendingEntries();
+            node.isShared = true;
+            disjoint.push([height, node]);
+            if (height > tallestHeight) {
+                tallestIndex = disjoint.length - 1;
+                tallestHeight = height;
+            }
+        };
+        // Have to do this as cast to convince TS it's ever assigned
+        var highestDisjoint = undefined;
+        // Cursor payload factory
+        var mkPayload = function (_) { return ({ disqualified: false }); };
+        var pushLeafRange = function (leaf, from, toExclusive) {
+            if (from < toExclusive) {
+                for (var i = from; i < toExclusive; ++i)
+                    pending.push([leaf.keys[i], leaf.values[i]]);
+            }
+        };
+        // Callbacks
+        var onEnterLeaf = function (leaf, payload, destIndex, other) {
+            var otherLeaf = BTree.getLeaf(other);
+            if (BTree.areOverlapping(leaf, otherLeaf, cmp)) {
+                payload.disqualified = true;
+                other.leafPayload.disqualified = true;
+                pushLeafRange(leaf, 0, Math.min(destIndex, leaf.keys.length));
+            }
+            else {
+                check(destIndex === 0, "onEnterLeaf: destIndex must be 0 if not overlapping");
+            }
+        };
+        var onMoveInLeaf = function (leaf, payload, fromIndex, toIndex, isInclusive, _other) {
+            check(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
+            var start = isInclusive ? fromIndex : fromIndex + 1;
+            pushLeafRange(leaf, start, Math.min(toIndex, leaf.keys.length));
+        };
+        var onExitLeaf = function (leaf, startingIndex, isInclusive, payload, _other) {
+            highestDisjoint = undefined;
+            if (!payload.disqualified) {
+                highestDisjoint = { node: leaf, height: 0 };
+            }
+            else {
+                var start = isInclusive ? startingIndex : startingIndex + 1;
+                pushLeafRange(leaf, start, leaf.keys.length);
+            }
+        };
+        var onStepUp = function (parent, height, payload, fromIndex, stepDownIndex, _other) {
+            if (Number.isNaN(stepDownIndex)) {
+                if (!payload.disqualified) {
+                    highestDisjoint = { node: parent, height: height };
+                }
+                else {
+                    for (var i = fromIndex + 1; i < parent.children.length; ++i)
+                        addSharedNodeToDisjointSet(parent.children[i], height - 1);
+                }
+            }
+            else if (stepDownIndex === Infinity) {
+                if (!payload.disqualified) {
+                    check(fromIndex === 0, "onStepUp: Infinity case requires fromIndex==0");
+                    highestDisjoint = { node: parent, height: height };
+                }
+                else {
+                    for (var i = fromIndex + 1; i < parent.children.length; ++i)
+                        addSharedNodeToDisjointSet(parent.children[i], height - 1);
+                }
+            }
+            else {
+                for (var i = fromIndex + 1; i < stepDownIndex; ++i)
+                    addSharedNodeToDisjointSet(parent.children[i], height - 1);
+            }
+        };
+        var onStepDown = function (node, height, payload, stepDownIndex, other) {
+            var otherLeaf = BTree.getLeaf(other);
+            if (BTree.areOverlapping(node, otherLeaf, cmp)) {
+                payload.disqualified = true;
+                // leaf disqualification is handled in onEnterLeaf
+            }
+            for (var i = 0; i < stepDownIndex; ++i)
+                addSharedNodeToDisjointSet(node.children[i], height - 1);
+        };
+        var curA = BTree.createCursor(left, mkPayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+        var curB = BTree.createCursor(right, mkPayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+        // Initialize disqualification w.r.t. opposite leaf.
+        var initDisqualify = function (cur, otherLeaf) {
+            if (BTree.areOverlapping(cur.leaf, otherLeaf, cmp))
+                cur.leafPayload.disqualified = true;
+            for (var i = 0; i < cur.spine.length; ++i) {
+                var entry = cur.spine[i];
+                if (BTree.areOverlapping(entry.node, otherLeaf, cmp))
+                    entry.payload.disqualified = true;
+            }
+        };
+        initDisqualify(curA, BTree.getLeaf(curB));
+        initDisqualify(curB, BTree.getLeaf(curA));
+        // Walk both cursors
+        while (true) {
+            var order = cmp(BTree.getKey(curA), BTree.getKey(curB));
+            var trailing = curA, leading = curB;
+            if (order > 0) {
+                trailing = curB;
+                leading = curA;
+            }
+            var areEqual = order === 0;
+            if (areEqual) {
+                var key = BTree.getKey(leading);
+                var vA = curA.leaf.values[curA.leafIndex];
+                var vB = curB.leaf.values[curB.leafIndex];
+                var merged = mergeValues(key, vA, vB);
+                if (merged !== undefined)
+                    pending.push([key, merged]);
+                var outT = BTree.moveTo(trailing, leading, key, false, cmp);
+                var outL = BTree.moveTo(leading, trailing, key, false, cmp);
+                if (outT && outL)
+                    break;
+            }
+            else {
+                var out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, cmp);
+                if (highestDisjoint !== undefined) {
+                    addSharedNodeToDisjointSet(highestDisjoint.node, highestDisjoint.height);
+                    highestDisjoint = undefined;
+                }
+                if (out) {
+                    var maxKeyLeft = left._root.maxKey();
+                    var maxKeyRight = right._root.maxKey();
+                    var maxKey = cmp(maxKeyLeft, maxKeyRight) >= 0 ? maxKeyLeft : maxKeyRight;
+                    BTree.moveTo(leading, trailing, maxKey, false, cmp);
+                    break;
+                }
+            }
+        }
+        flushPendingEntries();
+        return { disjoint: disjoint, tallestIndex: tallestIndex, tallestHeight: tallestHeight };
+    };
+    /**
+     * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
+     * Returns true if end-of-tree was reached (cursor not structurally mutated).
+     */
+    BTree.moveTo = function (cur, other, targetKey, isInclusive, cmp) {
+        // We should start before the target (or at it if inclusive)
+        var keyPos = cmp(BTree.getKey(cur), targetKey);
+        check(isInclusive && keyPos < 0 || !isInclusive && keyPos <= 0, "moveTo precondition violated");
+        // Fast path: destination within current leaf
+        var leaf = cur.leaf;
+        {
+            var i = leaf.indexOf(targetKey, -1, cmp);
+            var destInLeaf = i < 0 ? ~i : (isInclusive ? i : i + 1);
+            if (destInLeaf < leaf.keys.length) {
+                cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, isInclusive, other);
+                cur.leafIndex = destInLeaf;
+                return false;
+            }
+        }
+        // Find first ancestor with a viable right step
+        var spine = cur.spine;
+        var descentLevel = -1;
+        var descentIndex = -1;
+        for (var s = spine.length - 1; s >= 0; --s) {
+            var parent = spine[s].node;
+            var fromIndex = spine[s].childIndex;
+            var j = parent.indexOf(targetKey, 0, cmp); // insertion index or exact
+            var stepDownIndex = j + (isInclusive ? 0 : (j < parent.keys.length && cmp(parent.keys[j], targetKey) === 0 ? 1 : 0));
+            // Note: when key not found, indexOf with failXor=0 already returns insertion index
+            if (stepDownIndex > fromIndex && stepDownIndex <= parent.keys.length - 1) {
+                descentLevel = s;
+                descentIndex = stepDownIndex;
+                break;
+            }
+        }
+        // Heights for callbacks: height = distance to leaf. Parent-of-leaf height = 1.
+        var heightOf = function (sIndex) { return spine.length - sIndex; };
+        // Exit leaf; we did walk out of it conceptually
+        var startIndex = cur.leafIndex;
+        cur.onExitLeaf(leaf, startIndex, isInclusive, cur.leafPayload, other);
+        // Clear leaf payload after exit as specified
+        // @ts-ignore
+        cur.leafPayload = undefined;
+        if (descentLevel < 0) {
+            // No descent point; step up all the way; last callback gets Infinity
+            for (var s = spine.length - 1; s >= 0; --s) {
+                var entry = spine[s];
+                var sd = s === 0 ? Infinity : NaN;
+                cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, sd, other);
+            }
+            return true;
+        }
+        // Step up through ancestors above the descentLevel
+        for (var s = spine.length - 1; s > descentLevel; --s) {
+            var entry = spine[s];
+            cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, NaN, other);
+        }
+        {
+            var entry = spine[descentLevel];
+            cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex, other);
+            entry.childIndex = descentIndex;
+        }
+        // Descend, invoking onStepDown and creating payloads
+        spine.length = descentLevel + 1;
+        var node = spine[descentLevel].node.children[descentIndex];
+        var height = heightOf(descentLevel) - 1;
+        while (!node.isLeaf) {
+            var ni = node;
+            var j = ni.indexOf(targetKey, 0, cmp);
+            var stepDownIndex = j + (isInclusive ? 0 : (j < ni.keys.length && cmp(ni.keys[j], targetKey) === 0 ? 1 : 0));
+            var payload = cur.mkPayload(ni);
+            spine.push({ node: ni, childIndex: stepDownIndex, payload: payload });
+            cur.onStepDown(ni, height, payload, stepDownIndex, other);
+            node = ni.children[stepDownIndex];
+            height -= 1;
+        }
+        // Enter destination leaf
+        var newLeaf = node;
+        var leafPayload = cur.mkPayload(newLeaf);
+        var idx = newLeaf.indexOf(targetKey, -1, cmp);
+        var destIndex = idx < 0 ? ~idx : (isInclusive ? idx : idx + 1);
+        check(destIndex >= 0 && destIndex < newLeaf.keys.length, "moveTo: destination out of bounds");
+        cur.onEnterLeaf(newLeaf, leafPayload, destIndex, other);
+        cur.leaf = newLeaf;
+        cur.leafPayload = leafPayload;
+        cur.leafIndex = destIndex;
+        return false;
+    };
+    /** Create a cursor at the leftmost key. */
+    BTree.createCursor = function (tree, mkPayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown) {
+        check(tree._root.size() > 0, "createCursor: cannot create a cursor for an empty tree");
+        var spine = [];
+        var n = tree._root;
+        while (!n.isLeaf) {
+            var ni = n;
+            var payload = mkPayload(ni);
+            spine.push({ node: ni, childIndex: 0, payload: payload });
+            n = ni.children[0];
+        }
+        var leaf = n;
+        var leafPayload = mkPayload(leaf);
+        var cur = {
+            tree: tree,
+            leaf: leaf,
+            leafIndex: 0,
+            spine: spine,
+            leafPayload: leafPayload,
+            mkPayload: mkPayload,
+            onEnterLeaf: onEnterLeaf,
+            onMoveInLeaf: onMoveInLeaf,
+            onExitLeaf: onExitLeaf,
+            onStepUp: onStepUp,
+            onStepDown: onStepDown
+        };
+        return cur;
+    };
+    BTree.getKey = function (c) {
+        return c.leaf.keys[c.leafIndex];
+    };
+    BTree.getLeaf = function (c) {
+        return c.leaf;
+    };
+    BTree.areOverlapping = function (a, b, cmp) {
+        var amin = a.minKey(), amax = a.maxKey();
+        var bmin = b.minKey(), bmax = b.maxKey();
+        // Overlap iff !(amax < bmin || bmax < amin) on inclusive ranges.
+        return !(cmp(amax, bmin) < 0 || cmp(bmax, amin) < 0);
+    };
+    /**
      * Computes the differences between `this` and `other`.
      * For efficiency, the diff is returned via invocations of supplied handlers.
      * The computation is optimized for the case in which the two trees have large amounts

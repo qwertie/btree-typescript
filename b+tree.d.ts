@@ -254,6 +254,37 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
     entriesReversed(highestKey?: K, reusedArray?: (K | V)[], skipHighest?: boolean): IterableIterator<[K, V]>;
     private findPath;
     /**
+     * Intersects this tree with `other`, calling the supplied `intersection` callback for each intersecting key/value pair.
+     * Neither tree is modified.
+     * @param other The other tree to intersect with this one.
+     * @param intersection Called for keys that appear in both trees.
+     * @description Complexity: O(N) where N is the number of intersecting keys.
+     */
+    intersect(other: BTree<K, V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void;
+    /**
+     * Merges this tree with `other`, reusing subtrees wherever possible.
+     * Neither input tree is modified.
+     * @param other The other tree to merge into this one.
+     * @param merge Called for keys that appear in both trees. Return the desired value, or
+     *        `undefined` to omit the key from the result.
+     * @returns A new BTree that contains the merged key/value pairs.
+     * @description Complexity: O(1) when the ranges do not overlap; otherwise
+     *        O(k · log n) where k is the number of overlapping keys.
+     */
+    merge(other: BTree<K, V>, merge: (key: K, leftValue: V, rightValue: V) => V | undefined): BTree<K, V>;
+    /** First pass of merge: decompose into disjoint reusable subtrees and merged leaves. */
+    private static decompose;
+    /**
+     * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
+     * Returns true if end-of-tree was reached (cursor not structurally mutated).
+     */
+    private static moveTo;
+    /** Create a cursor at the leftmost key. */
+    private static createCursor;
+    private static getKey;
+    private static getLeaf;
+    private static areOverlapping;
+    /**
      * Computes the differences between `this` and `other`.
      * For efficiency, the diff is returned via invocations of supplied handlers.
      * The computation is optimized for the case in which the two trees have large amounts

@@ -1148,21 +1148,11 @@ function testMerge(maxNodeSize: number) {
     const tree2 = new BTree<number, number>([[1, 10], [2, 20], [3, 30]], compare, maxNodeSize);
     const mergeFunc = (k: number, v1: number, v2: number) => v1 + v2;
 
-    const result = tree1.merge(tree2, mergeFunc);
+    const result1 = tree1.merge(tree2, mergeFunc);
+    const result2 = tree2.merge(tree1, mergeFunc);
 
-    expect(result.size).toBe(3);
-    expect(result.toArray()).toEqual([[1, 10], [2, 20], [3, 30]]);
-  });
-
-  test('Merge non-empty tree with empty tree', () => {
-    const tree1 = new BTree<number, number>([[1, 10], [2, 20], [3, 30]], compare, maxNodeSize);
-    const tree2 = new BTree<number, number>([], compare, maxNodeSize);
-    const mergeFunc = (k: number, v1: number, v2: number) => v1 + v2;
-
-    const result = tree1.merge(tree2, mergeFunc);
-
-    expect(result.size).toBe(3);
-    expect(result.toArray()).toEqual([[1, 10], [2, 20], [3, 30]]);
+    expect(result1.toArray()).toEqual([[1, 10], [2, 20], [3, 30]]);
+    expect(result2.toArray()).toEqual([[1, 10], [2, 20], [3, 30]]);
   });
 
   test('Merge with no overlapping keys', () => {

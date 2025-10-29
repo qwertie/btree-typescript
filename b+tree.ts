@@ -569,7 +569,61 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return {nodequeue, nodeindex, leaf:nextnode};
   }
 
-    /**
+  /**
+   * Intersects this tree with `other`, calling the supplied `intersection` callback for each intersecting key/value pair.
+   * Neither tree is modified.
+   * @param other The other tree to intersect with this one.
+   * @param intersection Called for keys that appear in both trees.
+   * @description Complexity: O(N) where N is the number of intersecting keys.
+   */
+  intersect(other: BTree<K,V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void {
+    const cmp = this._compare;
+    // Ensure both trees share the same comparator reference
+    if (cmp !== other._compare)
+      throw new Error("Cannot merge BTrees with different comparators.");
+    if (this._maxNodeSize !== other._maxNodeSize)
+      throw new Error("Cannot merge BTrees with different max node sizes.");
+
+    if (other.size === 0 || this.size === 0)
+      return;
+
+    // Cursor payload factory
+    const mkPayload = (_: BNode<K,V>): undefined => undefined;
+
+    // Callbacks
+    const empty = () => {};
+
+    // Initialize cursors at minimum keys.
+    const curA = BTree.createCursor<K,V,undefined>(this, mkPayload, empty, empty, empty, empty, empty);
+    const curB = BTree.createCursor<K,V,undefined>(other, mkPayload, empty, empty, empty, empty, empty);
+
+    // Walk both cursors
+    while (true) {
+      const order = cmp(BTree.getKey(curA), BTree.getKey(curB));
+      let trailing = curA, leading = curB;
+      if (order > 0) { trailing = curB; leading = curA; }
+      const areEqual = order === 0;
+
+      if (areEqual) {
+        const key = BTree.getKey(leading);
+        const vA = curA.leaf.values[curA.leafIndex];
+        const vB = curB.leaf.values[curB.leafIndex];
+        intersection(key, vA, vB);
+        const outT = BTree.moveTo(trailing, leading, key, false, cmp);
+        const outL = BTree.moveTo(leading, trailing, key, false, cmp);
+        if (outT && outL)
+          break;
+      } else {
+        const out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, cmp);
+        if (out) {
+          // We've reached the end of one tree, so intersections are guaranteed to be done.
+          break;
+        }
+      }
+    }
+  }
+
+  /**
    * Merges this tree with `other`, reusing subtrees wherever possible.
    * Neither input tree is modified.
    * @param other The other tree to merge into this one.
@@ -595,7 +649,351 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     if (this._maxNodeSize !== other._maxNodeSize)
       throw new Error("Cannot merge BTrees with different max node sizes.");
 
+    const { disjoint, tallestHeight, tallestIndex} = BTree.decompose(this, other, merge);
+
     throw new Error("Not yet implemented: BTree.merge");
+  }
+
+
+  /** First pass of merge: decompose into disjoint reusable subtrees and merged leaves. */
+  private static decompose<K,V>(
+    left: BTree<K,V>,
+    right: BTree<K,V>,
+    mergeValues: (key: K, leftValue: V, rightValue: V) => V | undefined
+  ): DecomposeResult<K,V> {
+    const cmp = left._compare;
+    check(left._compare === right._compare, "merge: trees must share comparator");
+    check(left._maxNodeSize === right._maxNodeSize, "merge: trees must share max node size");
+    check(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
+
+    const disjoint: DisjointEntry<K,V>[] = [];
+    const pending: [K,V][] = [];
+    let tallestIndex = -1, tallestHeight = -1;
+
+    const flushPendingEntries = () => {
+      // Flush pending overlapped entries into new leaves
+      if (pending.length > 0) {
+        const max = left._maxNodeSize;
+        const total = pending.length;
+        let remaining = total;
+        let leafCount = Math.ceil(total / max);
+        let offset = 0;
+        while (leafCount > 0) {
+          const newLeafSize = Math.ceil(remaining / leafCount);
+          const slice = pending.slice(offset, offset + newLeafSize);
+          offset += newLeafSize;
+          remaining -= newLeafSize;
+          const keys = slice.map(p => p[0]);
+          const vals = slice.map(p => p[1]);
+          const leaf = new BNode<K,V>(keys, vals);
+          disjoint.push([0, leaf]);
+          if (0 > tallestHeight) {
+            tallestIndex = disjoint.length - 1;
+            tallestHeight = 0;
+          }
+          leafCount--;
+        }
+        pending.length = 0;
+      }
+    };
+
+    const addSharedNodeToDisjointSet = (node: BNode<K,V>, height: number) => {
+      flushPendingEntries();
+      node.isShared = true;
+      disjoint.push([height, node]);
+      if (height > tallestHeight) {
+        tallestIndex = disjoint.length - 1;
+        tallestHeight = height;
+      }
+    };
+
+    // Have to do this as cast to convince TS it's ever assigned
+    let highestDisjoint: { node: BNode<K,V>, height: number } | undefined = undefined as { node: BNode<K,V>, height: number } | undefined;
+
+    // Cursor payload factory
+    const mkPayload = <TP extends MergeCursorPayload>(_: BNode<K,V>): TP => ({ disqualified: false } as TP);
+
+    const pushLeafRange = (leaf: BNode<K,V>, from: number, toExclusive: number) => {
+      if (from < toExclusive) {
+        for (let i = from; i < toExclusive; ++i)
+          pending.push([leaf.keys[i], leaf.values[i]]);
+      }
+    };
+
+    // Callbacks
+    const onEnterLeaf = <TP extends MergeCursorPayload>(
+      leaf: BNode<K,V>, payload: TP, destIndex: number, other: MergeCursor<K,V,TP>
+    ) => {
+      const otherLeaf = BTree.getLeaf(other);
+      if (BTree.areOverlapping(leaf, otherLeaf, cmp)) {
+        payload.disqualified = true;
+        other.leafPayload.disqualified = true;
+        pushLeafRange(leaf, 0, Math.min(destIndex, leaf.keys.length));
+      } else {
+        check(destIndex === 0, "onEnterLeaf: destIndex must be 0 if not overlapping");
+      }
+    };
+
+    const onMoveInLeaf = <TP extends MergeCursorPayload>(
+      leaf: BNode<K,V>, payload: TP, fromIndex: number, toIndex: number, isInclusive: boolean, _other: MergeCursor<K,V,TP>
+    ) => {
+      check(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
+      const start = isInclusive ? fromIndex : fromIndex + 1;
+      pushLeafRange(leaf, start, Math.min(toIndex, leaf.keys.length));
+    };
+
+    const onExitLeaf = <TP extends MergeCursorPayload>(
+      leaf: BNode<K,V>, startingIndex: number, isInclusive: boolean, payload: TP, _other: MergeCursor<K,V,TP>
+    ) => {
+      highestDisjoint = undefined;
+      if (!payload.disqualified) {
+        highestDisjoint = { node: leaf, height: 0 };
+      } else {
+        const start = isInclusive ? startingIndex : startingIndex + 1;
+        pushLeafRange(leaf, start, leaf.keys.length);
+      }
+    };
+
+    const onStepUp = <TP extends MergeCursorPayload>(
+      parent: BNodeInternal<K,V>, height: number, payload: TP, fromIndex: number, stepDownIndex: number, _other: MergeCursor<K,V,TP>
+    ) => {
+      if (Number.isNaN(stepDownIndex)) {
+        if (!payload.disqualified) {
+          highestDisjoint = { node: parent, height };
+        } else {
+          for (let i = fromIndex + 1; i < parent.children.length; ++i)
+            addSharedNodeToDisjointSet(parent.children[i], height - 1);
+        }
+      } else if (stepDownIndex === Infinity) {
+        if (!payload.disqualified) {
+          check(fromIndex === 0, "onStepUp: Infinity case requires fromIndex==0");
+          highestDisjoint = { node: parent, height };
+        } else {
+          for (let i = fromIndex + 1; i < parent.children.length; ++i)
+            addSharedNodeToDisjointSet(parent.children[i], height - 1);
+        }
+      } else {
+        for (let i = fromIndex + 1; i < stepDownIndex; ++i)
+          addSharedNodeToDisjointSet(parent.children[i], height - 1);
+      }
+    };
+
+    const onStepDown = <TP extends MergeCursorPayload>(
+      node: BNodeInternal<K,V>, height: number, payload: TP, stepDownIndex: number, other: MergeCursor<K,V,TP>
+    ) => {
+      const otherLeaf = BTree.getLeaf(other);
+      if (BTree.areOverlapping(node, otherLeaf, cmp)) {
+        payload.disqualified = true;
+        // leaf disqualification is handled in onEnterLeaf
+      }
+      for (let i = 0; i < stepDownIndex; ++i)
+        addSharedNodeToDisjointSet(node.children[i], height - 1);
+    };
+
+    // Initialize cursors at minimum keys.
+    type Pay = MergeCursorPayload;
+    const curA = BTree.createCursor<K,V,Pay>(left, mkPayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+    const curB = BTree.createCursor<K,V,Pay>(right, mkPayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+
+    // Initialize disqualification w.r.t. opposite leaf.
+    const initDisqualify = (cur: MergeCursor<K,V,Pay>, otherLeaf: BNode<K,V>) => {
+      if (BTree.areOverlapping(cur.leaf, otherLeaf, cmp))
+        cur.leafPayload.disqualified = true;
+      for (let i = 0; i < cur.spine.length; ++i) {
+        const entry = cur.spine[i];
+        if (BTree.areOverlapping(entry.node, otherLeaf, cmp))
+          entry.payload.disqualified = true;
+      }
+    };
+    initDisqualify(curA, BTree.getLeaf(curB));
+    initDisqualify(curB, BTree.getLeaf(curA));
+
+    // Walk both cursors
+    while (true) {
+      const order = cmp(BTree.getKey(curA), BTree.getKey(curB));
+      let trailing = curA, leading = curB;
+      if (order > 0) { trailing = curB; leading = curA; }
+      const areEqual = order === 0;
+
+      if (areEqual) {
+        const key = BTree.getKey(leading);
+        const vA = curA.leaf.values[curA.leafIndex];
+        const vB = curB.leaf.values[curB.leafIndex];
+        const merged = mergeValues(key, vA, vB);
+        if (merged !== undefined) pending.push([key, merged]);
+        const outT = BTree.moveTo(trailing, leading, key, false, cmp);
+        const outL = BTree.moveTo(leading, trailing, key, false, cmp);
+        if (outT && outL)
+          break;
+      } else {
+        const out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, cmp);
+        if (highestDisjoint !== undefined) {
+          addSharedNodeToDisjointSet(highestDisjoint.node, highestDisjoint.height);
+          highestDisjoint = undefined;
+        }
+        if (out) {
+          const maxKeyLeft = left._root.maxKey() as K;
+          const maxKeyRight = right._root.maxKey() as K;
+          const maxKey = cmp(maxKeyLeft, maxKeyRight) >= 0 ? maxKeyLeft : maxKeyRight;
+          BTree.moveTo(leading, trailing, maxKey, false, cmp);
+          break;
+        }
+      }
+    }
+
+    flushPendingEntries();
+    return { disjoint, tallestIndex, tallestHeight };
+  }
+
+  /**
+   * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
+   * Returns true if end-of-tree was reached (cursor not structurally mutated).
+   */
+  private static moveTo<K,V,TP>(
+    cur: MergeCursor<K,V,TP>,
+    other: MergeCursor<K,V,TP>,
+    targetKey: K,
+    isInclusive: boolean,
+    cmp: (a:K,b:K)=>number
+  ): boolean {
+    // We should start before the target (or at it if inclusive)
+    const keyPos = cmp(BTree.getKey(cur), targetKey);
+    check(isInclusive && keyPos < 0 || !isInclusive && keyPos <= 0, "moveTo precondition violated");
+
+    // Fast path: destination within current leaf
+    const leaf = cur.leaf;
+    {
+      const i = leaf.indexOf(targetKey, -1, cmp);
+      const destInLeaf = i < 0 ? ~i : (isInclusive ? i : i + 1);
+      if (destInLeaf < leaf.keys.length) {
+        cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, isInclusive, other);
+        cur.leafIndex = destInLeaf;
+        return false;
+      }
+    }
+
+    // Find first ancestor with a viable right step
+    const spine = cur.spine;
+    let descentLevel = -1;
+    let descentIndex = -1;
+
+    for (let s = spine.length - 1; s >= 0; --s) {
+      const parent = spine[s].node;
+      const fromIndex = spine[s].childIndex;
+      const j = parent.indexOf(targetKey, 0, cmp); // insertion index or exact
+      const stepDownIndex = (j as number) + (isInclusive ? 0 : (j < parent.keys.length && cmp(parent.keys[j], targetKey) === 0 ? 1 : 0));
+      // Note: when key not found, indexOf with failXor=0 already returns insertion index
+      if (stepDownIndex > fromIndex && stepDownIndex <= parent.keys.length - 1) {
+        descentLevel = s;
+        descentIndex = stepDownIndex;
+        break;
+      }
+    }
+
+    // Heights for callbacks: height = distance to leaf. Parent-of-leaf height = 1.
+    const heightOf = (sIndex: number) => spine.length - sIndex;
+
+    // Exit leaf; we did walk out of it conceptually
+    const startIndex = cur.leafIndex;
+    cur.onExitLeaf(leaf, startIndex, isInclusive, cur.leafPayload, other);
+    // Clear leaf payload after exit as specified
+    // @ts-ignore
+    cur.leafPayload = undefined as any;
+
+    if (descentLevel < 0) {
+      // No descent point; step up all the way; last callback gets Infinity
+      for (let s = spine.length - 1; s >= 0; --s) {
+        const entry = spine[s];
+        const sd = s === 0 ? Infinity : NaN;
+        cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, sd, other);
+      }
+      return true;
+    }
+
+    // Step up through ancestors above the descentLevel
+    for (let s = spine.length - 1; s > descentLevel; --s) {
+      const entry = spine[s];
+      cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, NaN, other);
+    }
+    {
+      const entry = spine[descentLevel];
+      cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex, other);
+      entry.childIndex = descentIndex;
+    }
+
+    // Descend, invoking onStepDown and creating payloads
+    spine.length = descentLevel + 1;
+    let node: BNode<K,V> = spine[descentLevel].node.children[descentIndex];
+    let height = heightOf(descentLevel) - 1;
+
+    while (!(node as any).isLeaf) {
+      const ni = node as unknown as BNodeInternal<K,V>;
+      const j = ni.indexOf(targetKey, 0, cmp);
+      const stepDownIndex = (j as number) + (isInclusive ? 0 : (j < ni.keys.length && cmp(ni.keys[j], targetKey) === 0 ? 1 : 0));
+      const payload = cur.mkPayload(ni);
+      spine.push({ node: ni, childIndex: stepDownIndex, payload });
+      cur.onStepDown(ni, height, payload, stepDownIndex, other);
+      node = ni.children[stepDownIndex];
+      height -= 1;
+    }
+
+    // Enter destination leaf
+    const newLeaf = node as BNode<K,V>;
+    const leafPayload = cur.mkPayload(newLeaf);
+    const idx = newLeaf.indexOf(targetKey, -1, cmp);
+    const destIndex = idx < 0 ? ~idx : (isInclusive ? idx : idx + 1);
+    check(destIndex >= 0 && destIndex < newLeaf.keys.length, "moveTo: destination out of bounds");
+
+    cur.onEnterLeaf(newLeaf, leafPayload, destIndex, other);
+    cur.leaf = newLeaf;
+    cur.leafPayload = leafPayload;
+    cur.leafIndex = destIndex;
+    return false;
+  }
+
+    /** Create a cursor at the leftmost key. */
+  private static createCursor<K,V,TP>(
+    tree: BTree<K,V>,
+    mkPayload: (n: BNode<K,V>) => TP,
+    onEnterLeaf: MergeCursor<K,V,TP>["onEnterLeaf"],
+    onMoveInLeaf: MergeCursor<K,V,TP>["onMoveInLeaf"],
+    onExitLeaf: MergeCursor<K,V,TP>["onExitLeaf"],
+    onStepUp: MergeCursor<K,V,TP>["onStepUp"],
+    onStepDown: MergeCursor<K,V,TP>["onStepDown"],
+  ): MergeCursor<K,V,TP> {
+    check(tree._root.size() > 0, "createCursor: cannot create a cursor for an empty tree");
+    const spine: Array<{ node: BNodeInternal<K,V>, childIndex: number, payload: TP }> = [];
+    let n: BNode<K,V> = tree._root;
+    while (!(n as any).isLeaf) {
+      const ni = n as unknown as BNodeInternal<K,V>;
+      const payload = mkPayload(ni);
+      spine.push({ node: ni, childIndex: 0, payload });
+      n = ni.children[0];
+    }
+    const leaf = n as BNode<K,V>;
+    const leafPayload = mkPayload(leaf);
+    const cur: MergeCursor<K,V,TP> = {
+      tree, leaf, leafIndex: 0, spine, leafPayload, mkPayload,
+      onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown
+    };
+    return cur;
+  }
+
+  private static getKey<K,V,TP>(c: MergeCursor<K,V,TP>): K {
+    return c.leaf.keys[c.leafIndex] as K;
+  }
+
+  private static getLeaf<K,V,TP>(c: MergeCursor<K,V,TP>): BNode<K,V> {
+    return c.leaf;
+  }
+
+  private static areOverlapping<K,V>(
+    a: BNode<K,V>, b: BNode<K,V>, cmp: (x:K,y:K)=>number
+  ): boolean {
+    const amin = a.minKey() as K, amax = a.maxKey() as K;
+    const bmin = b.minKey() as K, bmax = b.maxKey() as K;
+    // Overlap iff !(amax < bmin || bmax < amin) on inclusive ranges.
+    return !(cmp(amax, bmin) < 0 || cmp(bmax, amin) < 0);
   }
 
   /**
@@ -1892,6 +2290,26 @@ class BNodeInternal<K,V> extends BNode<K,V> {
  *    and levelIndices[levelIndices.length - 1] is the index of the value.
  */
 type DiffCursor<K,V> = { height: number, internalSpine: BNode<K,V>[][], levelIndices: number[], leaf: BNode<K,V> | undefined, currentKey: K };
+
+type MergeCursorPayload = { disqualified: boolean };
+
+interface MergeCursor<K, V, TPayload> {
+  tree: BTree<K, V>;
+  leaf: BNode<K, V>;
+  leafIndex: number;
+  spine: Array<{ node: BNodeInternal<K, V>, childIndex: number, payload: TPayload }>;
+  leafPayload: TPayload;
+  mkPayload: (n: BNode<K, V>) => TPayload;
+
+  onEnterLeaf: (leaf: BNode<K, V>, payload: TPayload, destIndex: number, other: MergeCursor<K, V, TPayload>) => void;
+  onMoveInLeaf: (leaf: BNode<K, V>, payload: TPayload, fromIndex: number, toIndex: number, isInclusive: boolean, other: MergeCursor<K, V, TPayload>) => void;
+  onExitLeaf: (leaf: BNode<K, V>, startingIndex: number, isInclusive: boolean, payload: TPayload, other: MergeCursor<K, V, TPayload>) => void;
+  onStepUp: (parent: BNodeInternal<K, V>, height: number, payload: TPayload, fromIndex: number, stepDownIndex: number, other: MergeCursor<K, V, TPayload>) => void;
+  onStepDown: (node: BNodeInternal<K, V>, height: number, payload: TPayload, stepDownIndex: number, other: MergeCursor<K, V, TPayload>) => void;
+}
+
+type DisjointEntry<K,V> = [height: number, node: BNode<K,V>];
+type DecomposeResult<K,V> = { disjoint: DisjointEntry<K,V>[], tallestIndex: number, tallestHeight: number };
 
 // Optimization: this array of `undefined`s is used instead of a normal
 // array of values in nodes where `undefined` is the only value.
