@@ -569,6 +569,35 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return {nodequeue, nodeindex, leaf:nextnode};
   }
 
+    /**
+   * Merges this tree with `other`, reusing subtrees wherever possible.
+   * Neither input tree is modified.
+   * @param other The other tree to merge into this one.
+   * @param merge Called for keys that appear in both trees. Return the desired value, or
+   *        `undefined` to omit the key from the result.
+   * @returns A new BTree that contains the merged key/value pairs.
+   * @description Complexity: O(1) when the ranges do not overlap; otherwise
+   *        O(k · log n) where k is the number of overlapping keys.
+   */
+  merge(other: BTree<K,V>, merge: (key: K, leftValue: V, rightValue: V) => V | undefined): BTree<K,V> {
+    // Fast paths for empty trees
+    const sizeThis = this._root.size();
+    const sizeOther = other._root.size();
+
+    if (sizeThis === 0)
+      return other.clone();
+    if (sizeOther === 0)
+      return this.clone();
+
+    // Ensure both trees share the same comparator reference
+    if (this._compare !== other._compare)
+      throw new Error("Cannot merge BTrees with different comparators.");
+    if (this._maxNodeSize !== other._maxNodeSize)
+      throw new Error("Cannot merge BTrees with different max node sizes.");
+
+    throw new Error("Not yet implemented: BTree.merge");
+  }
+
   /**
    * Computes the differences between `this` and `other`.
    * For efficiency, the diff is returned via invocations of supplied handlers.
