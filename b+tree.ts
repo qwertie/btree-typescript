@@ -609,12 +609,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
         const vA = curA.leaf.values[curA.leafIndex];
         const vB = curB.leaf.values[curB.leafIndex];
         intersection(key, vA, vB);
-        const outT = BTree.moveTo(trailing, leading, key, false, cmp);
-        const outL = BTree.moveTo(leading, trailing, key, false, cmp);
+        const outT = BTree.moveTo(trailing, leading, key, false, areEqual, cmp);
+        const outL = BTree.moveTo(leading, trailing, key, false, areEqual, cmp);
         if (outT && outL)
           break;
       } else {
-        const out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, cmp);
+        const out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp);
         if (out) {
           // We've reached the end of one tree, so intersections are guaranteed to be done.
           break;
@@ -738,21 +738,21 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     };
 
     const onMoveInLeaf = <TP extends MergeCursorPayload>(
-      leaf: BNode<K,V>, payload: TP, fromIndex: number, toIndex: number, isInclusive: boolean, _other: MergeCursor<K,V,TP>
+      leaf: BNode<K,V>, payload: TP, fromIndex: number, toIndex: number, startedEqual: boolean, _other: MergeCursor<K,V,TP>
     ) => {
       check(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
-      const start = isInclusive ? fromIndex : fromIndex + 1;
+      const start = startedEqual ? fromIndex + 1 : fromIndex;
       pushLeafRange(leaf, start, Math.min(toIndex, leaf.keys.length));
     };
 
     const onExitLeaf = <TP extends MergeCursorPayload>(
-      leaf: BNode<K,V>, startingIndex: number, isInclusive: boolean, payload: TP, _other: MergeCursor<K,V,TP>
+      leaf: BNode<K,V>, startingIndex: number, startedEqual: boolean, payload: TP, _other: MergeCursor<K,V,TP>
     ) => {
       highestDisjoint = undefined;
       if (!payload.disqualified) {
         highestDisjoint = { node: leaf, height: 0 };
       } else {
-        const start = isInclusive ? startingIndex : startingIndex + 1;
+        const start = startedEqual ? startingIndex + 1 : startingIndex;
         pushLeafRange(leaf, start, leaf.keys.length);
       }
     };
@@ -824,12 +824,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
         const vB = curB.leaf.values[curB.leafIndex];
         const merged = mergeValues(key, vA, vB);
         if (merged !== undefined) pending.push([key, merged]);
-        const outT = BTree.moveTo(trailing, leading, key, false, cmp);
-        const outL = BTree.moveTo(leading, trailing, key, false, cmp);
+        const outT = BTree.moveTo(trailing, leading, key, false, areEqual, cmp);
+        const outL = BTree.moveTo(leading, trailing, key, false, areEqual, cmp);
         if (outT && outL)
           break;
       } else {
-        const out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, cmp);
+        const out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp);
         if (highestDisjoint !== undefined) {
           addSharedNodeToDisjointSet(highestDisjoint.node, highestDisjoint.height);
           highestDisjoint = undefined;
@@ -838,7 +838,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
           const maxKeyLeft = left._root.maxKey() as K;
           const maxKeyRight = right._root.maxKey() as K;
           const maxKey = cmp(maxKeyLeft, maxKeyRight) >= 0 ? maxKeyLeft : maxKeyRight;
-          BTree.moveTo(leading, trailing, maxKey, false, cmp);
+          BTree.moveTo(leading, trailing, maxKey, false, areEqual, cmp);
           break;
         }
       }
@@ -857,6 +857,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     other: MergeCursor<K,V,TP>,
     targetKey: K,
     isInclusive: boolean,
+    startedEqual: boolean,
     cmp: (a:K,b:K)=>number
   ): boolean {
     // We should start before the target (or at it if inclusive)
@@ -868,7 +869,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const i = leaf.indexOf(targetKey, -1, cmp);
     const destInLeaf = i < 0 ? ~i : (isInclusive ? i : i + 1);
     if (destInLeaf < leaf.keys.length) {
-      cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, isInclusive, other);
+      cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, startedEqual, other);
       cur.leafIndex = destInLeaf;
       return false;
     }
@@ -896,7 +897,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
     // Exit leaf; we did walk out of it conceptually
     const startIndex = cur.leafIndex;
-    cur.onExitLeaf(leaf, startIndex, isInclusive, cur.leafPayload, other);
+    cur.onExitLeaf(leaf, startIndex, startedEqual, cur.leafPayload, other);
 
     if (descentLevel < 0) {
       // No descent point; step up all the way; last callback gets Infinity
