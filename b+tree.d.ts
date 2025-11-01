@@ -272,6 +272,25 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      */
     merge(other: BTree<K, V>, merge: (key: K, leftValue: V, rightValue: V) => V | undefined): BTree<K, V>;
     /**
+     * Processes one side (left or right) of the disjoint subtree set during a merge operation.
+     * Merges each subtree in the disjoint set from start to end (exclusive) into the given spine.
+     */
+    private static processSide;
+    private static appendAndCascade;
+    private static ensureNotShared;
+    /**
+     * Refresh sizes on the spine for nodes in (isSharedFrontierDepth, depthTo)
+     */
+    private static updateSizeAndMax;
+    /**
+     * Update a spine (frontier) from a specific depth down, inclusive
+     */
+    private static updateFrontier;
+    /**
+     * Find the first ancestor (starting at insertionDepth) with capacity
+     */
+    private static findCascadeEndDepth;
+    /**
      * Decomposes two BTrees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
      * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
      */
@@ -281,11 +300,15 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      * Returns true if end-of-tree was reached (cursor not structurally mutated).
      */
     private static moveTo;
-    /** Create a cursor at the leftmost key. */
+    /**
+     * Create a cursor pointing to the leftmost key of the supplied tree.
+     */
     private static createCursor;
     private static getKey;
     private static getLeaf;
     private static areOverlapping;
+    private static getLeftmostChild;
+    private static getRightmostChild;
     /**
      * Computes the differences between `this` and `other`.
      * For efficiency, the diff is returned via invocations of supplied handlers.

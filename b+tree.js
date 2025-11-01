@@ -508,12 +508,12 @@ var BTree = /** @class */ (function () {
         if (other.size === 0 || this.size === 0)
             return;
         // Cursor payload factory
-        var mkPayload = function (_) { return undefined; };
+        var makePayload = function (_) { return undefined; };
         // Callbacks
         var empty = function () { };
         // Initialize cursors at minimum keys.
-        var curA = BTree.createCursor(this, mkPayload, empty, empty, empty, empty, empty);
-        var curB = BTree.createCursor(other, mkPayload, empty, empty, empty, empty, empty);
+        var curA = BTree.createCursor(this, makePayload, empty, empty, empty, empty, empty, empty);
+        var curB = BTree.createCursor(other, makePayload, empty, empty, empty, empty, empty, empty);
         // Walk both cursors
         while (true) {
             var order = cmp(BTree.getKey(curA), BTree.getKey(curB));
@@ -552,234 +552,208 @@ var BTree = /** @class */ (function () {
      * @description Complexity: O(N + M), but often much faster in practice due to skipping any non-intersecting subtrees.
      */
     BTree.prototype.merge = function (other, merge) {
-        // 1. Throw if comparators or max node sizes differ
         if (this._compare !== other._compare)
             throw new Error("Cannot merge BTrees with different comparators.");
         if (this._maxNodeSize !== other._maxNodeSize)
             throw new Error("Cannot merge BTrees with different max node sizes.");
-        // 2. Early outs for empty trees (cheap clone of the non-empty tree)
+        // Early outs for empty trees (cheap clone of the non-empty tree)
         var sizeThis = this._root.size();
         var sizeOther = other._root.size();
         if (sizeThis === 0)
             return other.clone();
         if (sizeOther === 0)
             return this.clone();
-        // 3. Decompose into disjoint subtrees and merged leaves
-        var _a = BTree.decompose(this, other, merge), disjoint = _a.disjoint, tallestIndex = _a.tallestIndex, tallestHeight = _a.tallestHeight;
-        // 4. Start result at the tallest subtree from the disjoint set
-        var result = new BTree(undefined, this._compare, this._maxNodeSize);
-        var root = disjoint[tallestIndex][1];
-        var height = tallestHeight; // number of internal levels; 0 means leaf
-        result._root = root;
-        var max = this._maxNodeSize;
-        // Build a spine (frontier) from the root down the chosen side (no leaf included)
-        var buildFrontier = function (r, rightSide) {
-            var spine = [];
-            var n = r;
-            while (!n.isLeaf) {
-                var ni = n;
-                spine.push(ni);
-                n = ni.children[rightSide ? ni.children.length - 1 : 0];
-            }
-            return spine;
-        };
-        // 6. Initialize left/right frontiers of current tree (root=tallest subtree)
-        var rightFrontier = buildFrontier(root, true);
-        var leftFrontier = buildFrontier(root, false);
-        // 7. Track highest shared frontier depth for the currently processed frontier
-        //    Depth is indexed from root=0 down to parent-of-leaf=(height-1).
-        //    Any changes at or below 'depthTo' require cloning from isSharedFrontierDepth..depthTo.
-        var processSide = function (start, end, step, rightSide) {
-            var spine = rightSide ? rightFrontier : leftFrontier;
-            var isSharedFrontierDepth = 0;
-            // 8. Refresh sizes on the spine for nodes in (isSharedFrontierDepth, depthTo)
-            var updateSpineSizes = function (sp, depthToExclusive) {
-                // Update from (isSharedFrontierDepth + 1) up to (depthToExclusive - 1)
-                var startDepth = isSharedFrontierDepth + 1;
-                var endDepth = Math.max(0, depthToExclusive);
-                for (var d = startDepth; d < endDepth && d < sp.length; d++) {
-                    var node = sp[d];
-                    node._size = sumChildSizes(node.children);
-                }
-            };
-            // 9. Clone along the spine from isSharedFrontierDepth..depthTo inclusive so path is unique
-            var ensureNotShared = function (sp, depthToInclusive) {
-                if (sp.length === 0)
-                    return; // nothing to clone when root is a leaf; equal-height case will handle this
-                // Clone root if needed first (depth 0)
-                if (isSharedFrontierDepth === 0) {
-                    var atRoot = sp[0];
-                    if (atRoot.isShared) {
-                        var clonedRoot = atRoot.clone();
-                        result._root = clonedRoot;
-                        sp[0] = clonedRoot;
-                        // After cloning an internal node, its children become explicitly shared
-                    }
-                }
-                // Clone downward along the frontier to 'depthToInclusive'
-                for (var d = Math.max(isSharedFrontierDepth, 0); d <= depthToInclusive && d < sp.length; d++) {
-                    if (d === 0)
-                        continue; // already considered root above
-                    var parent = sp[d - 1];
-                    var childIndex = rightSide ? parent.children.length - 1 : 0;
-                    var child = parent.children[childIndex];
-                    // Clone regardless; guarantees uniqueness down this path
-                    var clonedChild = child.clone();
-                    parent.children[childIndex] = clonedChild;
-                    parent.keys[childIndex] = clonedChild.maxKey();
-                    sp[d] = clonedChild;
-                }
-            };
-            // Find the first ancestor (starting at insertionDepth) with capacity
-            var findExpansionDepth = function (sp, insertionDepth) {
-                for (var d = insertionDepth; d >= 0; d--) {
-                    if (sp[d].keys.length < max)
-                        return d;
-                }
-                return -1; // no capacity, will need a new root
-            };
-            // Append a subtree at a given depth on the chosen side; cascade splits upward if needed.
-            var appendAndCascade = function (sp, insertionDepth, subtree) {
-                var carry;
-                // 10.1.5 Append at insertionDepth
-                var node = sp[insertionDepth];
-                if (rightSide) {
-                    if (node.keys.length < max) {
-                        node.insert(node.children.length, subtree);
-                    }
-                    else {
-                        var newRight = node.splitOffRightSide();
-                        newRight.insert(newRight.children.length, subtree);
-                        carry = newRight;
-                    }
-                }
-                else {
-                    if (node.keys.length < max) {
-                        node.insert(0, subtree);
-                    }
-                    else {
-                        var newRight = node.splitOffRightSide();
-                        // Insert into left half at index 0 (new child is the new leftmost)
-                        node.insert(0, subtree);
-                        carry = newRight;
-                    }
-                }
-                // Bubble new right siblings upward until a node with capacity accepts them or we reach root
-                var d = insertionDepth - 1;
-                while (carry && d >= 0) {
-                    var parent = sp[d];
-                    if (rightSide) {
-                        if (parent.keys.length < max) {
-                            parent.insert(parent.children.length, carry);
-                            carry = undefined;
-                        }
-                        else {
-                            var newRight = parent.splitOffRightSide();
-                            newRight.insert(newRight.children.length, carry);
-                            carry = newRight;
-                        }
-                    }
-                    else {
-                        if (parent.keys.length < max) {
-                            parent.insert(1, carry); // directly to the right of leftmost child
-                            carry = undefined;
-                        }
-                        else {
-                            var newRight = parent.splitOffRightSide();
-                            parent.insert(1, carry);
-                            carry = newRight;
-                        }
-                    }
-                    d--;
-                }
-                // If still carrying after root, create a new root
-                if (carry) {
-                    var oldRoot = result._root;
-                    var children = rightSide ? [oldRoot, carry] : [oldRoot, carry];
-                    var newRoot = new BNodeInternal(children, oldRoot.size() + carry.size());
-                    result._root = newRoot;
-                    // Height increases by 1
-                    height += 1;
-                    // Replace spine with new frontier for this side
-                    sp = rightSide ? buildFrontier(result._root, true) : buildFrontier(result._root, false);
-                    if (rightSide)
-                        rightFrontier = sp;
-                    else
-                        leftFrontier = sp;
-                }
-                // Refresh ancestor keys along the side from insertionDepth up to root,
-                // since rightmost/leftmost child maxKey may have changed.
-                for (var u = Math.min(insertionDepth, sp.length - 1); u >= 0; u--) {
-                    var parent = sp[u];
-                    var idx = rightSide ? parent.children.length - 1 : 0;
-                    parent.keys[idx] = parent.children[idx].maxKey();
-                }
-                // Rebuild the frontier from the (possibly new) root to ensure it reflects all structural changes.
-                sp = rightSide ? buildFrontier(result._root, true) : buildFrontier(result._root, false);
-                if (rightSide)
-                    rightFrontier = sp;
-                else
-                    leftFrontier = sp;
-                // 10.1.6 Set isSharedFrontierDepth to insertionDepth (relative to current height)
-                // If height changed due to a root split, adjust to parent-of-subtree in the new tree:
-                var subtreeHeight = computeHeight(subtree);
-                isSharedFrontierDepth = Math.max(0, (height - (subtreeHeight + 1)));
-            };
-            // Utility to compute height (number of internal levels) of a subtree
-            var computeHeight = function (node) {
-                var h = -1, n = node;
-                while (n) {
-                    h++;
-                    n = n.isLeaf ? undefined : n.children[0];
-                }
-                return h;
-            };
-            // Iterate the assigned half of the disjoint set
-            for (var i = start; step > 0 ? i <= end : i >= end; i += step) {
-                var subtree = disjoint[i][1];
-                var subtreeHeight = disjoint[i][0];
-                if (subtreeHeight < height) {
-                    // 10.1.1 Determine insertion depth on this frontier
-                    var insertionDepth = height - (subtreeHeight + 1); // node at this depth has children of height 'subtreeHeight'
-                    // 10.1.2 Ensure path is unshared before mutation
-                    ensureNotShared(spine, insertionDepth);
-                    // 10.1.3 Calculate expansion depth (first ancestor with capacity)
-                    var expansionDepth = findExpansionDepth(spine, insertionDepth);
-                    // 10.1.4 Update sizes on spine above the shared ancestor before we expand
-                    updateSpineSizes(spine, expansionDepth >= 0 ? expansionDepth : 0);
-                    // 10.1.5 Append and cascade splits upward
-                    appendAndCascade(spine, insertionDepth, subtree);
-                }
-                else {
-                    // 10.2 Equal height; create a new root combining [old root, subtree] (right) or [subtree, old root] (left)
-                    // 10.2.2 Update spine sizes before shifting frontier inward
-                    updateSpineSizes(spine, 0);
-                    // 10.2.3 Create a new root with children [old root, subtree] or [subtree, old root]
-                    var oldRoot = result._root;
-                    var newChildren = rightSide ? [oldRoot, subtree] : [subtree, oldRoot];
-                    var newRoot = new BNodeInternal(newChildren, oldRoot.size() + subtree.size());
-                    result._root = root = newRoot;
-                    height += 1;
-                    // 10.2.4 Update the frontier to match the new root and appended subtree side
-                    spine = rightSide ? buildFrontier(result._root, true) : buildFrontier(result._root, false);
-                    if (rightSide)
-                        rightFrontier = spine;
-                    else
-                        leftFrontier = spine;
-                    // 10.2.5 Set isSharedFrontierDepth to 1
-                    isSharedFrontierDepth = 1;
-                }
-            }
-        };
-        // 10. Process all subtrees to the right of the tallest subtree
+        // Decompose into disjoint subtrees and merged leaves
+        var _a = BTree.decompose(this, other, merge), disjoint = _a.disjoint, tallestIndex = _a.tallestIndex;
+        // Start result at the tallest subtree from the disjoint set
+        var initialRoot = disjoint[tallestIndex][1];
+        var branchingFactor = this._maxNodeSize;
+        var rightFrontier = [initialRoot];
+        BTree.updateFrontier(rightFrontier, 0, BTree.getRightmostChild);
+        // Process all subtrees to the right of the tallest subtree
         if (tallestIndex + 1 <= disjoint.length - 1)
-            processSide(tallestIndex + 1, disjoint.length - 1, +1, true);
-        // 11. Process all subtrees to the left of the tallest subtree (reverse order)
+            BTree.processSide(branchingFactor, disjoint, rightFrontier, tallestIndex + 1, disjoint.length, 1, true, BTree.getRightmostChild);
+        var leftFrontier = [rightFrontier[0]];
+        BTree.updateFrontier(leftFrontier, 0, BTree.getLeftmostChild);
+        // Process all subtrees to the left of the tallest subtree (reverse order)
         if (tallestIndex - 1 >= 0)
-            processSide(tallestIndex - 1, 0, -1, false);
-        // 12. Return the resulting tree
-        return result;
+            BTree.processSide(branchingFactor, disjoint, leftFrontier, tallestIndex - 1, -1, -1, false, BTree.getLeftmostChild);
+        var merged = new BTree(undefined, this._compare, this._maxNodeSize);
+        check(rightFrontier[0] === leftFrontier[0], "Root mismatch after merge processing.");
+        merged._root = rightFrontier[0];
+        // Return the resulting tree
+        return merged;
     };
+    /**
+     * Processes one side (left or right) of the disjoint subtree set during a merge operation.
+     * Merges each subtree in the disjoint set from start to end (exclusive) into the given spine.
+     */
+    BTree.processSide = function (branchingFactor, disjoint, spine, start, end, step, rightSide, frontierChildIndex) {
+        var isSharedFrontierDepth = 0;
+        var cur = spine[0];
+        // Find the first shared node on the frontier
+        while (!cur.isShared && isSharedFrontierDepth < spine.length - 1) {
+            isSharedFrontierDepth++;
+            cur = cur.children[frontierChildIndex(cur)];
+        }
+        // This array holds the sum of sizes of nodes that have been inserted but not yet propagated upward.
+        // For example, if a subtree of size 5 is inserted at depth 2, then unflushedSizes[1] += 5.
+        // These sizes are added to the depth above the insertion point because the insertion updates the direct parent of the insertion.
+        // These sizes are flushed upward any time we need to insert at level higher than pending unflushed sizes.
+        // E.g. in our example, if we later insert at depth 0, we will add 5 to the node at depth 1 and the root at depth 0 before inserting.
+        // This scheme enables us to avoid a log(n) propagation of sizes for each insertion.
+        var unflushedSizes = new Array(spine.length).fill(0); // pre-fill to avoid "holey" array
+        // Iterate the assigned half of the disjoint set
+        for (var i = start; step != end; i += step) {
+            var currentHeight = spine.length - 1; // height is number of internal levels; 0 means leaf
+            var subtree = disjoint[i][1];
+            var subtreeHeight = disjoint[i][0];
+            var insertionDepth = currentHeight - (subtreeHeight + 1); // node at this depth has children of height 'subtreeHeight'
+            // Ensure path is unshared before mutation
+            BTree.ensureNotShared(spine, isSharedFrontierDepth, insertionDepth, frontierChildIndex);
+            // Calculate expansion depth (first ancestor with capacity)
+            var expansionDepth = Math.max(0, BTree.findCascadeEndDepth(spine, insertionDepth, branchingFactor));
+            // Update sizes on spine above the shared ancestor before we expand
+            BTree.updateSizeAndMax(spine, unflushedSizes, isSharedFrontierDepth, expansionDepth, frontierChildIndex);
+            // Append and cascade splits upward
+            var newRoot = BTree.appendAndCascade(spine, insertionDepth, branchingFactor, subtree, rightSide);
+            if (newRoot) {
+                // Set the spine root to the highest up new node; the rest of the spine is updated below
+                spine[0] = newRoot;
+                unflushedSizes.forEach(function (count) { return check(count === 0, "Unexpected unflushed size after root split."); });
+                unflushedSizes.push(0); // new root level
+                isSharedFrontierDepth = insertionDepth;
+            }
+            else {
+                unflushedSizes[insertionDepth] += subtree.size();
+                isSharedFrontierDepth = insertionDepth;
+            }
+            // Finally, update the frontier from the highest new node downward
+            // Note that this is often the point where the new subtree is attached,
+            // but in the case of cascaded splits it may be higher up.
+            BTree.updateFrontier(spine, expansionDepth, frontierChildIndex);
+            check(unflushedSizes.length === spine.length - 1, "Unflushed sizes length mismatch after root split.");
+        }
+        // Finally, propagate any remaining unflushed sizes upward and update max keys
+        BTree.updateSizeAndMax(spine, unflushedSizes, isSharedFrontierDepth, 0, frontierChildIndex);
+    };
+    ;
+    // Append a subtree at a given depth on the chosen side; cascade splits upward if needed.
+    BTree.appendAndCascade = function (spine, insertionDepth, branchingFactor, subtree, rightSide) {
+        check(spine.length > 1 && insertionDepth < spine.length - 1, "Invalid insertion at leaf level.");
+        var carry = subtree;
+        // Append at insertionDepth and bubble new right siblings upward until a node with capacity accepts them or we reach root
+        var d = insertionDepth;
+        while (carry && d >= 0) {
+            var parent = spine[d];
+            if (rightSide) {
+                if (parent.keys.length < branchingFactor) {
+                    parent.insert(parent.children.length, carry);
+                    carry = undefined;
+                }
+                else {
+                    var newRight = parent.splitOffRightSide();
+                    newRight.insert(newRight.children.length, carry);
+                    carry = newRight;
+                }
+            }
+            else {
+                if (parent.keys.length < branchingFactor) {
+                    parent.insert(0, carry);
+                    carry = undefined;
+                }
+                else {
+                    var newLeft = parent.splitOffLeftSide();
+                    newLeft.insert(0, carry);
+                    carry = newLeft;
+                }
+            }
+            d--;
+        }
+        // If still carrying after root, create a new root
+        if (carry) {
+            var oldRoot = spine[0];
+            var children = rightSide ? [oldRoot, carry] : [oldRoot, carry];
+            var newRoot = new BNodeInternal(children, oldRoot.size() + carry.size());
+            return newRoot;
+        }
+        return undefined;
+    };
+    ;
+    // Clone along the spine from isSharedFrontierDepth..depthTo inclusive so path is mutable
+    BTree.ensureNotShared = function (spine, isSharedFrontierDepth, depthToInclusive, frontierChildIndex) {
+        if (spine.length === 1 /* only a leaf */ || depthToInclusive < 0 /* new root case */)
+            return; // nothing to clone when root is a leaf; equal-height case will handle this
+        check(spine[isSharedFrontierDepth].isShared === true, "Expected shared root at isSharedFrontierDepth 0");
+        // Clone root if needed first (depth 0)
+        if (isSharedFrontierDepth === 0) {
+            var root = spine[0];
+            spine[0] = root.clone();
+        }
+        // Clone downward along the frontier to 'depthToInclusive'
+        for (var depth = Math.max(isSharedFrontierDepth, 1); depth <= depthToInclusive; depth++) {
+            var parent = spine[depth - 1];
+            var childIndex = frontierChildIndex(parent);
+            var clone = parent.children[childIndex].clone();
+            parent.children[childIndex] = clone;
+            parent.keys[childIndex] = clone.maxKey();
+            spine[depth] = clone;
+        }
+    };
+    ;
+    /**
+     * Refresh sizes on the spine for nodes in (isSharedFrontierDepth, depthTo)
+     */
+    BTree.updateSizeAndMax = function (spine, unflushedSizes, isSharedFrontierDepth, depthUpToInclusive, frontierChildIndex) {
+        // If isSharedFrontierDepth is <= depthUpToInclusive there is nothing to update because
+        // the insertion point is inside a shared node which will always have correct sizes
+        var maxKey = spine[isSharedFrontierDepth].maxKey();
+        var startDepth = isSharedFrontierDepth - 1;
+        for (var depth = startDepth; depth >= depthUpToInclusive; depth--) {
+            var sizeAtLevel = unflushedSizes[depth];
+            unflushedSizes[depth] = 0; // we are propagating it now
+            if (depth > 0) {
+                // propagate size upward, will be added lazily, either when a subtree is appended at or above that level or
+                // at the end of processing the entire side
+                unflushedSizes[depth - 1] += sizeAtLevel;
+            }
+            var node = spine[depth];
+            node._size += sizeAtLevel;
+            node.keys[frontierChildIndex(node)] = maxKey;
+        }
+    };
+    ;
+    /**
+     * Update a spine (frontier) from a specific depth down, inclusive
+     */
+    BTree.updateFrontier = function (frontier, depthLastValid, frontierChildIndex) {
+        check(frontier.length > depthLastValid, "updateFrontier: depthLastValid exceeds frontier height");
+        var startingAncestor = frontier[depthLastValid];
+        if (startingAncestor.isLeaf)
+            return;
+        var an = startingAncestor;
+        var cur = an.children[frontierChildIndex(an)];
+        var depth = depthLastValid + 1;
+        while (!cur.isLeaf) {
+            var ni = cur;
+            frontier[depth] = ni;
+            cur = ni.children[frontierChildIndex(ni)];
+            depth++;
+        }
+        frontier[depth] = cur;
+    };
+    ;
+    /**
+     * Find the first ancestor (starting at insertionDepth) with capacity
+     */
+    BTree.findCascadeEndDepth = function (spine, insertionDepth, branchingFactor) {
+        for (var depth = insertionDepth; depth >= 0; depth--) {
+            if (spine[depth].keys.length < branchingFactor)
+                return depth;
+        }
+        return -1; // no capacity, will need a new root
+    };
+    ;
     /**
      * Decomposes two BTrees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
      * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
@@ -830,7 +804,7 @@ var BTree = /** @class */ (function () {
         // Have to do this as cast to convince TS it's ever assigned
         var highestDisjoint = undefined;
         // Cursor payload factory
-        var mkPayload = function (_) { return ({ disqualified: false }); };
+        var makePayload = function (_) { return ({ disqualified: false }); };
         var pushLeafRange = function (leaf, from, toExclusive) {
             if (from < toExclusive) {
                 for (var i = from; i < toExclusive; ++i)
@@ -898,8 +872,15 @@ var BTree = /** @class */ (function () {
             for (var i = 0; i < stepDownIndex; ++i)
                 addSharedNodeToDisjointSet(node.children[i], height - 1);
         };
-        var curA = BTree.createCursor(left, mkPayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
-        var curB = BTree.createCursor(right, mkPayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+        var onEndMove = function () {
+            if (highestDisjoint !== undefined) {
+                addSharedNodeToDisjointSet(highestDisjoint.node, highestDisjoint.height);
+                highestDisjoint = undefined;
+            }
+        };
+        // Initialize cursors at minimum keys.
+        var curA = BTree.createCursor(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, onEndMove);
+        var curB = BTree.createCursor(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, onEndMove);
         // Initialize disqualification w.r.t. opposite leaf.
         var initDisqualify = function (cur, otherLeaf) {
             if (BTree.areOverlapping(cur.leaf, otherLeaf, cmp))
@@ -935,10 +916,6 @@ var BTree = /** @class */ (function () {
             }
             else {
                 var out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp);
-                if (highestDisjoint !== undefined) {
-                    addSharedNodeToDisjointSet(highestDisjoint.node, highestDisjoint.height);
-                    highestDisjoint = undefined;
-                }
                 if (out) {
                     var maxKeyLeft = left._root.maxKey();
                     var maxKeyRight = right._root.maxKey();
@@ -949,7 +926,7 @@ var BTree = /** @class */ (function () {
             }
         }
         flushPendingEntries();
-        return { disjoint: disjoint, tallestIndex: tallestIndex, tallestHeight: tallestHeight };
+        return { disjoint: disjoint, tallestIndex: tallestIndex };
     };
     /**
      * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
@@ -966,6 +943,7 @@ var BTree = /** @class */ (function () {
         if (destInLeaf < leaf.keys.length) {
             cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, startedEqual, other);
             cur.leafIndex = destInLeaf;
+            cur.onEndMove();
             return false;
         }
         // Find first ancestor with a viable right step
@@ -996,6 +974,7 @@ var BTree = /** @class */ (function () {
                 var sd = s === 0 ? Infinity : NaN;
                 cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, sd, other);
             }
+            cur.onEndMove();
             return true;
         }
         // Step up through ancestors above the descentLevel
@@ -1016,49 +995,50 @@ var BTree = /** @class */ (function () {
             var ni = node;
             var j = ni.indexOf(targetKey, 0, cmp);
             var stepDownIndex = j + (isInclusive ? 0 : (j < ni.keys.length && cmp(ni.keys[j], targetKey) === 0 ? 1 : 0));
-            var payload = cur.mkPayload(ni);
+            var payload = cur.makePayload(ni);
             spine.push({ node: ni, childIndex: stepDownIndex, payload: payload });
             cur.onStepDown(ni, height, payload, stepDownIndex, other);
             node = ni.children[stepDownIndex];
             height -= 1;
         }
         // Enter destination leaf
-        var newLeaf = node;
-        var leafPayload = cur.mkPayload(newLeaf);
-        var idx = newLeaf.indexOf(targetKey, -1, cmp);
+        var leafPayload = cur.makePayload(node);
+        var idx = node.indexOf(targetKey, -1, cmp);
         var destIndex = idx < 0 ? ~idx : (isInclusive ? idx : idx + 1);
-        check(destIndex >= 0 && destIndex < newLeaf.keys.length, "moveTo: destination out of bounds");
-        cur.onEnterLeaf(newLeaf, leafPayload, destIndex, other);
-        cur.leaf = newLeaf;
+        check(destIndex >= 0 && destIndex < node.keys.length, "moveTo: destination out of bounds");
+        cur.onEnterLeaf(node, leafPayload, destIndex, other);
+        cur.leaf = node;
         cur.leafPayload = leafPayload;
         cur.leafIndex = destIndex;
+        cur.onEndMove();
         return false;
     };
-    /** Create a cursor at the leftmost key. */
-    BTree.createCursor = function (tree, mkPayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown) {
+    /**
+     * Create a cursor pointing to the leftmost key of the supplied tree.
+     */
+    BTree.createCursor = function (tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, onEndMove) {
         check(tree._root.size() > 0, "createCursor: cannot create a cursor for an empty tree");
         var spine = [];
         var n = tree._root;
         while (!n.isLeaf) {
             var ni = n;
-            var payload = mkPayload(ni);
+            var payload = makePayload(ni);
             spine.push({ node: ni, childIndex: 0, payload: payload });
             n = ni.children[0];
         }
-        var leaf = n;
-        var leafPayload = mkPayload(leaf);
+        var leafPayload = makePayload(n);
         var cur = {
             tree: tree,
-            leaf: leaf,
-            leafIndex: 0,
+            leaf: n, leafIndex: 0,
             spine: spine,
             leafPayload: leafPayload,
-            mkPayload: mkPayload,
+            makePayload: makePayload,
             onEnterLeaf: onEnterLeaf,
             onMoveInLeaf: onMoveInLeaf,
             onExitLeaf: onExitLeaf,
             onStepUp: onStepUp,
-            onStepDown: onStepDown
+            onStepDown: onStepDown,
+            onEndMove: onEndMove
         };
         return cur;
     };
@@ -1073,6 +1053,12 @@ var BTree = /** @class */ (function () {
         var bmin = b.minKey(), bmax = b.maxKey();
         // Overlap iff !(amax < bmin || bmax < amin) on inclusive ranges.
         return !(cmp(amax, bmin) < 0 || cmp(bmax, amin) < 0);
+    };
+    BTree.getLeftmostChild = function () {
+        return 0;
+    };
+    BTree.getRightmostChild = function (node) {
+        return node.children.length - 1;
     };
     /**
      * Computes the differences between `this` and `other`.
@@ -2140,6 +2126,20 @@ var BNodeInternal = /** @class */ (function (_super) {
         var half = this.children.length >> 1;
         var newChildren = this.children.splice(half);
         var newKeys = this.keys.splice(half);
+        var movedSize = sumChildSizes(newChildren);
+        var newNode = new BNodeInternal(newChildren, movedSize, newKeys);
+        this._size -= movedSize;
+        return newNode;
+    };
+    /**
+     * Split this node.
+     * Modifies this to remove the first half of the items, returning a separate node containing them.
+     */
+    BNodeInternal.prototype.splitOffLeftSide = function () {
+        // assert !this.isShared;
+        var half = this.children.length >> 1;
+        var newChildren = this.children.splice(0, half);
+        var newKeys = this.keys.splice(0, half);
         var movedSize = sumChildSizes(newChildren);
         var newNode = new BNodeInternal(newChildren, movedSize, newKeys);
         this._size -= movedSize;
