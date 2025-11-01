@@ -622,17 +622,17 @@ var BTree = /** @class */ (function () {
                 spine[0] = newRoot;
                 unflushedSizes.forEach(function (count) { return check(count === 0, "Unexpected unflushed size after root split."); });
                 unflushedSizes.push(0); // new root level
-                isSharedFrontierDepth = insertionDepth;
             }
             else {
                 unflushedSizes[insertionDepth] += subtree.size();
-                isSharedFrontierDepth = insertionDepth;
             }
+            // if insertionDepth was -1, a new root was made and the shared node was inserted just below it
+            isSharedFrontierDepth = Math.max(1, insertionDepth + 1);
             // Finally, update the frontier from the highest new node downward
             // Note that this is often the point where the new subtree is attached,
             // but in the case of cascaded splits it may be higher up.
             BTree.updateFrontier(spine, expansionDepth, frontierChildIndex);
-            check(unflushedSizes.length === spine.length - 1, "Unflushed sizes length mismatch after root split.");
+            check(unflushedSizes.length === spine.length, "Unflushed sizes length mismatch after root split.");
         }
         // Finally, propagate any remaining unflushed sizes upward and update max keys
         BTree.updateSizeAndMax(spine, unflushedSizes, isSharedFrontierDepth, 0, frontierChildIndex);

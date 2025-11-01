@@ -726,17 +726,19 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
         spine[0] = newRoot;
         unflushedSizes.forEach((count) => check(count === 0, "Unexpected unflushed size after root split."));
         unflushedSizes.push(0); // new root level
-        isSharedFrontierDepth = insertionDepth;
       } else {
         unflushedSizes[insertionDepth] += subtree.size();
-        isSharedFrontierDepth = insertionDepth;
       }
+
+      // if insertionDepth was -1, a new root was made and the shared node was inserted just below it
+      isSharedFrontierDepth = Math.max(1, insertionDepth + 1);
 
       // Finally, update the frontier from the highest new node downward
       // Note that this is often the point where the new subtree is attached,
       // but in the case of cascaded splits it may be higher up.
       BTree.updateFrontier(spine, expansionDepth, frontierChildIndex);
-      check(unflushedSizes.length === spine.length - 1, "Unflushed sizes length mismatch after root split.");
+      check(isSharedFrontierDepth === spine.length - 1 || spine[isSharedFrontierDepth].isShared === true, "Non-leaf subtrees must be shared.");
+      check(unflushedSizes.length === spine.length, "Unflushed sizes length mismatch after root split.");
     }
 
     // Finally, propagate any remaining unflushed sizes upward and update max keys
@@ -796,8 +798,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     frontierChildIndex: (node: BNodeInternal<K,V>) => number) {
     if (spine.length === 1 /* only a leaf */ || depthToInclusive < 0 /* new root case */)
       return; // nothing to clone when root is a leaf; equal-height case will handle this
-
-    check(spine[isSharedFrontierDepth].isShared === true, "Expected shared root at isSharedFrontierDepth 0");
 
     // Clone root if needed first (depth 0)
     if (isSharedFrontierDepth === 0) {
