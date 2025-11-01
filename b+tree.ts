@@ -704,7 +704,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const unflushedSizes: number[] = new Array(spine.length).fill(0); // pre-fill to avoid "holey" array
 
     // Iterate the assigned half of the disjoint set
-    for (let i = start; step != end; i += step) {
+    for (let i = start; i != end; i += step) {
       const currentHeight = spine.length - 1; // height is number of internal levels; 0 means leaf
       const subtree = disjoint[i][1];
       const subtreeHeight = disjoint[i][0];

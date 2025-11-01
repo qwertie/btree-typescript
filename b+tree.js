@@ -604,7 +604,7 @@ var BTree = /** @class */ (function () {
         // This scheme enables us to avoid a log(n) propagation of sizes for each insertion.
         var unflushedSizes = new Array(spine.length).fill(0); // pre-fill to avoid "holey" array
         // Iterate the assigned half of the disjoint set
-        for (var i = start; step != end; i += step) {
+        for (var i = start; i != end; i += step) {
             var currentHeight = spine.length - 1; // height is number of internal levels; 0 means leaf
             var subtree = disjoint[i][1];
             var subtreeHeight = disjoint[i][0];
@@ -632,6 +632,7 @@ var BTree = /** @class */ (function () {
             // Note that this is often the point where the new subtree is attached,
             // but in the case of cascaded splits it may be higher up.
             BTree.updateFrontier(spine, expansionDepth, frontierChildIndex);
+            check(isSharedFrontierDepth === spine.length - 1 || spine[isSharedFrontierDepth].isShared === true, "Non-leaf subtrees must be shared.");
             check(unflushedSizes.length === spine.length, "Unflushed sizes length mismatch after root split.");
         }
         // Finally, propagate any remaining unflushed sizes upward and update max keys
@@ -684,7 +685,6 @@ var BTree = /** @class */ (function () {
     BTree.ensureNotShared = function (spine, isSharedFrontierDepth, depthToInclusive, frontierChildIndex) {
         if (spine.length === 1 /* only a leaf */ || depthToInclusive < 0 /* new root case */)
             return; // nothing to clone when root is a leaf; equal-height case will handle this
-        check(spine[isSharedFrontierDepth].isShared === true, "Expected shared root at isSharedFrontierDepth 0");
         // Clone root if needed first (depth 0)
         if (isSharedFrontierDepth === 0) {
             var root = spine[0];
