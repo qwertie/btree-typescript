@@ -633,27 +633,238 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    * @description Complexity: O(N + M), but often much faster in practice due to skipping any non-intersecting subtrees.
    */
   merge(other: BTree<K,V>, merge: (key: K, leftValue: V, rightValue: V) => V | undefined): BTree<K,V> {
-    // Fast paths for empty trees
-    const sizeThis = this._root.size();
-    const sizeOther = other._root.size();
-
-    if (sizeThis === 0)
-      return other.clone();
-    if (sizeOther === 0)
-      return this.clone();
-
-    // Ensure both trees share the same comparator reference
     if (this._compare !== other._compare)
       throw new Error("Cannot merge BTrees with different comparators.");
     if (this._maxNodeSize !== other._maxNodeSize)
       throw new Error("Cannot merge BTrees with different max node sizes.");
 
-    const { disjoint, tallestHeight, tallestIndex} = BTree.decompose(this, other, merge);
+    // Early outs for empty trees (cheap clone of the non-empty tree)
+    const sizeThis = this._root.size();
+    const sizeOther = other._root.size();
+    if (sizeThis === 0)
+      return other.clone();
+    if (sizeOther === 0)
+      return this.clone();
 
-    throw new Error("Not yet implemented: BTree.merge");
+    // Decompose into disjoint subtrees and merged leaves
+    const { disjoint, tallestIndex } = BTree.decompose(this, other, merge);
+
+    // Start result at the tallest subtree from the disjoint set
+    const [initialHeight, initialRoot] = disjoint[tallestIndex];
+    const branchingFactor = this._maxNodeSize;
+    let rightFrontier: BNode<K,V>[] = [initialRoot], leftFrontier: BNode<K,V>[] = [initialRoot];
+    BTree.updateFrontier(rightFrontier, 0, BTree.getRightmostChild);
+    BTree.updateFrontier(leftFrontier, 0, BTree.getLeftmostChild);
+
+    // Process all subtrees to the right of the tallest subtree
+    if (tallestIndex + 1 <= disjoint.length - 1)
+      BTree.processSide(branchingFactor, initialHeight,disjoint, rightFrontier, tallestIndex + 1, disjoint.length - 1, +1, true, BTree.getRightmostChild);
+
+    // Process all subtrees to the left of the tallest subtree (reverse order)
+    if (tallestIndex - 1 >= 0)
+      BTree.processSide(branchingFactor, initialHeight, disjoint, leftFrontier, tallestIndex - 1, 0, -1, false, BTree.getLeftmostChild);
+
+    const merged = new BTree<K,V>(undefined, this._compare, this._maxNodeSize);
+    check(rightFrontier[0] === leftFrontier[0], "Root mismatch after merge processing.");
+    merged._root = rightFrontier[0];
+
+    // Return the resulting tree
+    return merged;
   }
 
+  /**
+   * Track highest shared frontier depth for the currently processed frontier
+   * Depth is indexed from root=0 down to parent-of-leaf=(height-1).
+   * Any changes at or below 'depthTo' require cloning from isSharedFrontierDepth..depthTo.
+   */
+  private static processSide<K,V>(
+    branchingFactor: number,
+    initialHeight: number,
+    disjoint: DisjointEntry<K,V>[],
+    spine: BNode<K,V>[],
+    start: number,
+    end: number,
+    step: number,
+    rightSide: boolean,
+    frontierChildIndex: (node: BNodeInternal<K,V>) => number): void {
 
+    // Append a subtree at a given depth on the chosen side; cascade splits upward if needed.
+    const appendAndCascade = (insertionDepth: number, subtree: BNode<K,V>): BNodeInternal<K,V> | undefined => {
+      check(spine.length > 1 && insertionDepth < spine.length - 1, "Invalid insertion at leaf level.");
+      let carry: BNode<K,V> | undefined = subtree;
+      // Append at insertionDepth and bubble new right siblings upward until a node with capacity accepts them or we reach root
+      let d = insertionDepth;
+      // TODO REVIEW FOR SIZE UPWARDS AND SPLITTING ERRORS...split is carried tho???
+      while (carry && d >= 0) {
+        const parent = spine[d] as BNodeInternal<K,V>;
+        if (rightSide) {
+          if (parent.keys.length < branchingFactor) {
+            parent.insert(parent.children.length, carry);
+            carry = undefined;
+          } else {
+            const newRight = parent.splitOffRightSide();
+            newRight.insert(newRight.children.length, carry);
+            carry = newRight;
+          }
+        } else {
+          if (parent.keys.length < branchingFactor) {
+            parent.insert(0, carry);
+            carry = undefined;
+          } else {
+            const newRight = parent.splitOffRightSide();
+            parent.insert(0, carry);
+            carry = newRight;
+          }
+        }
+        d--;
+      }
+
+      // If still carrying after root, create a new root
+      if (carry) {
+        const oldRoot = spine[0] as BNodeInternal<K,V>;
+        const children = rightSide ? [oldRoot, carry] : [oldRoot, carry];
+        const newRoot = new BNodeInternal<K,V>(children, oldRoot.size() + carry.size());
+        return newRoot;
+      }
+      return undefined;
+    };
+
+    let isSharedFrontierDepth = initialHeight;
+    const unflushedSizes: number[] = [];
+
+    // Iterate the assigned half of the disjoint set
+    for (let i = start; step != end; i += step) {
+      const currentHeight = spine.length; // height is number of internal levels; 0 means leaf
+      const subtree = disjoint[i][1];
+      const subtreeHeight = disjoint[i][0];
+      let highestNewNodeDepth: number;
+      if (subtreeHeight < currentHeight) {
+        // Determine insertion depth on this frontier
+        const insertionDepth = currentHeight - (subtreeHeight + 1); // node at this depth has children of height 'subtreeHeight'
+
+        // Ensure path is unshared before mutation
+        BTree.ensureNotShared(spine, isSharedFrontierDepth, insertionDepth, frontierChildIndex);
+
+        // Calculate expansion depth (first ancestor with capacity)
+        const expansionDepth = Math.max(0, BTree.findExpansionDepth(spine, insertionDepth, branchingFactor));
+
+        // Update sizes on spine above the shared ancestor before we expand
+        BTree.updateSizeAndMax(spine, unflushedSizes, isSharedFrontierDepth, expansionDepth, frontierChildIndex);
+
+        // Append and cascade splits upward
+        const newRoot = appendAndCascade(insertionDepth, subtree);
+        if (newRoot) {
+          // Set the spine root to the highest up new node; the rest of the spine is updated below
+          spine[0] = newRoot;
+        }
+        isSharedFrontierDepth = insertionDepth;
+        highestNewNodeDepth = expansionDepth;
+      } else {
+        // Equal height case, create a new root combining roots
+        // No need to clone path, since we are adding a new root instead of inserting/mutating
+        BTree.updateSizeAndMax(spine, unflushedSizes, isSharedFrontierDepth, 0, frontierChildIndex);
+
+        const oldRoot = spine[0];
+        const newChildren = rightSide ? [oldRoot, subtree] : [subtree, oldRoot];
+        const newRoot = new BNodeInternal<K,V>(newChildren, oldRoot.size() + subtree.size());
+        spine[0] = newRoot;
+        // first shared node is just below new root
+        isSharedFrontierDepth = 1;
+        highestNewNodeDepth = 0;
+      }
+
+      // Finally, update the frontier from the highest new node downward
+      // Note that this is often the point where the new subtree is attached,
+      // but in the case of cascaded splits it may be higher up.
+      BTree.updateFrontier(spine, highestNewNodeDepth, frontierChildIndex);
+    }
+  };
+
+  // Clone along the spine from isSharedFrontierDepth..depthTo inclusive so path is mutable
+  private static ensureNotShared<K,V>(
+    spine: BNode<K,V>[],
+    isSharedFrontierDepth: number,
+    depthToInclusive: number,
+    frontierChildIndex: (node: BNodeInternal<K,V>) => number) {
+    if (spine.length === 1)
+      return; // nothing to clone when root is a leaf; equal-height case will handle this
+
+    check(spine[isSharedFrontierDepth].isShared === true, "Expected shared root at isSharedFrontierDepth 0");
+
+    // Clone root if needed first (depth 0)
+    if (isSharedFrontierDepth === 0) {
+      const root = spine[0];
+      spine[0] = root.clone() as BNodeInternal<K,V>;
+    }
+
+    // Clone downward along the frontier to 'depthToInclusive'
+    for (let depth = Math.max(isSharedFrontierDepth, 1); depth <= depthToInclusive; depth++) {
+      const parent = spine[depth - 1] as BNodeInternal<K,V>;
+      const childIndex = frontierChildIndex(parent);
+      const clone = parent.children[childIndex].clone();
+      parent.children[childIndex] = clone;
+      parent.keys[childIndex] = clone.maxKey();
+      spine[depth] = clone as BNodeInternal<K,V>;
+    }
+  };
+
+  /**
+   * Refresh sizes on the spine for nodes in (isSharedFrontierDepth, depthTo)
+   */
+  private static updateSizeAndMax<K,V>(
+    spine: BNode<K,V>[],
+    unflushedSizes: number[],
+    isSharedFrontierDepth: number,
+    depthUpToInclusive: number,
+    frontierChildIndex: (node: BNodeInternal<K,V>) => number) {
+    // If isSharedFrontierDepth is <= depthUpToInclusive there is nothing to update because
+    // the insertion point is inside a shared node which will always have correct sizes
+    const maxKey = spine[isSharedFrontierDepth].maxKey();
+    const startDepth = isSharedFrontierDepth - 1;
+    for (let depth = startDepth; depth >= depthUpToInclusive; depth--) {
+      const sizeAtLevel = unflushedSizes[depth];
+      unflushedSizes[depth] = 0; // we are propagating it now
+      if (depth > 0) {
+        // propagate size upward, will be added lazily, either when a subtree is appended at or above that level or
+        // at the end of processing the entire side
+        unflushedSizes[depth - 1] += sizeAtLevel;
+      }
+      const node = spine[depth] as BNodeInternal<K,V>;
+      node._size += sizeAtLevel;
+      node.keys[frontierChildIndex(node)] = maxKey;
+    }
+  };
+
+  /**
+   * Update a spine (frontier) from a specific depth down, inclusive
+   */
+  private static updateFrontier<K, V>(frontier: BNode<K,V>[], depthLastValid: number, frontierChildIndex: (node: BNodeInternal<K,V>) => number): void {
+    check(frontier.length > depthLastValid, "updateFrontier: depthLastValid exceeds frontier height");
+    const startingAncestor = frontier[depthLastValid];
+    if (startingAncestor.isLeaf)
+      return;
+    const an = startingAncestor as BNodeInternal<K,V>;
+    let cur: BNode<K,V> = an.children[frontierChildIndex(an)];
+    let depth = depthLastValid + 1;
+    while (!cur.isLeaf) {
+      const ni = cur as BNodeInternal<K,V>;
+      frontier[depth] = ni;
+      cur = ni.children[frontierChildIndex(ni)];
+      depth++;
+    }
+    frontier[depth] = cur;
+  };
+
+  /**
+   * Find the first ancestor (starting at insertionDepth) with capacity
+   */
+  private static findExpansionDepth<K,V>(spine: BNode<K,V>[], insertionDepth: number, branchingFactor: number): number {
+    for (let depth = insertionDepth; depth >= 0; depth--) {
+      if (spine[depth].keys.length < branchingFactor)
+        return depth;
+  }
+    return -1; // no capacity, will need a new root
+  };
 
   /**
    * Decomposes two BTrees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
@@ -845,7 +1056,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     }
 
     flushPendingEntries();
-    return { disjoint, tallestIndex, tallestHeight };
+    return { disjoint, tallestIndex };
   }
 
   /**
@@ -925,10 +1136,10 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     let node: BNode<K,V> = spine[descentLevel].node.children[descentIndex];
     let height = heightOf(descentLevel) - 1;
 
-    while (!(node as any).isLeaf) {
-      const ni = node as unknown as BNodeInternal<K,V>;
+    while (!node.isLeaf) {
+      const ni = node as BNodeInternal<K,V>;
       const j = ni.indexOf(targetKey, 0, cmp);
-      const stepDownIndex = (j as number) + (isInclusive ? 0 : (j < ni.keys.length && cmp(ni.keys[j], targetKey) === 0 ? 1 : 0));
+      const stepDownIndex = j + (isInclusive ? 0 : (j < ni.keys.length && cmp(ni.keys[j], targetKey) === 0 ? 1 : 0));
       const payload = cur.mkPayload(ni);
       spine.push({ node: ni, childIndex: stepDownIndex, payload });
       cur.onStepDown(ni, height, payload, stepDownIndex, other);
@@ -937,20 +1148,21 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     }
 
     // Enter destination leaf
-    const newLeaf = node as BNode<K,V>;
-    const leafPayload = cur.mkPayload(newLeaf);
-    const idx = newLeaf.indexOf(targetKey, -1, cmp);
+    const leafPayload = cur.mkPayload(node);
+    const idx = node.indexOf(targetKey, -1, cmp);
     const destIndex = idx < 0 ? ~idx : (isInclusive ? idx : idx + 1);
-    check(destIndex >= 0 && destIndex < newLeaf.keys.length, "moveTo: destination out of bounds");
+    check(destIndex >= 0 && destIndex < node.keys.length, "moveTo: destination out of bounds");
 
-    cur.onEnterLeaf(newLeaf, leafPayload, destIndex, other);
-    cur.leaf = newLeaf;
+    cur.onEnterLeaf(node, leafPayload, destIndex, other);
+    cur.leaf = node;
     cur.leafPayload = leafPayload;
     cur.leafIndex = destIndex;
     return false;
   }
 
-    /** Create a cursor at the leftmost key. */
+  /**
+   * Create a cursor pointing to the leftmost key of the supplied tree.
+   */
   private static createCursor<K,V,TP>(
     tree: BTree<K,V>,
     mkPayload: (n: BNode<K,V>) => TP,
@@ -963,16 +1175,15 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     check(tree._root.size() > 0, "createCursor: cannot create a cursor for an empty tree");
     const spine: Array<{ node: BNodeInternal<K,V>, childIndex: number, payload: TP }> = [];
     let n: BNode<K,V> = tree._root;
-    while (!(n as any).isLeaf) {
-      const ni = n as unknown as BNodeInternal<K,V>;
+    while (!n.isLeaf) {
+      const ni = n as BNodeInternal<K,V>;
       const payload = mkPayload(ni);
       spine.push({ node: ni, childIndex: 0, payload });
       n = ni.children[0];
     }
-    const leaf = n as BNode<K,V>;
-    const leafPayload = mkPayload(leaf);
+    const leafPayload = mkPayload(n);
     const cur: MergeCursor<K,V,TP> = {
-      tree, leaf, leafIndex: 0, spine, leafPayload, mkPayload,
+      tree, leaf: n, leafIndex: 0, spine, leafPayload, mkPayload,
       onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown
     };
     return cur;
@@ -993,6 +1204,14 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const bmin = b.minKey() as K, bmax = b.maxKey() as K;
     // Overlap iff !(amax < bmin || bmax < amin) on inclusive ranges.
     return !(cmp(amax, bmin) < 0 || cmp(bmax, amin) < 0);
+  }
+
+  private static getLeftmostChild<K,V>(): number {
+    return 0;
+  }
+
+  private static getRightmostChild<K,V>(node: BNodeInternal<K,V>): number {
+    return node.children.length - 1;
   }
 
   /**
@@ -2308,7 +2527,7 @@ interface MergeCursor<K, V, TPayload> {
 }
 
 type DisjointEntry<K,V> = [height: number, node: BNode<K,V>];
-type DecomposeResult<K,V> = { disjoint: DisjointEntry<K,V>[], tallestIndex: number, tallestHeight: number };
+type DecomposeResult<K,V> = { disjoint: DisjointEntry<K,V>[], tallestIndex: number };
 
 // Optimization: this array of `undefined`s is used instead of a normal
 // array of values in nodes where `undefined` is the only value.
