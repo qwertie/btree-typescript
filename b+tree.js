@@ -512,8 +512,8 @@ var BTree = /** @class */ (function () {
         // Callbacks
         var empty = function () { };
         // Initialize cursors at minimum keys.
-        var curA = BTree.createCursor(this, makePayload, empty, empty, empty, empty, empty, empty);
-        var curB = BTree.createCursor(other, makePayload, empty, empty, empty, empty, empty, empty);
+        var curA = BTree.createCursor(this, makePayload, empty, empty, empty, empty, empty);
+        var curB = BTree.createCursor(other, makePayload, empty, empty, empty, empty, empty);
         // Walk both cursors
         while (true) {
             var order = cmp(BTree.getKey(curA), BTree.getKey(curB));
@@ -760,8 +760,6 @@ var BTree = /** @class */ (function () {
      */
     BTree.decompose = function (left, right, mergeValues) {
         var cmp = left._compare;
-        check(left._compare === right._compare, "merge: trees must share comparator");
-        check(left._maxNodeSize === right._maxNodeSize, "merge: trees must share max node size");
         check(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
         var disjoint = [];
         var pending = [];
@@ -828,10 +826,15 @@ var BTree = /** @class */ (function () {
             var start = startedEqual ? fromIndex + 1 : fromIndex;
             pushLeafRange(leaf, start, Math.min(toIndex, leaf.keys.length));
         };
-        var onExitLeaf = function (leaf, startingIndex, startedEqual, payload, _other) {
+        var onExitLeaf = function (cursorThis, leaf, startingIndex, startedEqual, payload, _other) {
             highestDisjoint = undefined;
             if (!payload.disqualified) {
                 highestDisjoint = { node: leaf, height: 0 };
+                if (cursorThis.spine.length === 0) {
+                    // if we are exiting a leaf and there are no internal nodes, we will reach the end of the tree.
+                    // In this case we need to add the leaf now because step up will not be called.
+                    addHighestDisjoint();
+                }
             }
             else {
                 var start = startedEqual ? startingIndex + 1 : startingIndex;
@@ -839,26 +842,18 @@ var BTree = /** @class */ (function () {
             }
         };
         var onStepUp = function (parent, height, payload, fromIndex, stepDownIndex, _other) {
-            if (Number.isNaN(stepDownIndex)) {
+            if (Number.isNaN(stepDownIndex) || stepDownIndex === Number.POSITIVE_INFINITY) {
                 if (!payload.disqualified) {
                     highestDisjoint = { node: parent, height: height };
                 }
                 else {
-                    for (var i = fromIndex + 1; i < parent.children.length; ++i)
-                        addSharedNodeToDisjointSet(parent.children[i], height - 1);
-                }
-            }
-            else if (stepDownIndex === Infinity) {
-                if (!payload.disqualified) {
-                    check(fromIndex === 0, "onStepUp: Infinity case requires fromIndex==0");
-                    highestDisjoint = { node: parent, height: height };
-                }
-                else {
+                    addHighestDisjoint();
                     for (var i = fromIndex + 1; i < parent.children.length; ++i)
                         addSharedNodeToDisjointSet(parent.children[i], height - 1);
                 }
             }
             else {
+                addHighestDisjoint();
                 for (var i = fromIndex + 1; i < stepDownIndex; ++i)
                     addSharedNodeToDisjointSet(parent.children[i], height - 1);
             }
@@ -872,15 +867,19 @@ var BTree = /** @class */ (function () {
             for (var i = 0; i < stepDownIndex; ++i)
                 addSharedNodeToDisjointSet(node.children[i], height - 1);
         };
-        var onEndMove = function () {
+        var addHighestDisjoint = function () {
             if (highestDisjoint !== undefined) {
                 addSharedNodeToDisjointSet(highestDisjoint.node, highestDisjoint.height);
                 highestDisjoint = undefined;
             }
         };
+        // Need the max key of both trees to perform the "finishing" walk of which ever cursor finishes second
+        var maxKeyLeft = left._root.maxKey();
+        var maxKeyRight = right._root.maxKey();
+        var maxKey = cmp(maxKeyLeft, maxKeyRight) >= 0 ? maxKeyLeft : maxKeyRight;
         // Initialize cursors at minimum keys.
-        var curA = BTree.createCursor(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, onEndMove);
-        var curB = BTree.createCursor(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, onEndMove);
+        var curA = BTree.createCursor(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+        var curB = BTree.createCursor(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
         // Initialize disqualification w.r.t. opposite leaf.
         var initDisqualify = function (cur, otherLeaf) {
             if (BTree.areOverlapping(cur.leaf, otherLeaf, cmp))
@@ -911,15 +910,24 @@ var BTree = /** @class */ (function () {
                     pending.push([key, merged]);
                 var outT = BTree.moveTo(trailing, leading, key, false, areEqual, cmp);
                 var outL = BTree.moveTo(leading, trailing, key, false, areEqual, cmp);
-                if (outT && outL)
+                if (outT || outL) {
+                    if (!outT || !outL) {
+                        // In these cases, we pass areEqual=false because a return value of "out of tree" means
+                        // the cursor did not move. This must be true because they started equal and one of them had more tree
+                        // to walk (one is !out), so they cannot be equal at this point.
+                        if (outT) {
+                            BTree.moveTo(leading, trailing, maxKey, false, false, cmp);
+                        }
+                        else {
+                            BTree.moveTo(trailing, leading, maxKey, false, false, cmp);
+                        }
+                    }
                     break;
+                }
             }
             else {
                 var out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp);
                 if (out) {
-                    var maxKeyLeft = left._root.maxKey();
-                    var maxKeyRight = right._root.maxKey();
-                    var maxKey = cmp(maxKeyLeft, maxKeyRight) >= 0 ? maxKeyLeft : maxKeyRight;
                     BTree.moveTo(leading, trailing, maxKey, false, areEqual, cmp);
                     break;
                 }
@@ -943,7 +951,6 @@ var BTree = /** @class */ (function () {
         if (destInLeaf < leaf.keys.length) {
             cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, startedEqual, other);
             cur.leafIndex = destInLeaf;
-            cur.onEndMove();
             return false;
         }
         // Find first ancestor with a viable right step
@@ -966,15 +973,14 @@ var BTree = /** @class */ (function () {
         var heightOf = function (sIndex) { return spine.length - sIndex; };
         // Exit leaf; we did walk out of it conceptually
         var startIndex = cur.leafIndex;
-        cur.onExitLeaf(leaf, startIndex, startedEqual, cur.leafPayload, other);
+        cur.onExitLeaf(cur, leaf, startIndex, startedEqual, cur.leafPayload, other);
         if (descentLevel < 0) {
-            // No descent point; step up all the way; last callback gets Infinity
+            // No descent point; step up all the way; last callback gets infinity
             for (var s = spine.length - 1; s >= 0; --s) {
                 var entry = spine[s];
-                var sd = s === 0 ? Infinity : NaN;
+                var sd = s === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
                 cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, sd, other);
             }
-            cur.onEndMove();
             return true;
         }
         // Step up through ancestors above the descentLevel
@@ -1010,13 +1016,12 @@ var BTree = /** @class */ (function () {
         cur.leaf = node;
         cur.leafPayload = leafPayload;
         cur.leafIndex = destIndex;
-        cur.onEndMove();
         return false;
     };
     /**
      * Create a cursor pointing to the leftmost key of the supplied tree.
      */
-    BTree.createCursor = function (tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, onEndMove) {
+    BTree.createCursor = function (tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown) {
         check(tree._root.size() > 0, "createCursor: cannot create a cursor for an empty tree");
         var spine = [];
         var n = tree._root;
@@ -1037,8 +1042,7 @@ var BTree = /** @class */ (function () {
             onMoveInLeaf: onMoveInLeaf,
             onExitLeaf: onExitLeaf,
             onStepUp: onStepUp,
-            onStepDown: onStepDown,
-            onEndMove: onEndMove
+            onStepDown: onStepDown
         };
         return cur;
     };
