@@ -1472,7 +1472,7 @@ function testMerge(maxNodeSize: number) {
       return leftValue + rightValue;
     });
 
-    expect(mergeCalls).toBe(1);
+    expect(mergeCalls).toBe(0);
     expect(result.size).toBe(tree1.size + tree2.size);
   });
 

@@ -1039,7 +1039,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       cursorThis: MergeCursor<K,V,MergeCursorPayload>,
       cursorOther: MergeCursor<K,V,MergeCursorPayload>
     ) => {
-      if (destIndex > 0 || cmp(leaf.keys[0], BTree.getKey(cursorOther)) < 0) {
+      if (destIndex > 0 || cmp(leaf.keys[0], BTree.getKey(cursorOther)) === 0) {
         // Similar logic to the step-down case, except in this case we also know the leaf in the other
         // tree overlaps a leaf in this tree (this leaf, specifically). Thus, we can disqualify both spines.
         cursorThis.leafPayload.disqualified = true;
