@@ -1016,6 +1016,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const onStepDown = (
       node: BNodeInternal<K,V>,
       height: number,
+      spineIndex: number,
       stepDownIndex: number,
       cursorThis: MergeCursor<K,V,MergeCursorPayload>
     ) => {
@@ -1026,8 +1027,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
         // the child we are stepping into has a key greater than our target key, this node must overlap.
         // If a child overlaps, the entire spine overlaps because a parent in a btree always encloses the range
         // of its children.
-        cursorThis.spine[height].payload.disqualified = true;
-        disqualifySpine(cursorThis, cursorThis.spine.length - height);
+        disqualifySpine(cursorThis, spineIndex);
         for (let i = 0; i < stepDownIndex; ++i)
           addSharedNodeToDisjointSet(node.children[i], height - 1);
       }
@@ -1198,9 +1198,9 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     entry.childIndex = descentIndex;
 
     // Descend, invoking onStepDown and creating payloads
+    let height = heightOf(descentLevel) - 1; // calculate height before changing length
     spine.length = descentLevel + 1;
     let node: BNode<K,V> = spine[descentLevel].node.children[descentIndex];
-    let height = heightOf(descentLevel) - 1;
 
     while (!node.isLeaf) {
       const ni = node as BNodeInternal<K,V>;
@@ -1208,7 +1208,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       const stepDownIndex = j + (isInclusive ? 0 : (j < ni.keys.length && cmp(ni.keys[j], targetKey) === 0 ? 1 : 0));
       const payload = cur.makePayload();
       spine.push({ node: ni, childIndex: stepDownIndex, payload });
-      cur.onStepDown(ni, height, stepDownIndex, cur);
+      cur.onStepDown(ni, height, spine.length - 1, stepDownIndex, cur);
       node = ni.children[stepDownIndex];
       height -= 1;
     }
@@ -2627,7 +2627,7 @@ interface MergeCursor<K, V, TPayload> {
   onMoveInLeaf: (leaf: BNode<K, V>, payload: TPayload, fromIndex: number, toIndex: number, isInclusive: boolean) => void;
   onExitLeaf: (leaf: BNode<K, V>, payload: TPayload, startingIndex: number, isInclusive: boolean, cursorThis: MergeCursor<K,V,TPayload>) => void;
   onStepUp: (parent: BNodeInternal<K, V>, height: number, payload: TPayload, fromIndex: number, stepDownIndex: number) => void;
-  onStepDown: (node: BNodeInternal<K, V>, height: number, stepDownIndex: number, cursorThis: MergeCursor<K, V, TPayload>) => void;
+  onStepDown: (node: BNodeInternal<K, V>, height: number, spineIndex: number, stepDownIndex: number, cursorThis: MergeCursor<K, V, TPayload>) => void;
   onEnterLeaf: (leaf: BNode<K, V>, destIndex: number, cursorThis: MergeCursor<K, V, TPayload>, cursorOther: MergeCursor<K, V, TPayload>) => void;
 }
 

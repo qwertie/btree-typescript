@@ -866,7 +866,7 @@ var BTree = /** @class */ (function () {
                     addSharedNodeToDisjointSet(parent.children[i], height - 1);
             }
         };
-        var onStepDown = function (node, height, stepDownIndex, cursorThis) {
+        var onStepDown = function (node, height, spineIndex, stepDownIndex, cursorThis) {
             if (stepDownIndex > 0) {
                 // When we step down into a node, we know that we have walked from a key that is less than our target.
                 // Because of this, if we are not stepping down into the first child, we know that all children before
@@ -874,8 +874,7 @@ var BTree = /** @class */ (function () {
                 // the child we are stepping into has a key greater than our target key, this node must overlap.
                 // If a child overlaps, the entire spine overlaps because a parent in a btree always encloses the range
                 // of its children.
-                cursorThis.spine[height].payload.disqualified = true;
-                disqualifySpine(cursorThis, cursorThis.spine.length - height);
+                disqualifySpine(cursorThis, spineIndex);
                 for (var i = 0; i < stepDownIndex; ++i)
                     addSharedNodeToDisjointSet(node.children[i], height - 1);
             }
@@ -1023,16 +1022,16 @@ var BTree = /** @class */ (function () {
         cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex);
         entry.childIndex = descentIndex;
         // Descend, invoking onStepDown and creating payloads
+        var height = heightOf(descentLevel) - 1; // calculate height before changing length
         spine.length = descentLevel + 1;
         var node = spine[descentLevel].node.children[descentIndex];
-        var height = heightOf(descentLevel) - 1;
         while (!node.isLeaf) {
             var ni = node;
             var j = ni.indexOf(targetKey, 0, cmp);
             var stepDownIndex = j + (isInclusive ? 0 : (j < ni.keys.length && cmp(ni.keys[j], targetKey) === 0 ? 1 : 0));
             var payload = cur.makePayload();
             spine.push({ node: ni, childIndex: stepDownIndex, payload: payload });
-            cur.onStepDown(ni, height, stepDownIndex, cur);
+            cur.onStepDown(ni, height, spine.length - 1, stepDownIndex, cur);
             node = ni.children[stepDownIndex];
             height -= 1;
         }
