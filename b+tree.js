@@ -566,19 +566,19 @@ var BTree = /** @class */ (function () {
         // Start result at the tallest subtree from the disjoint set
         var initialRoot = disjoint[tallestIndex][1];
         var branchingFactor = this._maxNodeSize;
-        var rightFrontier = [initialRoot];
-        BTree.updateFrontier(rightFrontier, 0, BTree.getRightmostChild);
+        var frontier = [initialRoot];
         // Process all subtrees to the right of the tallest subtree
-        if (tallestIndex + 1 <= disjoint.length - 1)
-            BTree.processSide(branchingFactor, disjoint, rightFrontier, tallestIndex + 1, disjoint.length, 1, true, BTree.getRightmostChild);
-        var leftFrontier = [rightFrontier[0]];
-        BTree.updateFrontier(leftFrontier, 0, BTree.getLeftmostChild);
+        if (tallestIndex + 1 <= disjoint.length - 1) {
+            BTree.updateFrontier(frontier, 0, BTree.getRightmostChild);
+            BTree.processSide(branchingFactor, disjoint, frontier, tallestIndex + 1, disjoint.length, 1, true, BTree.getRightmostChild);
+        }
         // Process all subtrees to the left of the tallest subtree (reverse order)
-        if (tallestIndex - 1 >= 0)
-            BTree.processSide(branchingFactor, disjoint, leftFrontier, tallestIndex - 1, -1, -1, false, BTree.getLeftmostChild);
+        if (tallestIndex - 1 >= 0) {
+            BTree.updateFrontier(frontier, 0, BTree.getLeftmostChild);
+            BTree.processSide(branchingFactor, disjoint, frontier, tallestIndex - 1, -1, -1, false, BTree.getLeftmostChild);
+        }
         var merged = new BTree(undefined, this._compare, this._maxNodeSize);
-        check(rightFrontier[0] === leftFrontier[0], "Root mismatch after merge processing.");
-        merged._root = rightFrontier[0];
+        merged._root = frontier[0];
         // Return the resulting tree
         return merged;
     };
