@@ -643,7 +643,6 @@ var BTree = /** @class */ (function () {
     ;
     // Append a subtree at a given depth on the chosen side; cascade splits upward if needed.
     BTree.appendAndCascade = function (spine, insertionDepth, branchingFactor, subtree, rightSide) {
-        check(spine.length > 1 && insertionDepth < spine.length - 1, "Invalid insertion at leaf level.");
         var carry = subtree;
         // Append at insertionDepth and bubble new right siblings upward until a node with capacity accepts them or we reach root
         var d = insertionDepth;
@@ -810,7 +809,7 @@ var BTree = /** @class */ (function () {
             }
         };
         var disqualifySpine = function (cursor, depthFrom) {
-            for (var i = depthFrom; i > 0; --i) {
+            for (var i = depthFrom; i >= 0; --i) {
                 var entry = cursor.spine[i];
                 if (entry.payload.disqualified)
                     break;

@@ -751,7 +751,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     branchingFactor: number,
     subtree: BNode<K,V>,
     rightSide: boolean): BNodeInternal<K,V> | undefined {
-    check(spine.length > 1 && insertionDepth < spine.length - 1, "Invalid insertion at leaf level.");
     let carry: BNode<K,V> | undefined = subtree;
     // Append at insertionDepth and bubble new right siblings upward until a node with capacity accepts them or we reach root
     let d = insertionDepth;
@@ -936,7 +935,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     };
 
     const disqualifySpine = (cursor: MergeCursor<K,V,MergeCursorPayload>, depthFrom: number) => {
-      for (let i = depthFrom; i > 0; --i) {
+      for (let i = depthFrom; i >= 0; --i) {
         const entry = cursor.spine[i];
         if (entry.payload.disqualified)
           break;
