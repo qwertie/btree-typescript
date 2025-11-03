@@ -809,7 +809,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       const childIndex = frontierChildIndex(parent);
       const clone = parent.children[childIndex].clone();
       parent.children[childIndex] = clone;
-      parent.keys[childIndex] = clone.maxKey();
       spine[depth] = clone as BNodeInternal<K,V>;
     }
   };

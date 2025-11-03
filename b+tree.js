@@ -697,7 +697,6 @@ var BTree = /** @class */ (function () {
             var childIndex = frontierChildIndex(parent);
             var clone = parent.children[childIndex].clone();
             parent.children[childIndex] = clone;
-            parent.keys[childIndex] = clone.maxKey();
             spine[depth] = clone;
         }
     };
