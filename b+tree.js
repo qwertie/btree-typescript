@@ -620,13 +620,16 @@ var BTree = /** @class */ (function () {
                 spine[0] = newRoot;
                 unflushedSizes.forEach(function (count) { return check(count === 0, "Unexpected unflushed size after root split."); });
                 unflushedSizes.push(0); // new root level
+                isSharedFrontierDepth = insertionDepth + 2;
             }
             else {
-                // TODO
-                unflushedSizes[insertionDepth] += subtree.size();
+                if (insertionDepth > 0) {
+                    // appendAndCascade updates the size of the parent of the insertion, but does not update recursively upward
+                    // This is done lazily to avoid log(n) asymptotics.
+                    unflushedSizes[insertionDepth - 1] += subtree.size();
+                }
+                isSharedFrontierDepth = insertionDepth + 1;
             }
-            // if insertionDepth was -1, a new root was made and the shared node was inserted just below it
-            isSharedFrontierDepth = Math.max(1, insertionDepth + 1);
             // Finally, update the frontier from the highest new node downward
             // Note that this is often the point where the new subtree is attached,
             // but in the case of cascaded splits it may be higher up.
@@ -673,7 +676,7 @@ var BTree = /** @class */ (function () {
         // If still carrying after root, create a new root
         if (carry) {
             var oldRoot = spine[0];
-            var children = rightSide ? [oldRoot, carry] : [oldRoot, carry];
+            var children = rightSide ? [oldRoot, carry] : [carry, oldRoot];
             var newRoot = new BNodeInternal(children, oldRoot.size() + carry.size());
             return newRoot;
         }
