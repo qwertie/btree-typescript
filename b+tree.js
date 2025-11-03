@@ -881,7 +881,8 @@ var BTree = /** @class */ (function () {
             }
         };
         var onEnterLeaf = function (leaf, destIndex, cursorThis, cursorOther) {
-            if (destIndex > 0 || cmp(leaf.keys[0], BTree.getKey(cursorOther)) === 0) {
+            if (destIndex > 0
+                || cmp(leaf.keys[0], cursorOther.leaf.minKey()) >= 0 && cmp(leaf.keys[0], cursorOther.leaf.maxKey()) <= 0) {
                 // Similar logic to the step-down case, except in this case we also know the leaf in the other
                 // tree overlaps a leaf in this tree (this leaf, specifically). Thus, we can disqualify both spines.
                 cursorThis.leafPayload.disqualified = true;
@@ -889,9 +890,6 @@ var BTree = /** @class */ (function () {
                 disqualifySpine(cursorThis, cursorThis.spine.length - 1);
                 disqualifySpine(cursorOther, cursorOther.spine.length - 1);
                 pushLeafRange(leaf, 0, Math.min(destIndex, leaf.keys.length));
-            }
-            else {
-                check(destIndex === 0, "onEnterLeaf: destIndex must be 0 if not overlapping");
             }
         };
         // Need the max key of both trees to perform the "finishing" walk of which ever cursor finishes second
@@ -975,9 +973,8 @@ var BTree = /** @class */ (function () {
      * Returns true if end-of-tree was reached (cursor not structurally mutated).
      */
     BTree.moveTo = function (cur, other, targetKey, isInclusive, startedEqual, cmp) {
-        var curKey = BTree.getKey(cur);
         // We should start before the target (or at it if inclusive)
-        var keyPos = cmp(curKey, targetKey);
+        var keyPos = cmp(BTree.getKey(cur), targetKey);
         check(isInclusive && keyPos < 0 || !isInclusive && keyPos <= 0, "moveTo precondition violated");
         // Fast path: destination within current leaf
         var leaf = cur.leaf;
@@ -1012,22 +1009,20 @@ var BTree = /** @class */ (function () {
         if (descentLevel < 0) {
             // No descent point; step up all the way; last callback gets infinity
             for (var s = spine.length - 1; s >= 0; --s) {
-                var entry = spine[s];
+                var entry_1 = spine[s];
                 var sd = s === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
-                cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, sd);
+                cur.onStepUp(entry_1.node, heightOf(s), entry_1.payload, entry_1.childIndex, sd);
             }
             return true;
         }
         // Step up through ancestors above the descentLevel
         for (var s = spine.length - 1; s > descentLevel; --s) {
-            var entry = spine[s];
-            cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, NaN);
+            var entry_2 = spine[s];
+            cur.onStepUp(entry_2.node, heightOf(s), entry_2.payload, entry_2.childIndex, NaN);
         }
-        {
-            var entry = spine[descentLevel];
-            cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex);
-            entry.childIndex = descentIndex;
-        }
+        var entry = spine[descentLevel];
+        cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex);
+        entry.childIndex = descentIndex;
         // Descend, invoking onStepDown and creating payloads
         spine.length = descentLevel + 1;
         var node = spine[descentLevel].node.children[descentIndex];

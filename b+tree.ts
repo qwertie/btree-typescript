@@ -1039,7 +1039,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       cursorThis: MergeCursor<K,V,MergeCursorPayload>,
       cursorOther: MergeCursor<K,V,MergeCursorPayload>
     ) => {
-      if (destIndex > 0 || cmp(leaf.keys[0], BTree.getKey(cursorOther)) === 0) {
+      if (destIndex > 0
+        || cmp(leaf.keys[0], cursorOther.leaf.minKey()!) >= 0 && cmp(leaf.keys[0], cursorOther.leaf.maxKey()) <= 0) {
         // Similar logic to the step-down case, except in this case we also know the leaf in the other
         // tree overlaps a leaf in this tree (this leaf, specifically). Thus, we can disqualify both spines.
         cursorThis.leafPayload.disqualified = true;
@@ -1047,8 +1048,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
         disqualifySpine(cursorThis, cursorThis.spine.length - 1);
         disqualifySpine(cursorOther, cursorOther.spine.length - 1);
         pushLeafRange(leaf, 0, Math.min(destIndex, leaf.keys.length));
-      } else {
-        check(destIndex === 0, "onEnterLeaf: destIndex must be 0 if not overlapping");
       }
     };
 
@@ -1140,10 +1139,9 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     startedEqual: boolean,
     cmp: (a:K,b:K)=>number
   ): boolean {
-    const curKey = BTree.getKey(cur);
     // We should start before the target (or at it if inclusive)
-    const keyPos = cmp(curKey, targetKey);
-    check(isInclusive && keyPos < 0 || !isInclusive && keyPos <= 0, "moveTo precondition violated");
+    const keyPos = cmp(BTree.getKey(cur), targetKey);
+    check(isInclusive && keyPos < 0 || !isInclusive && keyPos <= 0, "moveTo requires alternating hop pattern");
 
     // Fast path: destination within current leaf
     const leaf = cur.leaf;
@@ -1195,11 +1193,10 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       const entry = spine[s];
       cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, NaN);
     }
-    {
-      const entry = spine[descentLevel];
-      cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex);
-      entry.childIndex = descentIndex;
-    }
+
+    const entry = spine[descentLevel];
+    cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex);
+    entry.childIndex = descentIndex;
 
     // Descend, invoking onStepDown and creating payloads
     spine.length = descentLevel + 1;
