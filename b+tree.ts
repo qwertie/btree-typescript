@@ -1158,13 +1158,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     let descentLevel = -1;
     let descentIndex = -1;
 
-    for (let s = spine.length - 1; s >= 0; --s) {
+    for (let s = spine.length - 1; s >= 0; s--) {
       const parent = spine[s].node;
-      const fromIndex = spine[s].childIndex;
-      const j = parent.indexOf(targetKey, 0, cmp); // insertion index or exact
-      const stepDownIndex = j + (isInclusive ? 0 : (j < parent.keys.length && cmp(parent.keys[j], targetKey) === 0 ? 1 : 0));
+      const indexOf = parent.indexOf(targetKey, 0, cmp); // insertion index or exact
+      const stepDownIndex = indexOf + (isInclusive ? 0 : (indexOf < parent.keys.length && cmp(parent.keys[indexOf], targetKey) === 0 ? 1 : 0));
       // Note: when key not found, indexOf with failXor=0 already returns insertion index
-      if (stepDownIndex > fromIndex && stepDownIndex <= parent.keys.length - 1) {
+      if (stepDownIndex <= parent.keys.length - 1) {
         descentLevel = s;
         descentIndex = stepDownIndex;
         break;
@@ -1172,7 +1171,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     }
 
     // Heights for callbacks: height = distance to leaf. Parent-of-leaf height = 1.
-    const heightOf = (sIndex: number) => spine.length - sIndex;
+    const heightOf = (depth: number) => spine.length - depth;
 
     // Exit leaf; we did walk out of it conceptually
     const startIndex = cur.leafIndex;
@@ -1180,18 +1179,18 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
     if (descentLevel < 0) {
       // No descent point; step up all the way; last callback gets infinity
-      for (let s = spine.length - 1; s >= 0; --s) {
-        const entry = spine[s];
-        const sd = s === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
-        cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, sd);
+      for (let depth = spine.length - 1; depth >= 0; depth--) {
+        const entry = spine[depth];
+        const sd = depth === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
+        cur.onStepUp(entry.node, heightOf(depth), entry.payload, entry.childIndex, sd);
       }
       return true;
     }
 
     // Step up through ancestors above the descentLevel
-    for (let s = spine.length - 1; s > descentLevel; --s) {
-      const entry = spine[s];
-      cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, NaN);
+    for (let depth = spine.length - 1; depth > descentLevel; depth--) {
+      const entry = spine[depth];
+      cur.onStepUp(entry.node, heightOf(depth), entry.payload, entry.childIndex, NaN);
     }
 
     const entry = spine[descentLevel];

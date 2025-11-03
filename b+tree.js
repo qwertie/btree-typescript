@@ -975,7 +975,7 @@ var BTree = /** @class */ (function () {
     BTree.moveTo = function (cur, other, targetKey, isInclusive, startedEqual, cmp) {
         // We should start before the target (or at it if inclusive)
         var keyPos = cmp(BTree.getKey(cur), targetKey);
-        check(isInclusive && keyPos < 0 || !isInclusive && keyPos <= 0, "moveTo precondition violated");
+        check(isInclusive && keyPos < 0 || !isInclusive && keyPos <= 0, "moveTo requires alternating hop pattern");
         // Fast path: destination within current leaf
         var leaf = cur.leaf;
         var i = leaf.indexOf(targetKey, -1, cmp);
@@ -989,36 +989,35 @@ var BTree = /** @class */ (function () {
         var spine = cur.spine;
         var descentLevel = -1;
         var descentIndex = -1;
-        for (var s = spine.length - 1; s >= 0; --s) {
+        for (var s = spine.length - 1; s >= 0; s--) {
             var parent = spine[s].node;
-            var fromIndex = spine[s].childIndex;
-            var j = parent.indexOf(targetKey, 0, cmp); // insertion index or exact
-            var stepDownIndex = j + (isInclusive ? 0 : (j < parent.keys.length && cmp(parent.keys[j], targetKey) === 0 ? 1 : 0));
+            var indexOf = parent.indexOf(targetKey, 0, cmp); // insertion index or exact
+            var stepDownIndex = indexOf + (isInclusive ? 0 : (indexOf < parent.keys.length && cmp(parent.keys[indexOf], targetKey) === 0 ? 1 : 0));
             // Note: when key not found, indexOf with failXor=0 already returns insertion index
-            if (stepDownIndex > fromIndex && stepDownIndex <= parent.keys.length - 1) {
+            if (stepDownIndex <= parent.keys.length - 1) {
                 descentLevel = s;
                 descentIndex = stepDownIndex;
                 break;
             }
         }
         // Heights for callbacks: height = distance to leaf. Parent-of-leaf height = 1.
-        var heightOf = function (sIndex) { return spine.length - sIndex; };
+        var heightOf = function (depth) { return spine.length - depth; };
         // Exit leaf; we did walk out of it conceptually
         var startIndex = cur.leafIndex;
         cur.onExitLeaf(leaf, cur.leafPayload, startIndex, startedEqual, cur);
         if (descentLevel < 0) {
             // No descent point; step up all the way; last callback gets infinity
-            for (var s = spine.length - 1; s >= 0; --s) {
-                var entry_1 = spine[s];
-                var sd = s === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
-                cur.onStepUp(entry_1.node, heightOf(s), entry_1.payload, entry_1.childIndex, sd);
+            for (var depth = spine.length - 1; depth >= 0; depth--) {
+                var entry_1 = spine[depth];
+                var sd = depth === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
+                cur.onStepUp(entry_1.node, heightOf(depth), entry_1.payload, entry_1.childIndex, sd);
             }
             return true;
         }
         // Step up through ancestors above the descentLevel
-        for (var s = spine.length - 1; s > descentLevel; --s) {
-            var entry_2 = spine[s];
-            cur.onStepUp(entry_2.node, heightOf(s), entry_2.payload, entry_2.childIndex, NaN);
+        for (var depth = spine.length - 1; depth > descentLevel; depth--) {
+            var entry_2 = spine[depth];
+            cur.onStepUp(entry_2.node, heightOf(depth), entry_2.payload, entry_2.childIndex, NaN);
         }
         var entry = spine[descentLevel];
         cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex);
