@@ -507,9 +507,7 @@ var BTree = /** @class */ (function () {
             throw new Error("Cannot merge BTrees with different max node sizes.");
         if (other.size === 0 || this.size === 0)
             return;
-        // Cursor payload factory
-        var makePayload = function (_) { return undefined; };
-        // Callbacks
+        var makePayload = function () { return undefined; };
         var empty = function () { };
         // Initialize cursors at minimum keys.
         var curA = BTree.createCursor(this, makePayload, empty, empty, empty, empty, empty);
@@ -624,6 +622,7 @@ var BTree = /** @class */ (function () {
                 unflushedSizes.push(0); // new root level
             }
             else {
+                // TODO
                 unflushedSizes[insertionDepth] += subtree.size();
             }
             // if insertionDepth was -1, a new root was made and the shared node was inserted just below it
@@ -790,6 +789,8 @@ var BTree = /** @class */ (function () {
                 pending.length = 0;
             }
         };
+        // Have to do this as cast to convince TS it's ever assigned
+        var highestDisjoint = undefined;
         var addSharedNodeToDisjointSet = function (node, height) {
             flushPendingEntries();
             node.isShared = true;
@@ -799,34 +800,34 @@ var BTree = /** @class */ (function () {
                 tallestHeight = height;
             }
         };
-        // Have to do this as cast to convince TS it's ever assigned
-        var highestDisjoint = undefined;
+        var addHighestDisjoint = function () {
+            if (highestDisjoint !== undefined) {
+                addSharedNodeToDisjointSet(highestDisjoint.node, highestDisjoint.height);
+                highestDisjoint = undefined;
+            }
+        };
+        var disqualifySpine = function (cursor, depthFrom) {
+            for (var i = depthFrom; i > 0; --i) {
+                var entry = cursor.spine[i];
+                if (entry.payload.disqualified)
+                    break;
+                entry.payload.disqualified = true;
+            }
+        };
         // Cursor payload factory
-        var makePayload = function (_) { return ({ disqualified: false }); };
+        var makePayload = function () { return ({ disqualified: false }); };
         var pushLeafRange = function (leaf, from, toExclusive) {
             if (from < toExclusive) {
                 for (var i = from; i < toExclusive; ++i)
                     pending.push([leaf.keys[i], leaf.values[i]]);
             }
         };
-        // Callbacks
-        var onEnterLeaf = function (leaf, payload, destIndex, other) {
-            var otherLeaf = BTree.getLeaf(other);
-            if (BTree.areOverlapping(leaf, otherLeaf, cmp)) {
-                payload.disqualified = true;
-                other.leafPayload.disqualified = true;
-                pushLeafRange(leaf, 0, Math.min(destIndex, leaf.keys.length));
-            }
-            else {
-                check(destIndex === 0, "onEnterLeaf: destIndex must be 0 if not overlapping");
-            }
-        };
-        var onMoveInLeaf = function (leaf, payload, fromIndex, toIndex, startedEqual, _other) {
+        var onMoveInLeaf = function (leaf, payload, fromIndex, toIndex, startedEqual) {
             check(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
             var start = startedEqual ? fromIndex + 1 : fromIndex;
             pushLeafRange(leaf, start, Math.min(toIndex, leaf.keys.length));
         };
-        var onExitLeaf = function (cursorThis, leaf, startingIndex, startedEqual, payload, _other) {
+        var onExitLeaf = function (leaf, payload, startingIndex, startedEqual, cursorThis) {
             highestDisjoint = undefined;
             if (!payload.disqualified) {
                 highestDisjoint = { node: leaf, height: 0 };
@@ -841,10 +842,15 @@ var BTree = /** @class */ (function () {
                 pushLeafRange(leaf, start, leaf.keys.length);
             }
         };
-        var onStepUp = function (parent, height, payload, fromIndex, stepDownIndex, _other) {
-            if (Number.isNaN(stepDownIndex) || stepDownIndex === Number.POSITIVE_INFINITY) {
+        var onStepUp = function (parent, height, payload, fromIndex, stepDownIndex) {
+            if (Number.isNaN(stepDownIndex) /* still walking up */
+                || stepDownIndex === Number.POSITIVE_INFINITY /* target key is beyond edge of tree, done with walk */) {
                 if (!payload.disqualified) {
                     highestDisjoint = { node: parent, height: height };
+                    if (stepDownIndex === Number.POSITIVE_INFINITY) {
+                        // We have finished our walk, and we won't be stepping down, so add the root
+                        addHighestDisjoint();
+                    }
                 }
                 else {
                     addHighestDisjoint();
@@ -858,19 +864,32 @@ var BTree = /** @class */ (function () {
                     addSharedNodeToDisjointSet(parent.children[i], height - 1);
             }
         };
-        var onStepDown = function (node, height, payload, stepDownIndex, other) {
-            var otherLeaf = BTree.getLeaf(other);
-            if (BTree.areOverlapping(node, otherLeaf, cmp)) {
-                payload.disqualified = true;
-                // leaf disqualification is handled in onEnterLeaf
+        var onStepDown = function (node, height, stepDownIndex, cursorThis) {
+            if (stepDownIndex > 0) {
+                // When we step down into a node, we know that we have walked from a key that is less than our target.
+                // Because of this, if we are not stepping down into the first child, we know that all children before
+                // the stepDownIndex must overlap with the other tree because they must be before our target key. Since
+                // the child we are stepping into has a key greater than our target key, this node must overlap.
+                // If a child overlaps, the entire spine overlaps because a parent in a btree always encloses the range
+                // of its children.
+                cursorThis.spine[height].payload.disqualified = true;
+                disqualifySpine(cursorThis, cursorThis.spine.length - height);
+                for (var i = 0; i < stepDownIndex; ++i)
+                    addSharedNodeToDisjointSet(node.children[i], height - 1);
             }
-            for (var i = 0; i < stepDownIndex; ++i)
-                addSharedNodeToDisjointSet(node.children[i], height - 1);
         };
-        var addHighestDisjoint = function () {
-            if (highestDisjoint !== undefined) {
-                addSharedNodeToDisjointSet(highestDisjoint.node, highestDisjoint.height);
-                highestDisjoint = undefined;
+        var onEnterLeaf = function (leaf, destIndex, cursorThis, cursorOther) {
+            if (destIndex > 0 || cmp(leaf.keys[0], BTree.getKey(cursorOther)) < 0) {
+                // Similar logic to the step-down case, except in this case we also know the leaf in the other
+                // tree overlaps a leaf in this tree (this leaf, specifically). Thus, we can disqualify both spines.
+                cursorThis.leafPayload.disqualified = true;
+                cursorOther.leafPayload.disqualified = true;
+                disqualifySpine(cursorThis, cursorThis.spine.length - 1);
+                disqualifySpine(cursorOther, cursorOther.spine.length - 1);
+                pushLeafRange(leaf, 0, Math.min(destIndex, leaf.keys.length));
+            }
+            else {
+                check(destIndex === 0, "onEnterLeaf: destIndex must be 0 if not overlapping");
             }
         };
         // Need the max key of both trees to perform the "finishing" walk of which ever cursor finishes second
@@ -880,19 +899,32 @@ var BTree = /** @class */ (function () {
         // Initialize cursors at minimum keys.
         var curA = BTree.createCursor(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
         var curB = BTree.createCursor(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+        // The guarantee that no overlapping interior nodes are accidentally reused relies on the careful
+        // alternating hopping walk of the cursors: WLOG, cursorA always--with one exception--walks from a key just behind (in key space)
+        // the key of cursorB to the first key >= cursorB. Call this transition a "crossover point." All interior nodes that
+        // overlap cause a crossover point, and all crossover points are guaranteed to be walked using this method. Thus,
+        // all overlapping interior nodes will be found if they are checked for on step-down.
+        // The one exception mentioned above is when they start at the same key. In this case, they are both advanced forward and then
+        // their new ordering determines how they walk from there.
+        // The one issue then is detecting any overlaps that occur based on their very initial position (minimum key of each tree).
+        // This is handled by the initial disqualification step below, which essentially emulates the step down disqualification for each spine.
         // Initialize disqualification w.r.t. opposite leaf.
-        var initDisqualify = function (cur, otherLeaf) {
-            if (BTree.areOverlapping(cur.leaf, otherLeaf, cmp))
+        var initDisqualify = function (cur, other) {
+            var minKey = BTree.getKey(cur);
+            var otherMin = BTree.getKey(other);
+            var otherMax = other.leaf.maxKey();
+            if (BTree.areOverlapping(minKey, cur.leaf.maxKey(), otherMin, otherMax, cmp))
                 cur.leafPayload.disqualified = true;
             for (var i = 0; i < cur.spine.length; ++i) {
                 var entry = cur.spine[i];
-                if (BTree.areOverlapping(entry.node, otherLeaf, cmp))
+                // Since we are on the left side of the tree, we can use the leaf min key for every spine node
+                if (BTree.areOverlapping(minKey, entry.node.maxKey(), otherMin, otherMax, cmp))
                     entry.payload.disqualified = true;
             }
         };
-        initDisqualify(curA, BTree.getLeaf(curB));
-        initDisqualify(curB, BTree.getLeaf(curA));
-        // Walk both cursors
+        initDisqualify(curA, curB);
+        initDisqualify(curB, curA);
+        // Walk both cursors in alternating hops
         while (true) {
             var order = cmp(BTree.getKey(curA), BTree.getKey(curB));
             var trailing = curA, leading = curB;
@@ -941,15 +973,16 @@ var BTree = /** @class */ (function () {
      * Returns true if end-of-tree was reached (cursor not structurally mutated).
      */
     BTree.moveTo = function (cur, other, targetKey, isInclusive, startedEqual, cmp) {
+        var curKey = BTree.getKey(cur);
         // We should start before the target (or at it if inclusive)
-        var keyPos = cmp(BTree.getKey(cur), targetKey);
+        var keyPos = cmp(curKey, targetKey);
         check(isInclusive && keyPos < 0 || !isInclusive && keyPos <= 0, "moveTo precondition violated");
         // Fast path: destination within current leaf
         var leaf = cur.leaf;
         var i = leaf.indexOf(targetKey, -1, cmp);
         var destInLeaf = i < 0 ? ~i : (isInclusive ? i : i + 1);
         if (destInLeaf < leaf.keys.length) {
-            cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, startedEqual, other);
+            cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, startedEqual);
             cur.leafIndex = destInLeaf;
             return false;
         }
@@ -973,24 +1006,24 @@ var BTree = /** @class */ (function () {
         var heightOf = function (sIndex) { return spine.length - sIndex; };
         // Exit leaf; we did walk out of it conceptually
         var startIndex = cur.leafIndex;
-        cur.onExitLeaf(cur, leaf, startIndex, startedEqual, cur.leafPayload, other);
+        cur.onExitLeaf(leaf, cur.leafPayload, startIndex, startedEqual, cur);
         if (descentLevel < 0) {
             // No descent point; step up all the way; last callback gets infinity
             for (var s = spine.length - 1; s >= 0; --s) {
                 var entry = spine[s];
                 var sd = s === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
-                cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, sd, other);
+                cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, sd);
             }
             return true;
         }
         // Step up through ancestors above the descentLevel
         for (var s = spine.length - 1; s > descentLevel; --s) {
             var entry = spine[s];
-            cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, NaN, other);
+            cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, NaN);
         }
         {
             var entry = spine[descentLevel];
-            cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex, other);
+            cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex);
             entry.childIndex = descentIndex;
         }
         // Descend, invoking onStepDown and creating payloads
@@ -1001,37 +1034,35 @@ var BTree = /** @class */ (function () {
             var ni = node;
             var j = ni.indexOf(targetKey, 0, cmp);
             var stepDownIndex = j + (isInclusive ? 0 : (j < ni.keys.length && cmp(ni.keys[j], targetKey) === 0 ? 1 : 0));
-            var payload = cur.makePayload(ni);
+            var payload = cur.makePayload();
             spine.push({ node: ni, childIndex: stepDownIndex, payload: payload });
-            cur.onStepDown(ni, height, payload, stepDownIndex, other);
+            cur.onStepDown(ni, height, stepDownIndex, cur);
             node = ni.children[stepDownIndex];
             height -= 1;
         }
         // Enter destination leaf
-        var leafPayload = cur.makePayload(node);
         var idx = node.indexOf(targetKey, -1, cmp);
         var destIndex = idx < 0 ? ~idx : (isInclusive ? idx : idx + 1);
         check(destIndex >= 0 && destIndex < node.keys.length, "moveTo: destination out of bounds");
-        cur.onEnterLeaf(node, leafPayload, destIndex, other);
         cur.leaf = node;
-        cur.leafPayload = leafPayload;
+        cur.leafPayload = cur.makePayload();
         cur.leafIndex = destIndex;
+        cur.onEnterLeaf(node, destIndex, cur, other);
         return false;
     };
     /**
      * Create a cursor pointing to the leftmost key of the supplied tree.
      */
     BTree.createCursor = function (tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown) {
-        check(tree._root.size() > 0, "createCursor: cannot create a cursor for an empty tree");
         var spine = [];
         var n = tree._root;
         while (!n.isLeaf) {
             var ni = n;
-            var payload = makePayload(ni);
+            var payload = makePayload();
             spine.push({ node: ni, childIndex: 0, payload: payload });
             n = ni.children[0];
         }
-        var leafPayload = makePayload(n);
+        var leafPayload = makePayload();
         var cur = {
             tree: tree,
             leaf: n, leafIndex: 0,
@@ -1049,14 +1080,39 @@ var BTree = /** @class */ (function () {
     BTree.getKey = function (c) {
         return c.leaf.keys[c.leafIndex];
     };
-    BTree.getLeaf = function (c) {
-        return c.leaf;
-    };
-    BTree.areOverlapping = function (a, b, cmp) {
-        var amin = a.minKey(), amax = a.maxKey();
-        var bmin = b.minKey(), bmax = b.maxKey();
-        // Overlap iff !(amax < bmin || bmax < amin) on inclusive ranges.
-        return !(cmp(amax, bmin) < 0 || cmp(bmax, amin) < 0);
+    /**
+     * Determines whether two nodes are overlapping in key range.
+     * Takes the leftmost known key of each node to avoid a log(n) min calculation.
+     * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
+     */
+    BTree.areOverlapping = function (aMin, aMax, bMin, bMax, cmp) {
+        // There are 4 possibilities:
+        // 1. aMin.........aMax
+        //            bMin.........bMax
+        // (aMax between bMin and bMax)
+        // 2.            aMin.........aMax
+        //      bMin.........bMax
+        // (aMin between bMin and bMax)
+        // 3. aMin.............aMax
+        //         bMin....bMax
+        // (aMin and aMax enclose bMin and bMax; note this includes equality cases)
+        // 4.      aMin....aMax
+        //     bMin.............bMax
+        // (bMin and bMax enclose aMin and aMax; note equality cases are identical to case 3)
+        var aMinBMin = cmp(aMin, bMin);
+        var aMinBMax = cmp(aMin, bMax);
+        if (aMinBMin >= 0 && aMinBMax <= 0) {
+            // case 2 or 4
+            return true;
+        }
+        var aMaxBMin = cmp(aMax, bMin);
+        var aMaxBMax = cmp(aMax, bMax);
+        if (aMaxBMin >= 0 && aMaxBMax <= 0) {
+            // case 1
+            return true;
+        }
+        // case 3 or no overlap
+        return aMinBMin <= 0 && aMaxBMax >= 0;
     };
     BTree.getLeftmostChild = function () {
         return 0;

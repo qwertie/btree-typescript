@@ -305,7 +305,11 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      */
     private static createCursor;
     private static getKey;
-    private static getLeaf;
+    /**
+     * Determines whether two nodes are overlapping in key range.
+     * Takes the leftmost known key of each node to avoid a log(n) min calculation.
+     * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
+     */
     private static areOverlapping;
     private static getLeftmostChild;
     private static getRightmostChild;

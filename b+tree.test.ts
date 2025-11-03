@@ -1458,6 +1458,24 @@ function testMerge(maxNodeSize: number) {
     expect(result.size).toBe(tree1.size + tree2.size - 1);
   });
 
+  test('Merge trees where all leaves are disjoint and one tree straddles the other', () => {
+    const straddleLength = 3 * 2 * maxNodeSize; // guaranteed to create multiple leaves on both trees
+    const tree1 = buildTree(range(0, straddleLength / 3).concat(range((straddleLength / 3) * 2, straddleLength)), 1);
+    const tree2 = buildTree(range(straddleLength / 3, (straddleLength / 3) * 2), 3);
+
+    expectRootLeafState(tree1, false);
+    expectRootLeafState(tree2, false);
+
+    let mergeCalls = 0;
+    const result = tree1.merge(tree2, (key, leftValue, rightValue) => {
+      mergeCalls++;
+      return leftValue + rightValue;
+    });
+
+    expect(mergeCalls).toBe(1);
+    expect(result.size).toBe(tree1.size + tree2.size);
+  });
+
   test('Merge where two-leaf tree intersects leaf-root tree across both leaves', () => {
     const size = maxNodeSize + Math.max(3, Math.floor(maxNodeSize / 2));
     const tree1 = buildTree(range(0, size), 2, 0);

@@ -587,10 +587,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     if (other.size === 0 || this.size === 0)
       return;
 
-    // Cursor payload factory
-    const makePayload = (_: BNode<K,V>): undefined => undefined;
-
-    // Callbacks
+    const makePayload = (): undefined => undefined;
     const empty = () => {};
 
     // Initialize cursors at minimum keys.
@@ -727,6 +724,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
         unflushedSizes.forEach((count) => check(count === 0, "Unexpected unflushed size after root split."));
         unflushedSizes.push(0); // new root level
       } else {
+        // TODO
         unflushedSizes[insertionDepth] += subtree.size();
       }
 
@@ -916,6 +914,9 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       }
     };
 
+    // Have to do this as cast to convince TS it's ever assigned
+    let highestDisjoint: { node: BNode<K,V>, height: number } | undefined = undefined as { node: BNode<K,V>, height: number } | undefined;
+
     const addSharedNodeToDisjointSet = (node: BNode<K,V>, height: number) => {
       flushPendingEntries();
       node.isShared = true;
@@ -926,11 +927,24 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       }
     };
 
-    // Have to do this as cast to convince TS it's ever assigned
-    let highestDisjoint: { node: BNode<K,V>, height: number } | undefined = undefined as { node: BNode<K,V>, height: number } | undefined;
+    const addHighestDisjoint = () => {
+      if (highestDisjoint !== undefined) {
+        addSharedNodeToDisjointSet(highestDisjoint.node, highestDisjoint.height);
+        highestDisjoint = undefined;
+      }
+    };
+
+    const disqualifySpine = (cursor: MergeCursor<K,V,MergeCursorPayload>, depthFrom: number) => {
+      for (let i = depthFrom; i > 0; --i) {
+        const entry = cursor.spine[i];
+        if (entry.payload.disqualified)
+          break;
+        entry.payload.disqualified = true;
+      }
+    };
 
     // Cursor payload factory
-    const makePayload = <TP extends MergeCursorPayload>(_: BNode<K,V>): TP => ({ disqualified: false } as TP);
+    const makePayload = (): MergeCursorPayload => ({ disqualified: false });
 
     const pushLeafRange = (leaf: BNode<K,V>, from: number, toExclusive: number) => {
       if (from < toExclusive) {
@@ -939,30 +953,24 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       }
     };
 
-    // Callbacks
-    const onEnterLeaf = <TP extends MergeCursorPayload>(
-      leaf: BNode<K,V>, payload: TP, destIndex: number, other: MergeCursor<K,V,TP>
-    ) => {
-      const otherLeaf = BTree.getLeaf(other);
-      if (BTree.areOverlapping(leaf, otherLeaf, cmp)) {
-        payload.disqualified = true;
-        other.leafPayload.disqualified = true;
-        pushLeafRange(leaf, 0, Math.min(destIndex, leaf.keys.length));
-      } else {
-        check(destIndex === 0, "onEnterLeaf: destIndex must be 0 if not overlapping");
-      }
-    };
-
-    const onMoveInLeaf = <TP extends MergeCursorPayload>(
-      leaf: BNode<K,V>, payload: TP, fromIndex: number, toIndex: number, startedEqual: boolean, _other: MergeCursor<K,V,TP>
+    const onMoveInLeaf = (
+      leaf: BNode<K,V>,
+      payload: MergeCursorPayload,
+      fromIndex: number,
+      toIndex: number,
+      startedEqual: boolean
     ) => {
       check(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
       const start = startedEqual ? fromIndex + 1 : fromIndex;
       pushLeafRange(leaf, start, Math.min(toIndex, leaf.keys.length));
     };
 
-    const onExitLeaf = <TP extends MergeCursorPayload>(
-      cursorThis: MergeCursor<K,V,TP>, leaf: BNode<K,V>, startingIndex: number, startedEqual: boolean, payload: TP, _other: MergeCursor<K,V,TP>
+    const onExitLeaf = (
+      leaf: BNode<K,V>,
+      payload: MergeCursorPayload,
+      startingIndex: number,
+      startedEqual: boolean,
+      cursorThis: MergeCursor<K,V,MergeCursorPayload>,
     ) => {
       highestDisjoint = undefined;
       if (!payload.disqualified) {
@@ -978,12 +986,21 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       }
     };
 
-    const onStepUp = <TP extends MergeCursorPayload>(
-      parent: BNodeInternal<K,V>, height: number, payload: TP, fromIndex: number, stepDownIndex: number, _other: MergeCursor<K,V,TP>
+    const onStepUp = (
+      parent: BNodeInternal<K,V>,
+      height: number,
+      payload: MergeCursorPayload,
+      fromIndex: number,
+      stepDownIndex: number
     ) => {
-      if (Number.isNaN(stepDownIndex) || stepDownIndex === Number.POSITIVE_INFINITY) {
+      if (Number.isNaN(stepDownIndex) /* still walking up */ 
+        || stepDownIndex === Number.POSITIVE_INFINITY /* target key is beyond edge of tree, done with walk */) {
         if (!payload.disqualified) {
           highestDisjoint = { node: parent, height };
+          if (stepDownIndex === Number.POSITIVE_INFINITY) {
+            // We have finished our walk, and we won't be stepping down, so add the root
+            addHighestDisjoint();
+          }
         } else {
           addHighestDisjoint();
           for (let i = fromIndex + 1; i < parent.children.length; ++i)
@@ -996,22 +1013,42 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       }
     };
 
-    const onStepDown = <TP extends MergeCursorPayload>(
-      node: BNodeInternal<K,V>, height: number, payload: TP, stepDownIndex: number, other: MergeCursor<K,V,TP>
+    const onStepDown = (
+      node: BNodeInternal<K,V>,
+      height: number,
+      stepDownIndex: number,
+      cursorThis: MergeCursor<K,V,MergeCursorPayload>
     ) => {
-      const otherLeaf = BTree.getLeaf(other);
-      if (BTree.areOverlapping(node, otherLeaf, cmp)) {
-        payload.disqualified = true;
-        // leaf disqualification is handled in onEnterLeaf
+      if (stepDownIndex > 0) {
+        // When we step down into a node, we know that we have walked from a key that is less than our target.
+        // Because of this, if we are not stepping down into the first child, we know that all children before
+        // the stepDownIndex must overlap with the other tree because they must be before our target key. Since
+        // the child we are stepping into has a key greater than our target key, this node must overlap.
+        // If a child overlaps, the entire spine overlaps because a parent in a btree always encloses the range
+        // of its children.
+        cursorThis.spine[height].payload.disqualified = true;
+        disqualifySpine(cursorThis, cursorThis.spine.length - height);
+        for (let i = 0; i < stepDownIndex; ++i)
+          addSharedNodeToDisjointSet(node.children[i], height - 1);
       }
-      for (let i = 0; i < stepDownIndex; ++i)
-        addSharedNodeToDisjointSet(node.children[i], height - 1);
     };
 
-    const addHighestDisjoint = () => {
-      if (highestDisjoint !== undefined) {
-        addSharedNodeToDisjointSet(highestDisjoint.node, highestDisjoint.height);
-        highestDisjoint = undefined;
+    const onEnterLeaf = (
+      leaf: BNode<K,V>,
+      destIndex: number,
+      cursorThis: MergeCursor<K,V,MergeCursorPayload>,
+      cursorOther: MergeCursor<K,V,MergeCursorPayload>
+    ) => {
+      if (destIndex > 0 || cmp(leaf.keys[0], BTree.getKey(cursorOther)) < 0) {
+        // Similar logic to the step-down case, except in this case we also know the leaf in the other
+        // tree overlaps a leaf in this tree (this leaf, specifically). Thus, we can disqualify both spines.
+        cursorThis.leafPayload.disqualified = true;
+        cursorOther.leafPayload.disqualified = true;
+        disqualifySpine(cursorThis, cursorThis.spine.length - 1);
+        disqualifySpine(cursorOther, cursorOther.spine.length - 1);
+        pushLeafRange(leaf, 0, Math.min(destIndex, leaf.keys.length));
+      } else {
+        check(destIndex === 0, "onEnterLeaf: destIndex must be 0 if not overlapping");
       }
     };
 
@@ -1024,20 +1061,33 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const curA = BTree.createCursor<K,V,MergeCursorPayload>(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
     const curB = BTree.createCursor<K,V,MergeCursorPayload>(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
 
+    // The guarantee that no overlapping interior nodes are accidentally reused relies on the careful
+    // alternating hopping walk of the cursors: WLOG, cursorA always--with one exception--walks from a key just behind (in key space)
+    // the key of cursorB to the first key >= cursorB. Call this transition a "crossover point." All interior nodes that
+    // overlap cause a crossover point, and all crossover points are guaranteed to be walked using this method. Thus,
+    // all overlapping interior nodes will be found if they are checked for on step-down.
+    // The one exception mentioned above is when they start at the same key. In this case, they are both advanced forward and then
+    // their new ordering determines how they walk from there.
+    // The one issue then is detecting any overlaps that occur based on their very initial position (minimum key of each tree).
+    // This is handled by the initial disqualification step below, which essentially emulates the step down disqualification for each spine.
     // Initialize disqualification w.r.t. opposite leaf.
-    const initDisqualify = (cur: MergeCursor<K,V,MergeCursorPayload>, otherLeaf: BNode<K,V>) => {
-      if (BTree.areOverlapping(cur.leaf, otherLeaf, cmp))
+    const initDisqualify = (cur: MergeCursor<K,V,MergeCursorPayload>, other: MergeCursor<K,V,MergeCursorPayload>) => {
+      const minKey = BTree.getKey(cur);
+      const otherMin = BTree.getKey(other);
+      const otherMax = other.leaf.maxKey();
+      if (BTree.areOverlapping(minKey, cur.leaf.maxKey(), otherMin, otherMax, cmp))
         cur.leafPayload.disqualified = true;
       for (let i = 0; i < cur.spine.length; ++i) {
         const entry = cur.spine[i];
-        if (BTree.areOverlapping(entry.node, otherLeaf, cmp))
+        // Since we are on the left side of the tree, we can use the leaf min key for every spine node
+        if (BTree.areOverlapping(minKey, entry.node.maxKey(), otherMin, otherMax, cmp))
           entry.payload.disqualified = true;
       }
     };
-    initDisqualify(curA, BTree.getLeaf(curB));
-    initDisqualify(curB, BTree.getLeaf(curA));
+    initDisqualify(curA, curB);
+    initDisqualify(curB, curA);
 
-    // Walk both cursors
+    // Walk both cursors in alternating hops
     while (true) {
       const order = cmp(BTree.getKey(curA), BTree.getKey(curB));
       let trailing = curA, leading = curB;
@@ -1090,8 +1140,9 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     startedEqual: boolean,
     cmp: (a:K,b:K)=>number
   ): boolean {
+    const curKey = BTree.getKey(cur);
     // We should start before the target (or at it if inclusive)
-    const keyPos = cmp(BTree.getKey(cur), targetKey);
+    const keyPos = cmp(curKey, targetKey);
     check(isInclusive && keyPos < 0 || !isInclusive && keyPos <= 0, "moveTo precondition violated");
 
     // Fast path: destination within current leaf
@@ -1099,7 +1150,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const i = leaf.indexOf(targetKey, -1, cmp);
     const destInLeaf = i < 0 ? ~i : (isInclusive ? i : i + 1);
     if (destInLeaf < leaf.keys.length) {
-      cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, startedEqual, other);
+      cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, startedEqual);
       cur.leafIndex = destInLeaf;
       return false;
     }
@@ -1127,14 +1178,14 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
     // Exit leaf; we did walk out of it conceptually
     const startIndex = cur.leafIndex;
-    cur.onExitLeaf(cur, leaf, startIndex, startedEqual, cur.leafPayload, other);
+    cur.onExitLeaf(leaf, cur.leafPayload, startIndex, startedEqual, cur);
 
     if (descentLevel < 0) {
       // No descent point; step up all the way; last callback gets infinity
       for (let s = spine.length - 1; s >= 0; --s) {
         const entry = spine[s];
         const sd = s === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
-        cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, sd, other);
+        cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, sd);
       }
       return true;
     }
@@ -1142,11 +1193,11 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     // Step up through ancestors above the descentLevel
     for (let s = spine.length - 1; s > descentLevel; --s) {
       const entry = spine[s];
-      cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, NaN, other);
+      cur.onStepUp(entry.node, heightOf(s), entry.payload, entry.childIndex, NaN);
     }
     {
       const entry = spine[descentLevel];
-      cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex, other);
+      cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex);
       entry.childIndex = descentIndex;
     }
 
@@ -1159,23 +1210,21 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       const ni = node as BNodeInternal<K,V>;
       const j = ni.indexOf(targetKey, 0, cmp);
       const stepDownIndex = j + (isInclusive ? 0 : (j < ni.keys.length && cmp(ni.keys[j], targetKey) === 0 ? 1 : 0));
-      const payload = cur.makePayload(ni);
+      const payload = cur.makePayload();
       spine.push({ node: ni, childIndex: stepDownIndex, payload });
-      cur.onStepDown(ni, height, payload, stepDownIndex, other);
+      cur.onStepDown(ni, height, stepDownIndex, cur);
       node = ni.children[stepDownIndex];
       height -= 1;
     }
 
     // Enter destination leaf
-    const leafPayload = cur.makePayload(node);
     const idx = node.indexOf(targetKey, -1, cmp);
     const destIndex = idx < 0 ? ~idx : (isInclusive ? idx : idx + 1);
     check(destIndex >= 0 && destIndex < node.keys.length, "moveTo: destination out of bounds");
-
-    cur.onEnterLeaf(node, leafPayload, destIndex, other);
     cur.leaf = node;
-    cur.leafPayload = leafPayload;
+    cur.leafPayload = cur.makePayload();
     cur.leafIndex = destIndex;
+    cur.onEnterLeaf(node, destIndex, cur, other);
     return false;
   }
 
@@ -1184,23 +1233,22 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    */
   private static createCursor<K,V,TP>(
     tree: BTree<K,V>,
-    makePayload: (n: BNode<K,V>) => TP,
+    makePayload: MergeCursor<K,V,TP>["makePayload"],
     onEnterLeaf: MergeCursor<K,V,TP>["onEnterLeaf"],
     onMoveInLeaf: MergeCursor<K,V,TP>["onMoveInLeaf"],
     onExitLeaf: MergeCursor<K,V,TP>["onExitLeaf"],
     onStepUp: MergeCursor<K,V,TP>["onStepUp"],
     onStepDown: MergeCursor<K,V,TP>["onStepDown"],
   ): MergeCursor<K,V,TP> {
-    check(tree._root.size() > 0, "createCursor: cannot create a cursor for an empty tree");
     const spine: Array<{ node: BNodeInternal<K,V>, childIndex: number, payload: TP }> = [];
     let n: BNode<K,V> = tree._root;
     while (!n.isLeaf) {
       const ni = n as BNodeInternal<K,V>;
-      const payload = makePayload(ni);
+      const payload = makePayload();
       spine.push({ node: ni, childIndex: 0, payload });
       n = ni.children[0];
     }
-    const leafPayload = makePayload(n);
+    const leafPayload = makePayload();
     const cur: MergeCursor<K,V,TP> = {
       tree, leaf: n, leafIndex: 0, spine, leafPayload, makePayload: makePayload,
       onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown
@@ -1209,20 +1257,48 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   }
 
   private static getKey<K,V,TP>(c: MergeCursor<K,V,TP>): K {
-    return c.leaf.keys[c.leafIndex] as K;
+    return c.leaf.keys[c.leafIndex];
   }
 
-  private static getLeaf<K,V,TP>(c: MergeCursor<K,V,TP>): BNode<K,V> {
-    return c.leaf;
-  }
-
+  /**
+   * Determines whether two nodes are overlapping in key range.
+   * Takes the leftmost known key of each node to avoid a log(n) min calculation.
+   * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
+   */
   private static areOverlapping<K,V>(
-    a: BNode<K,V>, b: BNode<K,V>, cmp: (x:K,y:K)=>number
+    aMin: K,
+    aMax: K,
+    bMin: K,
+    bMax: K,
+    cmp: (x:K,y:K)=>number
   ): boolean {
-    const amin = a.minKey() as K, amax = a.maxKey() as K;
-    const bmin = b.minKey() as K, bmax = b.maxKey() as K;
-    // Overlap iff !(amax < bmin || bmax < amin) on inclusive ranges.
-    return !(cmp(amax, bmin) < 0 || cmp(bmax, amin) < 0);
+    // There are 4 possibilities:
+    // 1. aMin.........aMax
+    //            bMin.........bMax
+    // (aMax between bMin and bMax)
+    // 2.            aMin.........aMax
+    //      bMin.........bMax
+    // (aMin between bMin and bMax)
+    // 3. aMin.............aMax
+    //         bMin....bMax
+    // (aMin and aMax enclose bMin and bMax; note this includes equality cases)
+    // 4.      aMin....aMax
+    //     bMin.............bMax
+    // (bMin and bMax enclose aMin and aMax; note equality cases are identical to case 3)
+    const aMinBMin = cmp(aMin, bMin);
+    const aMinBMax = cmp(aMin, bMax);
+    if (aMinBMin >= 0 && aMinBMax <= 0) {
+      // case 2 or 4
+      return true;
+    }
+    const aMaxBMin = cmp(aMax, bMin);
+    const aMaxBMax = cmp(aMax, bMax);
+    if (aMaxBMin >= 0 && aMaxBMax <= 0) {
+      // case 1
+      return true;
+    }
+    // case 3 or no overlap
+    return aMinBMin <= 0 && aMaxBMax >= 0;
   }
 
   private static getLeftmostChild<K,V>(): number {
@@ -2551,13 +2627,12 @@ interface MergeCursor<K, V, TPayload> {
   leafIndex: number;
   spine: Array<{ node: BNodeInternal<K, V>, childIndex: number, payload: TPayload }>;
   leafPayload: TPayload;
-  makePayload: (n: BNode<K, V>) => TPayload;
-
-  onEnterLeaf: (leaf: BNode<K, V>, payload: TPayload, destIndex: number, other: MergeCursor<K, V, TPayload>) => void;
-  onMoveInLeaf: (leaf: BNode<K, V>, payload: TPayload, fromIndex: number, toIndex: number, isInclusive: boolean, other: MergeCursor<K, V, TPayload>) => void;
-  onExitLeaf: (cursorThis: MergeCursor<K,V,TPayload>, leaf: BNode<K, V>, startingIndex: number, isInclusive: boolean, payload: TPayload, other: MergeCursor<K, V, TPayload>) => void;
-  onStepUp: (parent: BNodeInternal<K, V>, height: number, payload: TPayload, fromIndex: number, stepDownIndex: number, other: MergeCursor<K, V, TPayload>) => void;
-  onStepDown: (node: BNodeInternal<K, V>, height: number, payload: TPayload, stepDownIndex: number, other: MergeCursor<K, V, TPayload>) => void;
+  makePayload: () => TPayload;
+  onMoveInLeaf: (leaf: BNode<K, V>, payload: TPayload, fromIndex: number, toIndex: number, isInclusive: boolean) => void;
+  onExitLeaf: (leaf: BNode<K, V>, payload: TPayload, startingIndex: number, isInclusive: boolean, cursorThis: MergeCursor<K,V,TPayload>) => void;
+  onStepUp: (parent: BNodeInternal<K, V>, height: number, payload: TPayload, fromIndex: number, stepDownIndex: number) => void;
+  onStepDown: (node: BNodeInternal<K, V>, height: number, stepDownIndex: number, cursorThis: MergeCursor<K, V, TPayload>) => void;
+  onEnterLeaf: (leaf: BNode<K, V>, destIndex: number, cursorThis: MergeCursor<K, V, TPayload>, cursorOther: MergeCursor<K, V, TPayload>) => void;
 }
 
 type DisjointEntry<K,V> = [height: number, node: BNode<K,V>];
