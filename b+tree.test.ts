@@ -1951,6 +1951,28 @@ function testMerge(maxNodeSize: number) {
     result.checkValid();
   });
 
+  test('Merge trees with random overlap', () => {
+    const sizes = [100, 1000, 10000, 100000];
+      sizes.forEach((size) => {
+      const keys1 = makeArray(size, true);
+      const keys2 = makeArray(size, true);
+
+      const tree1 = new BTree();
+      const tree2 = new BTree();
+
+      for (let k of keys1) {
+        tree1.set(k, k);
+      }
+      for (let k of keys2) {
+        tree2.set(k, k * 10);
+      }
+
+      const preferLeft = (_k: number, v1: number, _v2: number) => v1;
+      const mergeResult = tree1.merge(tree2, preferLeft);
+      mergeResult.checkValid();
+    });
+  });
+
   test('Merge trees with ~10% overlap', () => {
     const size = 200;
     const offset = Math.floor(size * 0.9);
@@ -1989,124 +2011,111 @@ function testMerge(maxNodeSize: number) {
   });
 }
 
+function swap(keys: any[], i: number, j: number) {
+  var tmp = keys[i];
+  keys[i] = keys[j];
+  keys[j] = tmp;
+}
+
+function makeArray(size: number, randomOrder: boolean, spacing = 10) {
+  var keys: number[] = [], i, n;
+  for (i = 0, n = 0; i < size; i++, n += 1 + randInt(spacing))
+    keys[i] = n;
+  if (randomOrder)
+    for (i = 0; i < size; i++) 
+      swap(keys, i, randInt(size));
+  return keys;
+}
+
 describe('BTree merge fuzz tests', () => {
   const compare = (a: number, b: number) => a - b;
-  const branchingFactors = [4, 8, 16, 32];
-  const seeds = [0x12345678, 0x9ABCDEF];
+  const mergeFn = (_k: number, left: number, _right: number) => left;
   const FUZZ_SETTINGS = {
-    scenarioBudget: 1,          // Increase to explore more seed/fanout combinations.
-    iterationsPerScenario: 1,   // Increase to deepen each scenario.
-    maxInsertSize: 200,         // Maximum keys inserted per iteration.
-    keyRange: 10_000,           // Range of key distribution.
-    valueRange: 1_000,          // Range of value distribution.
-    sampleChecks: 3,            // Number of random spot-checks per result.
-    timeoutMs: 10_000           // Jest timeout for the fuzz test.
+    branchingFactors: [4, 5, 8, 16],
+    ooms: [0, 1, 2, 3],
+    fractionsPerOOM: [0.0001, 0.01, 0.1, 0.25, 0.5]
   } as const;
+  const RANDOM_EDITS_PER_TEST = 20;
+  const TIMEOUT_MS = 1000_000;
 
-  const strategies = [
-    {
-      name: 'prefer-left',
-      fn: (k: number, left: number, _right: number) => left,
-      apply: (_k: number, left: number, _right: number) => left
-    },
-    {
-      name: 'prefer-right',
-      fn: (_k: number, _left: number, right: number) => right,
-      apply: (_k: number, _left: number, right: number) => right
-    },
-    {
-      name: 'sum',
-      fn: (_k: number, left: number, right: number) => left + right,
-      apply: (_k: number, left: number, right: number) => left + right
-    },
-    {
-      name: 'min',
-      fn: (_k: number, left: number, right: number) => Math.min(left, right),
-      apply: (_k: number, left: number, right: number) => Math.min(left, right)
-    },
-    {
-      name: 'drop-even-sum',
-      fn: (_k: number, left: number, right: number) => ((left + right) & 1) === 0 ? undefined : right - left,
-      apply: (_k: number, left: number, right: number) => ((left + right) & 1) === 0 ? undefined : right - left
-    }
-  ] as const;
-
-  test('randomized merges across branching factors', () => {
-    jest.setTimeout(FUZZ_SETTINGS.timeoutMs);
-
-    const scenarioConfigs: Array<{ seedBase: number, maxNodeSize: number }> = [];
-    for (const seedBase of seeds)
-      for (const maxNodeSize of branchingFactors)
-        scenarioConfigs.push({ seedBase, maxNodeSize });
-
-    const scenariosToRun = Math.min(FUZZ_SETTINGS.scenarioBudget, scenarioConfigs.length);
-    const selectedScenarios = scenarioConfigs.slice(0, scenariosToRun);
-
-    for (const { seedBase, maxNodeSize } of selectedScenarios) {
-      const baseSeed = (seedBase ^ (maxNodeSize * 0x9E3779B1)) >>> 0;
-      const fuzzRand = new MersenneTwister(baseSeed);
-      const nextInt = (limit: number) => {
-        if (limit <= 0)
-          return 0;
-        return Math.floor(fuzzRand.random() * limit);
-      };
-
-      let currentTree = new BTree<number, number>([], compare, maxNodeSize);
-      let currentMap = new Map<number, number>();
-
-      for (let iteration = 0; iteration < FUZZ_SETTINGS.iterationsPerScenario; iteration++) {
-        const size = nextInt(FUZZ_SETTINGS.maxInsertSize);
-        const otherTree = new BTree<number, number>([], compare, maxNodeSize);
-        const otherMap = new Map<number, number>();
-
-        for (let i = 0; i < size; i++) {
-          const key = nextInt(FUZZ_SETTINGS.keyRange);
-          const value = nextInt(FUZZ_SETTINGS.valueRange);
-          otherTree.set(key, value);
-          otherMap.set(key, value);
-        }
-
-        const strategy = strategies[nextInt(strategies.length)];
-        const mergeFunc = strategy.fn;
-
-        const expectedMap = new Map<number, number>(currentMap);
-
-        otherMap.forEach((rightValue, key) => {
-          if (expectedMap.has(key)) {
-            const leftValue = expectedMap.get(key)!;
-            const mergedValue = strategy.apply(key, leftValue, rightValue);
-            if (mergedValue === undefined)
-              expectedMap.delete(key);
-            else
-              expectedMap.set(key, mergedValue);
-          } else {
-            expectedMap.set(key, rightValue);
-          }
-        });
-
-        const previousSnapshot = currentTree.toArray();
-        const merged = currentTree.merge(otherTree, mergeFunc);
-
-        expect(currentTree.toArray()).toEqual(previousSnapshot);
-
-        if ((iteration & 1) === 0) {
-          merged.checkValid();
-        }
-
-        const expectedArray = Array.from(expectedMap.entries()).sort((a, b) => a[0] - b[0]);
-        expect(merged.toArray()).toEqual(expectedArray);
-
-        // Spot-check a few sampled keys for consistency with the Map
-        const sampleCount = Math.min(FUZZ_SETTINGS.sampleChecks, expectedArray.length);
-        for (let s = 0; s < sampleCount; s++) {
-          const sampleIndex = nextInt(expectedArray.length);
-          const [sampleKey, sampleValue] = expectedArray[sampleIndex];
-          expect(merged.get(sampleKey)).toBe(sampleValue);
-        }
-
-        currentTree = merged;
-        currentMap = expectedMap;
-      }
-    }
+  FUZZ_SETTINGS.fractionsPerOOM.forEach(fraction => {
+    if (fraction < 0 || fraction > 1)
+      throw new Error('FUZZ_SETTINGS.fractionsPerOOM must contain values between 0 and 1');
   });
+
+  const randomInt = (rng: MersenneTwister, maxExclusive: number) => Math.floor(rng.random() * maxExclusive);
+  const shuffleInPlace = <T>(rng: MersenneTwister, items: T[]): void => {
+    for (let i = items.length - 1; i > 0; i--) {
+      const swapIndex = Math.floor(rng.random() * (i + 1));
+      const tmp = items[i];
+      items[i] = items[swapIndex];
+      items[swapIndex] = tmp;
+    }
+  };
+
+  jest.setTimeout(TIMEOUT_MS);
+
+  const rng = new MersenneTwister(0xBEEFCAFE);
+
+  for (const maxNodeSize of FUZZ_SETTINGS.branchingFactors) {
+    describe(`branching factor ${maxNodeSize}`, () => {
+      for (const oom of FUZZ_SETTINGS.ooms) {
+        const size = 5 * Math.pow(10, oom);
+        for (const fractionA of FUZZ_SETTINGS.fractionsPerOOM) {
+          const fractionB = 1 - fractionA;
+
+          test(`size ${size}, fractionA ${fractionA.toFixed(2)}, fractionB ${fractionB.toFixed(2)}`, () => {
+            const treeA = new BTree<number, number>([], compare, maxNodeSize);
+            const treeB = new BTree<number, number>([], compare, maxNodeSize);
+
+            const keys: number[] = [];
+            for (let value = 1; value <= size; value++) {
+              keys.push(value);
+            }
+            shuffleInPlace(rng, keys);
+
+            for (const value of keys) {
+              const target = rng.random() < fractionA ? treeA : treeB;
+              target.set(value, value);
+            }
+
+            const snapshotA = treeA.toArray();
+            const snapshotB = treeB.toArray();
+
+            const merged = treeA.merge(treeB, mergeFn);
+            merged.checkValid();
+
+            for (let value = 1; value <= size; value++) {
+              expect(merged.get(value)).toBe(value);
+            }
+
+            expect(treeA.toArray()).toEqual(snapshotA);
+            expect(treeB.toArray()).toEqual(snapshotB);
+
+            for (let edit = 0; edit < RANDOM_EDITS_PER_TEST; edit++) {
+              const key = 1 + randomInt(rng, size);
+              const action = rng.random();
+              if (action < 0.33) {
+                merged.set(key, key);
+              } else if (action < 0.66) {
+                merged.set(key, -key);
+              } else {
+                merged.delete(key);
+              }
+            }
+
+            expect(treeA.toArray()).toEqual(snapshotA);
+            expect(treeB.toArray()).toEqual(snapshotB);
+
+            for (const [key, value] of snapshotA) {
+              expect(treeA.get(key)).toBe(value);
+            }
+            for (const [key, value] of snapshotB) {
+              expect(treeB.get(key)).toBe(value);
+            }
+          });
+        }
+      }
+    });
+  }
 });

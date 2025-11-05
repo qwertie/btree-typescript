@@ -53,7 +53,7 @@ function countTreeNodeStats(tree: BTree<any, any>) {
   const visit = (node: any, ancestorShared: boolean): { total: number, shared: number } => {
     if (!node)
       return { total: 0, shared: 0 };
-    const selfShared = node.sharedSizeTag < 0 || ancestorShared;
+    const selfShared = node.isShared === true || ancestorShared;
     let shared = selfShared ? 1 : 0;
     let total = 1;
     const children: any[] | undefined = node.children;
@@ -415,6 +415,18 @@ console.log("### Merge between B+ trees");
   console.log();
   const sizes = [100, 1000, 10000, 100000];
 
+  const timeBaselineMerge = (title: string, tree1: BTree, tree2: BTree) => {
+    const baselineResult = measure(() => title, () => {
+      const result = tree1.clone();
+      tree2.forEachPair((k, v) => {
+        result.set(k, v, false);
+      });
+      return result;
+    });
+    const baselineStats = countTreeNodeStats(baselineResult);
+    console.log(`\tShared nodes (baseline): ${baselineStats.shared}/${baselineStats.total}`);
+  }
+
   // Test 1: Non-overlapping ranges (best case - minimal intersections)
   console.log("# Non-overlapping ranges (disjoint keys)");
   sizes.forEach((size) => {
@@ -428,31 +440,24 @@ console.log("### Merge between B+ trees");
     }
 
     const preferLeft = (_k: number, v1: number, _v2: number) => v1;
-    const mergeResult = measure(() => `Merge ${size}+${size} non-overlapping trees using merge()`, () => {
+    const baseTitle = `Merge ${size}+${size} non-overlapping trees using `;
+    const mergeResult = measure(() => `${baseTitle} (merge)`, () => {
       return tree1.merge(tree2, preferLeft);
     });
     const mergeStats = countTreeNodeStats(mergeResult);
     console.log(`\tShared nodes (merge): ${mergeStats.shared}/${mergeStats.total}`);
 
-    const baselineResult = measure(() => `Merge ${size}+${size} non-overlapping trees using clone+set loop (baseline)`, () => {
-      const result = tree1.clone();
-      tree2.forEachPair((k, v) => {
-        result.set(k, v, false);
-      });
-      return result;
-    });
-    const baselineStats = countTreeNodeStats(baselineResult);
-    console.log(`\tShared nodes (baseline): ${baselineStats.shared}/${baselineStats.total}`);
+    timeBaselineMerge(`${baseTitle} (baseline)`, tree1, tree2);
   });
 
   console.log();
-  console.log("# Adjacent ranges (one intersection points)");
+  console.log("# Adjacent ranges (one intersection point)");
   sizes.forEach((size) => {
     const tree1 = new BTree();
     const tree2 = new BTree();
 
     // Tree1: 0-size, Tree2: size-(2*size)
-    for (let i = 0; i < size; i++) {
+    for (let i = 0; i <= size; i++) {
       tree1.set(i, i);
       tree2.set(i + size, i + size);
     }
@@ -483,7 +488,7 @@ console.log("### Merge between B+ trees");
 
     // Tree1: 0-size, 2*size-3*size
     // Tree2: size-2*size
-    for (let i = 0; i < size; i++) {
+    for (let i = 0; i <= size; i++) {
       tree1.set(i, i);
       tree1.set(i + 2 * size, i + 2 * size);
       tree2.set(i + size, i + size);
