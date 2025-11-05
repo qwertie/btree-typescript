@@ -296,6 +296,8 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
     private static getRightInsertionIndex;
     private static splitOffRightSide;
     private static splitOffLeftSide;
+    private static updateRightMax;
+    private static noop;
     /**
      * Decomposes two BTrees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
      * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
