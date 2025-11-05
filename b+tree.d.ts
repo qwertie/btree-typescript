@@ -290,6 +290,12 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      * Find the first ancestor (starting at insertionDepth) with capacity
      */
     private static findCascadeEndDepth;
+    private static insertNoCount;
+    private static getLeftmostIndex;
+    private static getRightmostIndex;
+    private static getRightInsertionIndex;
+    private static splitOffRightSide;
+    private static splitOffLeftSide;
     /**
      * Decomposes two BTrees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
      * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
@@ -311,8 +317,6 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
      */
     private static areOverlapping;
-    private static getLeftmostChild;
-    private static getRightmostChild;
     /**
      * Computes the differences between `this` and `other`.
      * For efficiency, the diff is returned via invocations of supplied handlers.
