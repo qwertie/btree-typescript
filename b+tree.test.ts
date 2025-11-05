@@ -2036,7 +2036,7 @@ describe('BTree merge fuzz tests', () => {
     fractionsPerOOM: [0.0001, 0.01, 0.1, 0.25, 0.5]
   } as const;
   const RANDOM_EDITS_PER_TEST = 20;
-  const TIMEOUT_MS = 1000_000;
+  const TIMEOUT_MS = 30_000;
 
   FUZZ_SETTINGS.fractionsPerOOM.forEach(fraction => {
     if (fraction < 0 || fraction > 1)
@@ -2054,19 +2054,30 @@ describe('BTree merge fuzz tests', () => {
         for (const fractionA of FUZZ_SETTINGS.fractionsPerOOM) {
           const fractionB = 1 - fractionA;
 
+          const expectEqualsArray = (tree: BTree<number, number>, array: [number, number][]) => {
+            expect(tree.size).toBe(array.length);
+            for (const [key, value] of array) {
+              expect(tree.get(key)).toBe(value);
+            }
+          };
+
           test(`size ${size}, fractionA ${fractionA.toFixed(2)}, fractionB ${fractionB.toFixed(2)}`, () => {
             const treeA = new BTree<number, number>([], compare, maxNodeSize);
             const treeB = new BTree<number, number>([], compare, maxNodeSize);
 
             const keys = makeArray(size, true, 1);
 
+            const aArray: [number, number][] = [];
+            const bArray: [number, number][] = [];
             for (const value of keys) {
-              const target = rng.random() < fractionA ? treeA : treeB;
-              target.set(value, value);
+              if (rng.random() < fractionA) {
+                aArray.push([value, value]);
+                treeA.set(value, value);
+              } else {
+                bArray.push([value, value]);
+                treeB.set(value, value);
+              }
             }
-
-            const snapshotA = treeA.toArray();
-            const snapshotB = treeB.toArray();
 
             const merged = treeA.merge(treeB, mergeFn);
             merged.checkValid();
@@ -2075,8 +2086,9 @@ describe('BTree merge fuzz tests', () => {
               expect(merged.get(key)).toBe(key);
             }
 
-            expect(treeA.toArray()).toEqual(snapshotA);
-            expect(treeB.toArray()).toEqual(snapshotB);
+            // Merge should not have mutated inputs
+            expectEqualsArray(treeA, aArray);
+            expectEqualsArray(treeB, bArray);
 
             for (let edit = 0; edit < RANDOM_EDITS_PER_TEST; edit++) {
               const key = 1 + randomInt(rng, size);
@@ -2088,17 +2100,11 @@ describe('BTree merge fuzz tests', () => {
               } else {
                 merged.delete(key);
               }
-            }
+            };
 
-            expect(treeA.toArray()).toEqual(snapshotA);
-            expect(treeB.toArray()).toEqual(snapshotB);
-
-            for (const [key, value] of snapshotA) {
-              expect(treeA.get(key)).toBe(value);
-            }
-            for (const [key, value] of snapshotB) {
-              expect(treeB.get(key)).toBe(value);
-            }
+            // Check for shared mutability issues
+            expectEqualsArray(treeA, aArray);
+            expectEqualsArray(treeB, bArray);
           });
         }
       }
