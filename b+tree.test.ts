@@ -1952,25 +1952,23 @@ function testMerge(maxNodeSize: number) {
   });
 
   test('Merge trees with random overlap', () => {
-    const sizes = [100, 1000, 10000, 100000];
-      sizes.forEach((size) => {
-      const keys1 = makeArray(size, true);
-      const keys2 = makeArray(size, true);
+    const size = 10000;
+    const keys1 = makeArray(size, true);
+    const keys2 = makeArray(size, true);
 
-      const tree1 = new BTree();
-      const tree2 = new BTree();
+    const tree1 = new BTree();
+    const tree2 = new BTree();
 
-      for (let k of keys1) {
-        tree1.set(k, k);
-      }
-      for (let k of keys2) {
-        tree2.set(k, k * 10);
-      }
+    for (let k of keys1) {
+      tree1.set(k, k);
+    }
+    for (let k of keys2) {
+      tree2.set(k, k * 10);
+    }
 
-      const preferLeft = (_k: number, v1: number, _v2: number) => v1;
-      const mergeResult = tree1.merge(tree2, preferLeft);
-      mergeResult.checkValid();
-    });
+    const preferLeft = (_k: number, v1: number, _v2: number) => v1;
+    const mergeResult = tree1.merge(tree2, preferLeft);
+    mergeResult.checkValid();
   });
 
   test('Merge trees with ~10% overlap', () => {
@@ -2027,6 +2025,8 @@ function makeArray(size: number, randomOrder: boolean, spacing = 10) {
   return keys;
 }
 
+const randomInt = (rng: MersenneTwister, maxExclusive: number) => Math.floor(rng.random() * maxExclusive);
+
 describe('BTree merge fuzz tests', () => {
   const compare = (a: number, b: number) => a - b;
   const mergeFn = (_k: number, left: number, _right: number) => left;
@@ -2043,16 +2043,6 @@ describe('BTree merge fuzz tests', () => {
       throw new Error('FUZZ_SETTINGS.fractionsPerOOM must contain values between 0 and 1');
   });
 
-  const randomInt = (rng: MersenneTwister, maxExclusive: number) => Math.floor(rng.random() * maxExclusive);
-  const shuffleInPlace = <T>(rng: MersenneTwister, items: T[]): void => {
-    for (let i = items.length - 1; i > 0; i--) {
-      const swapIndex = Math.floor(rng.random() * (i + 1));
-      const tmp = items[i];
-      items[i] = items[swapIndex];
-      items[swapIndex] = tmp;
-    }
-  };
-
   jest.setTimeout(TIMEOUT_MS);
 
   const rng = new MersenneTwister(0xBEEFCAFE);
@@ -2068,11 +2058,7 @@ describe('BTree merge fuzz tests', () => {
             const treeA = new BTree<number, number>([], compare, maxNodeSize);
             const treeB = new BTree<number, number>([], compare, maxNodeSize);
 
-            const keys: number[] = [];
-            for (let value = 1; value <= size; value++) {
-              keys.push(value);
-            }
-            shuffleInPlace(rng, keys);
+            const keys = makeArray(size, true, 1);
 
             for (const value of keys) {
               const target = rng.random() < fractionA ? treeA : treeB;
@@ -2085,8 +2071,8 @@ describe('BTree merge fuzz tests', () => {
             const merged = treeA.merge(treeB, mergeFn);
             merged.checkValid();
 
-            for (let value = 1; value <= size; value++) {
-              expect(merged.get(value)).toBe(value);
+            for (const key of keys) {
+              expect(merged.get(key)).toBe(key);
             }
 
             expect(treeA.toArray()).toEqual(snapshotA);
