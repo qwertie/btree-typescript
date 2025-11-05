@@ -1396,6 +1396,7 @@ function testMerge(maxNodeSize: number) {
     const resultRoot = result['_root'] as any;
     expect(sharesNode(resultRoot, tree1['_root'] as any)).toBe(true);
     expect(sharesNode(resultRoot, tree2['_root'] as any)).toBe(true);
+    result.checkValid();
   });
 
   test('Merge leaf roots with intersecting keys', () => {
@@ -1413,6 +1414,7 @@ function testMerge(maxNodeSize: number) {
 
     expect(calls).toEqual([{ key: 2, leftValue: 20, rightValue: 200 }]);
     expect(result.toArray()).toEqual([[1, 10], [2, 220], [3, 300], [4, 40], [5, 500]]);
+    result.checkValid();
   });
 
   test('Merge leaf roots with disjoint keys', () => {
@@ -1437,6 +1439,7 @@ function testMerge(maxNodeSize: number) {
       [5, 5],
       [6, 1006]
     ]);
+    result.checkValid();
   });
 
   test('Merge trees disjoint except for shared maximum key', () => {
@@ -1456,6 +1459,7 @@ function testMerge(maxNodeSize: number) {
     expect(mergeCalls).toBe(1);
     expect(result.get(size - 1)).toBe((size - 1) + (size - 1) * 3);
     expect(result.size).toBe(tree1.size + tree2.size - 1);
+    result.checkValid();
   });
 
   test('Merge trees where all leaves are disjoint and one tree straddles the other', () => {
@@ -1474,6 +1478,7 @@ function testMerge(maxNodeSize: number) {
 
     expect(mergeCalls).toBe(0);
     expect(result.size).toBe(tree1.size + tree2.size);
+    result.checkValid();
   });
 
   test('Merge where two-leaf tree intersects leaf-root tree across both leaves', () => {
@@ -1495,6 +1500,7 @@ function testMerge(maxNodeSize: number) {
     expect(result.get(Math.floor(size / 2))).toBe(5 * Math.floor(size / 2));
     expect(result.get(size - 1)).toBe(5 * (size - 1));
     expect(result.size).toBe(tree1.size + tree2.size - seenKeys.length);
+    result.checkValid();
   });
 
   test('Merge where max key equals min key of other tree', () => {
@@ -1514,6 +1520,7 @@ function testMerge(maxNodeSize: number) {
     expect(mergeCalls).toBe(1);
     expect(result.get(size - 1)).toBe((size - 1) * 10);
     expect(result.size).toBe(tree1.size + tree2.size - 1);
+    result.checkValid();
   });
 
   test('Merge odd and even keyed trees', () => {
@@ -1532,6 +1539,7 @@ function testMerge(maxNodeSize: number) {
 
     expect(mergeCalls).toBe(0);
     expect(result.size).toBe(treeOdd.size + treeEven.size);
+    result.checkValid();
   });
 
   test('Merge overlapping prefix equal to branching factor', () => {
@@ -1565,6 +1573,7 @@ function testMerge(maxNodeSize: number) {
     ];
     expect(result.toArray()).toEqual(expected);
     expect(result.size).toBe(tree1.size + tree2.size - shared);
+    result.checkValid();
   });
 
   test('Merge two empty trees', () => {
@@ -1601,6 +1610,7 @@ function testMerge(maxNodeSize: number) {
 
     expect(result.size).toBe(6);
     expect(result.toArray()).toEqual([[1, 10], [2, 20], [3, 30], [4, 40], [5, 50], [6, 60]]);
+    result.checkValid();
   });
 
   test('Merge with completely overlapping keys - sum values', () => {
@@ -1612,6 +1622,7 @@ function testMerge(maxNodeSize: number) {
 
     expect(result.size).toBe(3);
     expect(result.toArray()).toEqual([[1, 15], [2, 35], [3, 55]]);
+    result.checkValid();
   });
 
   test('Merge with completely overlapping keys - prefer left', () => {
@@ -1623,6 +1634,7 @@ function testMerge(maxNodeSize: number) {
 
     expect(result.size).toBe(3);
     expect(result.toArray()).toEqual([[1, 10], [2, 20], [3, 30]]);
+    result.checkValid();
   });
 
   test('Merge with completely overlapping keys - prefer right', () => {
@@ -1634,6 +1646,7 @@ function testMerge(maxNodeSize: number) {
 
     expect(result.size).toBe(3);
     expect(result.toArray()).toEqual([[1, 100], [2, 200], [3, 300]]);
+    result.checkValid();
   });
 
   test('Merge with partially overlapping keys', () => {
@@ -1645,6 +1658,7 @@ function testMerge(maxNodeSize: number) {
 
     expect(result.size).toBe(6);
     expect(result.toArray()).toEqual([[1, 10], [2, 20], [3, 330], [4, 440], [5, 500], [6, 600]]);
+    result.checkValid();
   });
 
   test('Merge with overlapping keys - exclude some keys via undefined', () => {
@@ -1660,6 +1674,7 @@ function testMerge(maxNodeSize: number) {
 
     expect(result.size).toBe(4);  // Keys 1, 2, 4, 5 (key 3 excluded)
     expect(result.toArray()).toEqual([[1, 10], [2, 220], [4, 440], [5, 500]]);
+    result.checkValid();
   });
 
   test('Merge is called even when values are equal', () => {
@@ -1676,6 +1691,7 @@ function testMerge(maxNodeSize: number) {
 
     expect(mergeCallLog).toEqual([{k: 2, v1: 20, v2: 20}]);
     expect(result.toArray()).toEqual([[1, 10], [2, 20], [3, 30]]);
+    result.checkValid();
   });
 
   test('Merge does not mutate input trees', () => {
@@ -1693,6 +1709,7 @@ function testMerge(maxNodeSize: number) {
 
     // Verify result is correct
     expect(result.toArray()).toEqual([[1, 10], [2, 220], [3, 330], [4, 400]]);
+    result.checkValid();
   });
 
   test('Merge with disjoint ranges', () => {
@@ -1826,6 +1843,9 @@ function testMerge(maxNodeSize: number) {
     expect(tree1.has(5)).toBe(false);
     expect(tree2.get(3)).toBe(30);
     expect(tree2.get(4)).toBe(40);
+    tree1.checkValid();
+    tree2.checkValid();
+    result.checkValid();
   });
 
   test('Merge with single element trees', () => {
@@ -1875,6 +1895,7 @@ function testMerge(maxNodeSize: number) {
 
     // Only non-overlapping keys remain
     expect(result.toArray()).toEqual([[1, 10], [4, 400]]);
+    result.checkValid();
   });
 
   test('Merge reuses appended subtree with minimum fanout', () => {
