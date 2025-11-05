@@ -2031,7 +2031,7 @@ describe('BTree merge fuzz tests', () => {
   const compare = (a: number, b: number) => a - b;
   const mergeFn = (_k: number, left: number, _right: number) => left;
   const FUZZ_SETTINGS = {
-    branchingFactors: [4, 5, 8, 16],
+    branchingFactors: [4, 5, 32],
     ooms: [0, 1, 2, 3],
     fractionsPerOOM: [0.0001, 0.01, 0.1, 0.25, 0.5]
   } as const;
@@ -2066,6 +2066,7 @@ describe('BTree merge fuzz tests', () => {
             const treeB = new BTree<number, number>([], compare, maxNodeSize);
 
             const keys = makeArray(size, true, 1);
+            const sorted = Array.from(new Set(keys)).sort(compare);
 
             const aArray: [number, number][] = [];
             const bArray: [number, number][] = [];
@@ -2082,9 +2083,8 @@ describe('BTree merge fuzz tests', () => {
             const merged = treeA.merge(treeB, mergeFn);
             merged.checkValid();
 
-            for (const key of keys) {
-              expect(merged.get(key)).toBe(key);
-            }
+            const mergedArray = merged.toArray();
+            expect(mergedArray).toEqual(sorted.map(k => [k, k]));
 
             // Merge should not have mutated inputs
             expectEqualsArray(treeA, aArray);

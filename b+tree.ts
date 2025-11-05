@@ -964,6 +964,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
           const keys = slice.map(p => p[0]);
           const vals = slice.map(p => p[1]);
           const leaf = new BNode<K,V>(keys, vals);
+          if (disjoint.length > 0)
+          {
+            if (areOverlapping(leaf.minKey()!, leaf.maxKey(), disjoint[disjoint.length - 1][1].minKey()!, disjoint[disjoint.length - 1][1].maxKey(), left._compare)
+            || cmp(leaf.minKey()!, disjoint[disjoint.length - 1][1].maxKey()!) <= 0)
+              throw new Error("Decompose produced overlapping leaves");
+          }
           disjoint.push([0, leaf]);
           if (0 > tallestHeight) {
             tallestIndex = disjoint.length - 1;
@@ -981,6 +987,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const addSharedNodeToDisjointSet = (node: BNode<K,V>, height: number) => {
       flushPendingEntries();
       node.isShared = true;
+      if (disjoint.length > 0)
+      {
+        if (areOverlapping(node.minKey()!, node.maxKey(), disjoint[disjoint.length - 1][1].minKey()!, disjoint[disjoint.length - 1][1].maxKey(), left._compare)
+        || cmp(node.minKey()!, disjoint[disjoint.length - 1][1].maxKey()!) <= 0)
+          throw new Error("Decompose produced overlapping leaves");
+      }
       disjoint.push([height, node]);
       if (height > tallestHeight) {
         tallestIndex = disjoint.length - 1;
@@ -1052,7 +1064,9 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       height: number,
       payload: MergeCursorPayload,
       fromIndex: number,
-      stepDownIndex: number
+      spineIndex: number,
+      stepDownIndex: number,
+      cursorThis: MergeCursor<K,V,MergeCursorPayload>
     ) => {
       if (Number.isNaN(stepDownIndex) /* still walking up */ 
         || stepDownIndex === Number.POSITIVE_INFINITY /* target key is beyond edge of tree, done with walk */) {
@@ -1068,6 +1082,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
             addSharedNodeToDisjointSet(parent.children[i], height - 1);
         }
       } else {
+        // We have a valid step down index, so we need to disqualify the spine if needed.
+        // This is identical to the step down logic, but we must also perform it here because
+        // in the case of stepping down into a leaf, the step down callback is never called.
+        if (stepDownIndex > 0) {
+          disqualifySpine(cursorThis, spineIndex);
+        }
         addHighestDisjoint();
         for (let i = fromIndex + 1; i < stepDownIndex; ++i)
           addSharedNodeToDisjointSet(parent.children[i], height - 1);
@@ -1101,7 +1121,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       cursorOther: MergeCursor<K,V,MergeCursorPayload>
     ) => {
       if (destIndex > 0
-        || BTree.areOverlapping(leaf.minKey()!, leaf.maxKey(), BTree.getKey(cursorOther), cursorOther.leaf.maxKey(), cmp)) {
+        || areOverlapping(leaf.minKey()!, leaf.maxKey(), BTree.getKey(cursorOther), cursorOther.leaf.maxKey(), cmp)) {
         // Similar logic to the step-down case, except in this case we also know the leaf in the other
         // tree overlaps a leaf in this tree (this leaf, specifically). Thus, we can disqualify both spines.
         cursorThis.leafPayload.disqualified = true;
@@ -1135,12 +1155,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       const minKey = BTree.getKey(cur);
       const otherMin = BTree.getKey(other);
       const otherMax = other.leaf.maxKey();
-      if (BTree.areOverlapping(minKey, cur.leaf.maxKey(), otherMin, otherMax, cmp))
+      if (areOverlapping(minKey, cur.leaf.maxKey(), otherMin, otherMax, cmp))
         cur.leafPayload.disqualified = true;
       for (let i = 0; i < cur.spine.length; ++i) {
         const entry = cur.spine[i];
         // Since we are on the left side of the tree, we can use the leaf min key for every spine node
-        if (BTree.areOverlapping(minKey, entry.node.maxKey(), otherMin, otherMax, cmp))
+        if (areOverlapping(minKey, entry.node.maxKey(), otherMin, otherMax, cmp))
           entry.payload.disqualified = true;
       }
     };
@@ -1243,7 +1263,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       for (let depth = spine.length - 1; depth >= 0; depth--) {
         const entry = spine[depth];
         const sd = depth === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
-        cur.onStepUp(entry.node, heightOf(depth), entry.payload, entry.childIndex, sd);
+        cur.onStepUp(entry.node, heightOf(depth), entry.payload, entry.childIndex, depth, sd, cur);
       }
       return true;
     }
@@ -1251,11 +1271,11 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     // Step up through ancestors above the descentLevel
     for (let depth = spine.length - 1; depth > descentLevel; depth--) {
       const entry = spine[depth];
-      cur.onStepUp(entry.node, heightOf(depth), entry.payload, entry.childIndex, NaN);
+      cur.onStepUp(entry.node, heightOf(depth), entry.payload, entry.childIndex, depth, NaN, cur);
     }
 
     const entry = spine[descentLevel];
-    cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex);
+    cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentLevel, descentIndex, cur);
     entry.childIndex = descentIndex;
 
     // Descend, invoking onStepDown and creating payloads
@@ -1315,47 +1335,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
   private static getKey<K,V,TP>(c: MergeCursor<K,V,TP>): K {
     return c.leaf.keys[c.leafIndex];
-  }
-
-  /**
-   * Determines whether two nodes are overlapping in key range.
-   * Takes the leftmost known key of each node to avoid a log(n) min calculation.
-   * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
-   */
-  private static areOverlapping<K,V>(
-    aMin: K,
-    aMax: K,
-    bMin: K,
-    bMax: K,
-    cmp: (x:K,y:K)=>number
-  ): boolean {
-    // There are 4 possibilities:
-    // 1. aMin.........aMax
-    //            bMin.........bMax
-    // (aMax between bMin and bMax)
-    // 2.            aMin.........aMax
-    //      bMin.........bMax
-    // (aMin between bMin and bMax)
-    // 3. aMin.............aMax
-    //         bMin....bMax
-    // (aMin and aMax enclose bMin and bMax; note this includes equality cases)
-    // 4.      aMin....aMax
-    //     bMin.............bMax
-    // (bMin and bMax enclose aMin and aMax; note equality cases are identical to case 3)
-    const aMinBMin = cmp(aMin, bMin);
-    const aMinBMax = cmp(aMin, bMax);
-    if (aMinBMin >= 0 && aMinBMax <= 0) {
-      // case 2 or 4
-      return true;
-    }
-    const aMaxBMin = cmp(aMax, bMin);
-    const aMaxBMax = cmp(aMax, bMax);
-    if (aMaxBMin >= 0 && aMaxBMax <= 0) {
-      // case 1
-      return true;
-    }
-    // case 3 or no overlap
-    return aMinBMin <= 0 && aMaxBMax >= 0;
   }
 
   /**
@@ -1967,7 +1946,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    *  skips the most expensive test - whether all keys are sorted - but it
    *  does check that maxKey() of the children of internal nodes are sorted. */
   checkValid() {
-    var size = this._root.checkValid(0, this, 0);
+    var [size] = this._root.checkValid(0, this, 0);
     check(size === this.size, "size mismatch: counted ", size, "but stored", this.size);
   }
 }
@@ -2156,7 +2135,7 @@ class BNode<K,V> {
     return undefined;
   }
 
-  checkValid(depth: number, tree: BTree<K,V>, baseIndex: number): number {
+  checkValid(depth: number, tree: BTree<K,V>, baseIndex: number): [size: number, min: K, max: K] {
     var kL = this.keys.length, vL = this.values.length;
     check(this.values === undefVals ? kL <= vL : kL === vL,
       "keys/values length mismatch: depth", depth, "with lengths", kL, vL, "and baseIndex", baseIndex);
@@ -2166,7 +2145,12 @@ class BNode<K,V> {
     // it can't be merged with adjacent nodes. However, the parent will
     // verify that the average node size is at least half of the maximum.
     check(depth == 0 || kL > 0, "empty leaf at depth", depth, "and baseIndex", baseIndex);
-    return kL;
+    for (var i = 1; i < kL; i++) {
+      var c = tree._compare(this.keys[i-1], this.keys[i]);
+      check(c < 0, "keys out of order at depth", depth, "and baseIndex", baseIndex + i - 1,
+        ": ", this.keys[i-1], " !< ", this.keys[i]);
+    }
+    return [kL, this.keys[0], this.keys[kL - 1]];
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2403,15 +2387,26 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     return result;
   }
 
-  checkValid(depth: number, tree: BTree<K,V>, baseIndex: number): number {
+  checkValid(depth: number, tree: BTree<K,V>, baseIndex: number): [size: number, min: K, max: K] {
     let kL = this.keys.length, cL = this.children.length;
     check(kL === cL, "keys/children length mismatch: depth", depth, "lengths", kL, cL, "baseIndex", baseIndex);
     check(kL > 1 || depth > 0, "internal node has length", kL, "at depth", depth, "baseIndex", baseIndex);
     let size = 0, c = this.children, k = this.keys, childSize = 0;
+    let prevMinKey: K | undefined = undefined;
+    let prevMaxKey: K | undefined = undefined;
     for (var i = 0; i < cL; i++) {
       var child = c[i];
-      var subtreeSize = child.checkValid(depth + 1, tree, baseIndex + size);
+      var [subtreeSize, minKey, maxKey] = child.checkValid(depth + 1, tree, baseIndex + size);
       check(subtreeSize === child.size(), "cached size mismatch at depth", depth, "index", i, "baseIndex", baseIndex);
+      check(subtreeSize === 1 || tree._compare(minKey, maxKey) < 0, "child node keys not sorted at depth", depth, "index", i, "baseIndex", baseIndex);
+      if (prevMinKey !== undefined && prevMaxKey !== undefined) {
+        check(!areOverlapping(prevMinKey, prevMaxKey, minKey, maxKey, tree._compare), "children keys not sorted at depth", depth, "index", i, "baseIndex", baseIndex,
+          ": ", prevMaxKey, " !< ", minKey);
+        check(tree._compare(prevMaxKey, minKey) < 0, "children keys not sorted at depth", depth, "index", i, "baseIndex", baseIndex,
+          ": ", prevMaxKey, " !< ", minKey);
+      }
+      prevMinKey = minKey;
+      prevMaxKey = maxKey;
       size += subtreeSize;
       childSize += child.keys.length;
       check(size >= childSize, "wtf", baseIndex); // no way this will ever fail
@@ -2427,7 +2422,7 @@ class BNodeInternal<K,V> extends BNode<K,V> {
     let toofew = childSize === 0; // childSize < (tree.maxNodeSize >> 1)*cL;
     if (toofew || childSize > tree.maxNodeSize*cL)
       check(false, toofew ? "too few" : "too many", "children (", childSize, size, ") at depth", depth, "maxNodeSize:", tree.maxNodeSize, "children.length:", cL, "baseIndex:", baseIndex);
-    return size;
+    return [size, this.minKey()!, this.maxKey()];
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2679,13 +2674,54 @@ interface MergeCursor<K, V, TPayload> {
   makePayload: () => TPayload;
   onMoveInLeaf: (leaf: BNode<K, V>, payload: TPayload, fromIndex: number, toIndex: number, isInclusive: boolean) => void;
   onExitLeaf: (leaf: BNode<K, V>, payload: TPayload, startingIndex: number, isInclusive: boolean, cursorThis: MergeCursor<K,V,TPayload>) => void;
-  onStepUp: (parent: BNodeInternal<K, V>, height: number, payload: TPayload, fromIndex: number, stepDownIndex: number) => void;
+  onStepUp: (parent: BNodeInternal<K, V>, height: number, payload: TPayload, fromIndex: number, spineIndex: number, stepDownIndex: number, cursorThis: MergeCursor<K,V,TPayload>) => void;
   onStepDown: (node: BNodeInternal<K, V>, height: number, spineIndex: number, stepDownIndex: number, cursorThis: MergeCursor<K, V, TPayload>) => void;
   onEnterLeaf: (leaf: BNode<K, V>, destIndex: number, cursorThis: MergeCursor<K, V, TPayload>, cursorOther: MergeCursor<K, V, TPayload>) => void;
 }
 
 type DisjointEntry<K,V> = [height: number, node: BNode<K,V>];
 type DecomposeResult<K,V> = { disjoint: DisjointEntry<K,V>[], tallestIndex: number };
+
+/**
+ * Determines whether two nodes are overlapping in key range.
+ * Takes the leftmost known key of each node to avoid a log(n) min calculation.
+ * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
+ */
+function areOverlapping<K,V>(
+  aMin: K,
+  aMax: K,
+  bMin: K,
+  bMax: K,
+  cmp: (x:K,y:K)=>number
+): boolean {
+  // There are 4 possibilities:
+  // 1. aMin.........aMax
+  //            bMin.........bMax
+  // (aMax between bMin and bMax)
+  // 2.            aMin.........aMax
+  //      bMin.........bMax
+  // (aMin between bMin and bMax)
+  // 3. aMin.............aMax
+  //         bMin....bMax
+  // (aMin and aMax enclose bMin and bMax; note this includes equality cases)
+  // 4.      aMin....aMax
+  //     bMin.............bMax
+  // (bMin and bMax enclose aMin and aMax; note equality cases are identical to case 3)
+  const aMinBMin = cmp(aMin, bMin);
+  const aMinBMax = cmp(aMin, bMax);
+  if (aMinBMin >= 0 && aMinBMax <= 0) {
+    // case 2 or 4
+    return true;
+  }
+  const aMaxBMin = cmp(aMax, bMin);
+  const aMaxBMax = cmp(aMax, bMax);
+  if (aMaxBMin >= 0 && aMaxBMax <= 0) {
+    // case 1
+    return true;
+  }
+  // case 3 or no overlap
+  return aMinBMin <= 0 && aMaxBMax >= 0;
+}
 
 // Optimization: this array of `undefined`s is used instead of a normal
 // array of values in nodes where `undefined` is the only value.

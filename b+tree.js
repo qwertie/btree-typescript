@@ -802,6 +802,11 @@ var BTree = /** @class */ (function () {
                     var keys = slice.map(function (p) { return p[0]; });
                     var vals = slice.map(function (p) { return p[1]; });
                     var leaf = new BNode(keys, vals);
+                    if (disjoint.length > 0) {
+                        if (areOverlapping(leaf.minKey(), leaf.maxKey(), disjoint[disjoint.length - 1][1].minKey(), disjoint[disjoint.length - 1][1].maxKey(), left._compare)
+                            || cmp(leaf.minKey(), disjoint[disjoint.length - 1][1].maxKey()) <= 0)
+                            throw new Error("Decompose produced overlapping leaves");
+                    }
                     disjoint.push([0, leaf]);
                     if (0 > tallestHeight) {
                         tallestIndex = disjoint.length - 1;
@@ -817,6 +822,11 @@ var BTree = /** @class */ (function () {
         var addSharedNodeToDisjointSet = function (node, height) {
             flushPendingEntries();
             node.isShared = true;
+            if (disjoint.length > 0) {
+                if (areOverlapping(node.minKey(), node.maxKey(), disjoint[disjoint.length - 1][1].minKey(), disjoint[disjoint.length - 1][1].maxKey(), left._compare)
+                    || cmp(node.minKey(), disjoint[disjoint.length - 1][1].maxKey()) <= 0)
+                    throw new Error("Decompose produced overlapping leaves");
+            }
             disjoint.push([height, node]);
             if (height > tallestHeight) {
                 tallestIndex = disjoint.length - 1;
@@ -865,7 +875,7 @@ var BTree = /** @class */ (function () {
                 pushLeafRange(leaf, start, leaf.keys.length);
             }
         };
-        var onStepUp = function (parent, height, payload, fromIndex, stepDownIndex) {
+        var onStepUp = function (parent, height, payload, fromIndex, spineIndex, stepDownIndex, cursorThis) {
             if (Number.isNaN(stepDownIndex) /* still walking up */
                 || stepDownIndex === Number.POSITIVE_INFINITY /* target key is beyond edge of tree, done with walk */) {
                 if (!payload.disqualified) {
@@ -882,6 +892,12 @@ var BTree = /** @class */ (function () {
                 }
             }
             else {
+                // We have a valid step down index, so we need to disqualify the spine if needed.
+                // This is identical to the step down logic, but we must also perform it here because
+                // in the case of stepping down into a leaf, the step down callback is never called.
+                if (stepDownIndex > 0) {
+                    disqualifySpine(cursorThis, spineIndex);
+                }
                 addHighestDisjoint();
                 for (var i = fromIndex + 1; i < stepDownIndex; ++i)
                     addSharedNodeToDisjointSet(parent.children[i], height - 1);
@@ -902,7 +918,7 @@ var BTree = /** @class */ (function () {
         };
         var onEnterLeaf = function (leaf, destIndex, cursorThis, cursorOther) {
             if (destIndex > 0
-                || BTree.areOverlapping(leaf.minKey(), leaf.maxKey(), BTree.getKey(cursorOther), cursorOther.leaf.maxKey(), cmp)) {
+                || areOverlapping(leaf.minKey(), leaf.maxKey(), BTree.getKey(cursorOther), cursorOther.leaf.maxKey(), cmp)) {
                 // Similar logic to the step-down case, except in this case we also know the leaf in the other
                 // tree overlaps a leaf in this tree (this leaf, specifically). Thus, we can disqualify both spines.
                 cursorThis.leafPayload.disqualified = true;
@@ -933,12 +949,12 @@ var BTree = /** @class */ (function () {
             var minKey = BTree.getKey(cur);
             var otherMin = BTree.getKey(other);
             var otherMax = other.leaf.maxKey();
-            if (BTree.areOverlapping(minKey, cur.leaf.maxKey(), otherMin, otherMax, cmp))
+            if (areOverlapping(minKey, cur.leaf.maxKey(), otherMin, otherMax, cmp))
                 cur.leafPayload.disqualified = true;
             for (var i = 0; i < cur.spine.length; ++i) {
                 var entry = cur.spine[i];
                 // Since we are on the left side of the tree, we can use the leaf min key for every spine node
-                if (BTree.areOverlapping(minKey, entry.node.maxKey(), otherMin, otherMax, cmp))
+                if (areOverlapping(minKey, entry.node.maxKey(), otherMin, otherMax, cmp))
                     entry.payload.disqualified = true;
             }
         };
@@ -1030,17 +1046,17 @@ var BTree = /** @class */ (function () {
             for (var depth = spine.length - 1; depth >= 0; depth--) {
                 var entry_1 = spine[depth];
                 var sd = depth === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
-                cur.onStepUp(entry_1.node, heightOf(depth), entry_1.payload, entry_1.childIndex, sd);
+                cur.onStepUp(entry_1.node, heightOf(depth), entry_1.payload, entry_1.childIndex, depth, sd, cur);
             }
             return true;
         }
         // Step up through ancestors above the descentLevel
         for (var depth = spine.length - 1; depth > descentLevel; depth--) {
             var entry_2 = spine[depth];
-            cur.onStepUp(entry_2.node, heightOf(depth), entry_2.payload, entry_2.childIndex, NaN);
+            cur.onStepUp(entry_2.node, heightOf(depth), entry_2.payload, entry_2.childIndex, depth, NaN, cur);
         }
         var entry = spine[descentLevel];
-        cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentIndex);
+        cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentLevel, descentIndex, cur);
         entry.childIndex = descentIndex;
         // Descend, invoking onStepDown and creating payloads
         var height = heightOf(descentLevel) - 1; // calculate height before changing length
@@ -1095,40 +1111,6 @@ var BTree = /** @class */ (function () {
     };
     BTree.getKey = function (c) {
         return c.leaf.keys[c.leafIndex];
-    };
-    /**
-     * Determines whether two nodes are overlapping in key range.
-     * Takes the leftmost known key of each node to avoid a log(n) min calculation.
-     * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
-     */
-    BTree.areOverlapping = function (aMin, aMax, bMin, bMax, cmp) {
-        // There are 4 possibilities:
-        // 1. aMin.........aMax
-        //            bMin.........bMax
-        // (aMax between bMin and bMax)
-        // 2.            aMin.........aMax
-        //      bMin.........bMax
-        // (aMin between bMin and bMax)
-        // 3. aMin.............aMax
-        //         bMin....bMax
-        // (aMin and aMax enclose bMin and bMax; note this includes equality cases)
-        // 4.      aMin....aMax
-        //     bMin.............bMax
-        // (bMin and bMax enclose aMin and aMax; note equality cases are identical to case 3)
-        var aMinBMin = cmp(aMin, bMin);
-        var aMinBMax = cmp(aMin, bMax);
-        if (aMinBMin >= 0 && aMinBMax <= 0) {
-            // case 2 or 4
-            return true;
-        }
-        var aMaxBMin = cmp(aMax, bMin);
-        var aMaxBMax = cmp(aMax, bMax);
-        if (aMaxBMin >= 0 && aMaxBMax <= 0) {
-            // case 1
-            return true;
-        }
-        // case 3 or no overlap
-        return aMinBMin <= 0 && aMaxBMax >= 0;
     };
     /**
      * Computes the differences between `this` and `other`.
@@ -1704,7 +1686,7 @@ var BTree = /** @class */ (function () {
      *  skips the most expensive test - whether all keys are sorted - but it
      *  does check that maxKey() of the children of internal nodes are sorted. */
     BTree.prototype.checkValid = function () {
-        var size = this._root.checkValid(0, this, 0);
+        var size = this._root.checkValid(0, this, 0)[0];
         check(size === this.size, "size mismatch: counted ", size, "but stored", this.size);
     };
     return BTree;
@@ -1881,7 +1863,11 @@ var BNode = /** @class */ (function () {
         // it can't be merged with adjacent nodes. However, the parent will
         // verify that the average node size is at least half of the maximum.
         check(depth == 0 || kL > 0, "empty leaf at depth", depth, "and baseIndex", baseIndex);
-        return kL;
+        for (var i = 1; i < kL; i++) {
+            var c = tree._compare(this.keys[i - 1], this.keys[i]);
+            check(c < 0, "keys out of order at depth", depth, "and baseIndex", baseIndex + i - 1, ": ", this.keys[i - 1], " !< ", this.keys[i]);
+        }
+        return [kL, this.keys[0], this.keys[kL - 1]];
     };
     /////////////////////////////////////////////////////////////////////////////
     // Leaf Node: set & node splitting //////////////////////////////////////////
@@ -2107,10 +2093,19 @@ var BNodeInternal = /** @class */ (function (_super) {
         check(kL === cL, "keys/children length mismatch: depth", depth, "lengths", kL, cL, "baseIndex", baseIndex);
         check(kL > 1 || depth > 0, "internal node has length", kL, "at depth", depth, "baseIndex", baseIndex);
         var size = 0, c = this.children, k = this.keys, childSize = 0;
+        var prevMinKey = undefined;
+        var prevMaxKey = undefined;
         for (var i = 0; i < cL; i++) {
             var child = c[i];
-            var subtreeSize = child.checkValid(depth + 1, tree, baseIndex + size);
+            var _a = child.checkValid(depth + 1, tree, baseIndex + size), subtreeSize = _a[0], minKey = _a[1], maxKey = _a[2];
             check(subtreeSize === child.size(), "cached size mismatch at depth", depth, "index", i, "baseIndex", baseIndex);
+            check(subtreeSize === 1 || tree._compare(minKey, maxKey) < 0, "child node keys not sorted at depth", depth, "index", i, "baseIndex", baseIndex);
+            if (prevMinKey !== undefined && prevMaxKey !== undefined) {
+                check(!areOverlapping(prevMinKey, prevMaxKey, minKey, maxKey, tree._compare), "children keys not sorted at depth", depth, "index", i, "baseIndex", baseIndex, ": ", prevMaxKey, " !< ", minKey);
+                check(tree._compare(prevMaxKey, minKey) < 0, "children keys not sorted at depth", depth, "index", i, "baseIndex", baseIndex, ": ", prevMaxKey, " !< ", minKey);
+            }
+            prevMinKey = minKey;
+            prevMaxKey = maxKey;
             size += subtreeSize;
             childSize += child.keys.length;
             check(size >= childSize, "wtf", baseIndex); // no way this will ever fail
@@ -2126,7 +2121,7 @@ var BNodeInternal = /** @class */ (function (_super) {
         var toofew = childSize === 0; // childSize < (tree.maxNodeSize >> 1)*cL;
         if (toofew || childSize > tree.maxNodeSize * cL)
             check(false, toofew ? "too few" : "too many", "children (", childSize, size, ") at depth", depth, "maxNodeSize:", tree.maxNodeSize, "children.length:", cL, "baseIndex:", baseIndex);
-        return size;
+        return [size, this.minKey(), this.maxKey()];
     };
     /////////////////////////////////////////////////////////////////////////////
     // Internal Node: set & node splitting //////////////////////////////////////
@@ -2339,6 +2334,40 @@ var BNodeInternal = /** @class */ (function (_super) {
     };
     return BNodeInternal;
 }(BNode));
+/**
+ * Determines whether two nodes are overlapping in key range.
+ * Takes the leftmost known key of each node to avoid a log(n) min calculation.
+ * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
+ */
+function areOverlapping(aMin, aMax, bMin, bMax, cmp) {
+    // There are 4 possibilities:
+    // 1. aMin.........aMax
+    //            bMin.........bMax
+    // (aMax between bMin and bMax)
+    // 2.            aMin.........aMax
+    //      bMin.........bMax
+    // (aMin between bMin and bMax)
+    // 3. aMin.............aMax
+    //         bMin....bMax
+    // (aMin and aMax enclose bMin and bMax; note this includes equality cases)
+    // 4.      aMin....aMax
+    //     bMin.............bMax
+    // (bMin and bMax enclose aMin and aMax; note equality cases are identical to case 3)
+    var aMinBMin = cmp(aMin, bMin);
+    var aMinBMax = cmp(aMin, bMax);
+    if (aMinBMin >= 0 && aMinBMax <= 0) {
+        // case 2 or 4
+        return true;
+    }
+    var aMaxBMin = cmp(aMax, bMin);
+    var aMaxBMax = cmp(aMax, bMax);
+    if (aMaxBMin >= 0 && aMaxBMax <= 0) {
+        // case 1
+        return true;
+    }
+    // case 3 or no overlap
+    return aMinBMin <= 0 && aMaxBMax >= 0;
+}
 // Optimization: this array of `undefined`s is used instead of a normal
 // array of values in nodes where `undefined` is the only value.
 // Its length is extended to max node size on first use; since it can
