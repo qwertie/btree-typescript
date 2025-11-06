@@ -964,12 +964,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
           const keys = slice.map(p => p[0]);
           const vals = slice.map(p => p[1]);
           const leaf = new BNode<K,V>(keys, vals);
-          if (disjoint.length > 0)
-          {
-            if (areOverlapping(leaf.minKey()!, leaf.maxKey(), disjoint[disjoint.length - 1][1].minKey()!, disjoint[disjoint.length - 1][1].maxKey(), left._compare)
-            || cmp(leaf.minKey()!, disjoint[disjoint.length - 1][1].maxKey()!) <= 0)
-              throw new Error("Decompose produced overlapping leaves");
-          }
           disjoint.push([0, leaf]);
           if (0 > tallestHeight) {
             tallestIndex = disjoint.length - 1;
@@ -987,12 +981,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const addSharedNodeToDisjointSet = (node: BNode<K,V>, height: number) => {
       flushPendingEntries();
       node.isShared = true;
-      if (disjoint.length > 0)
-      {
-        if (areOverlapping(node.minKey()!, node.maxKey(), disjoint[disjoint.length - 1][1].minKey()!, disjoint[disjoint.length - 1][1].maxKey(), left._compare)
-        || cmp(node.minKey()!, disjoint[disjoint.length - 1][1].maxKey()!) <= 0)
-          throw new Error("Decompose produced overlapping leaves");
-      }
       disjoint.push([height, node]);
       if (height > tallestHeight) {
         tallestIndex = disjoint.length - 1;

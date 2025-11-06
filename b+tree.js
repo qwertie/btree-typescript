@@ -802,11 +802,6 @@ var BTree = /** @class */ (function () {
                     var keys = slice.map(function (p) { return p[0]; });
                     var vals = slice.map(function (p) { return p[1]; });
                     var leaf = new BNode(keys, vals);
-                    if (disjoint.length > 0) {
-                        if (areOverlapping(leaf.minKey(), leaf.maxKey(), disjoint[disjoint.length - 1][1].minKey(), disjoint[disjoint.length - 1][1].maxKey(), left._compare)
-                            || cmp(leaf.minKey(), disjoint[disjoint.length - 1][1].maxKey()) <= 0)
-                            throw new Error("Decompose produced overlapping leaves");
-                    }
                     disjoint.push([0, leaf]);
                     if (0 > tallestHeight) {
                         tallestIndex = disjoint.length - 1;
@@ -822,11 +817,6 @@ var BTree = /** @class */ (function () {
         var addSharedNodeToDisjointSet = function (node, height) {
             flushPendingEntries();
             node.isShared = true;
-            if (disjoint.length > 0) {
-                if (areOverlapping(node.minKey(), node.maxKey(), disjoint[disjoint.length - 1][1].minKey(), disjoint[disjoint.length - 1][1].maxKey(), left._compare)
-                    || cmp(node.minKey(), disjoint[disjoint.length - 1][1].maxKey()) <= 0)
-                    throw new Error("Decompose produced overlapping leaves");
-            }
             disjoint.push([height, node]);
             if (height > tallestHeight) {
                 tallestIndex = disjoint.length - 1;
