@@ -1250,91 +1250,93 @@ function testIntersect(maxNodeSize: number) {
 
 describe('BTree intersect fuzz tests', () => {
   const compare = (a: number, b: number) => a - b;
-  const branchingFactors = [4, 8, 16, 32];
-  const seeds = [0x1234ABCD, 0x9ABCDEFF];
   const FUZZ_SETTINGS = {
-    scenarioBudget: 2,
-    iterationsPerScenario: 3,
-    maxInsertSize: 200,
-    keyRange: 5_000,
-    valueRange: 1_000,
-    timeoutMs: 8_000
+    branchingFactors: [4, 5, 32],
+    ooms: [2, 3],
+    fractionsPerOOM: [0.1, 0.25, 0.5],
+    collisionChances: [0.05, 0.1, 0.3],
+    timeoutMs: 30_000
   } as const;
 
-  test('randomized intersects across branching factors', () => {
-    jest.setTimeout(FUZZ_SETTINGS.timeoutMs);
-
-    const scenarioConfigs: Array<{ seedBase: number, maxNodeSize: number }> = [];
-    for (const seedBase of seeds)
-      for (const maxNodeSize of branchingFactors)
-        scenarioConfigs.push({ seedBase, maxNodeSize });
-
-    const scenariosToRun = Math.min(FUZZ_SETTINGS.scenarioBudget, scenarioConfigs.length);
-    const selectedScenarios = scenarioConfigs.slice(0, scenariosToRun);
-
-    for (const { seedBase, maxNodeSize } of selectedScenarios) {
-      const baseSeed = (seedBase ^ (maxNodeSize * 0x9E3779B1)) >>> 0;
-      const fuzzRand = new MersenneTwister(baseSeed);
-      const nextInt = (limit: number) => limit <= 0 ? 0 : Math.floor(fuzzRand.random() * limit);
-
-      for (let iteration = 0; iteration < FUZZ_SETTINGS.iterationsPerScenario; iteration++) {
-        const treeA = new BTree<number, number>([], compare, maxNodeSize);
-        const treeB = new BTree<number, number>([], compare, maxNodeSize);
-        const mapA = new Map<number, number>();
-        const mapB = new Map<number, number>();
-
-        const sizeA = nextInt(FUZZ_SETTINGS.maxInsertSize);
-        const sizeB = nextInt(FUZZ_SETTINGS.maxInsertSize);
-
-        for (let i = 0; i < sizeA; i++) {
-          const key = nextInt(FUZZ_SETTINGS.keyRange);
-          const value = nextInt(FUZZ_SETTINGS.valueRange);
-          treeA.set(key, value);
-          mapA.set(key, value);
-        }
-
-        for (let i = 0; i < sizeB; i++) {
-          const key = nextInt(FUZZ_SETTINGS.keyRange);
-          const value = nextInt(FUZZ_SETTINGS.valueRange);
-          treeB.set(key, value);
-          mapB.set(key, value);
-        }
-
-        const expected: Array<{ key: number, leftValue: number, rightValue: number }> = [];
-        mapA.forEach((leftValue, key) => {
-          const rightValue = mapB.get(key);
-          if (rightValue !== undefined) {
-            expected.push({ key, leftValue, rightValue });
-          }
-        });
-        expected.sort((a, b) => a.key - b.key);
-
-        const actual: Array<{ key: number, leftValue: number, rightValue: number }> = [];
-        treeA.intersect(treeB, (key, leftValue, rightValue) => {
-          actual.push({ key, leftValue, rightValue });
-        });
-        expect(actual).toEqual(expected);
-
-        const swapped: Array<{ key: number, leftValue: number, rightValue: number }> = [];
-        treeB.intersect(treeA, (key, leftValue, rightValue) => {
-          swapped.push({ key, leftValue, rightValue });
-        });
-        const swapExpected = expected.map(({ key, leftValue, rightValue }) => ({
-          key,
-          leftValue: rightValue,
-          rightValue: leftValue
-        }));
-        expect(swapped).toEqual(swapExpected);
-
-        const sortedA = Array.from(mapA.entries()).sort((a, b) => a[0] - b[0]);
-        const sortedB = Array.from(mapB.entries()).sort((a, b) => a[0] - b[0]);
-        expect(treeA.toArray()).toEqual(sortedA);
-        expect(treeB.toArray()).toEqual(sortedB);
-        treeA.checkValid();
-        treeB.checkValid();
-      }
-    }
+  FUZZ_SETTINGS.fractionsPerOOM.forEach(fraction => {
+    if (fraction < 0 || fraction > 1)
+      throw new Error('FUZZ_SETTINGS.fractionsPerOOM must contain values between 0 and 1');
   });
+  FUZZ_SETTINGS.collisionChances.forEach(chance => {
+    if (chance < 0 || chance > 1)
+      throw new Error('FUZZ_SETTINGS.collisionChances must contain values between 0 and 1');
+  });
+
+  jest.setTimeout(FUZZ_SETTINGS.timeoutMs);
+
+  const rng = new MersenneTwister(0xC0FFEE);
+
+  for (const maxNodeSize of FUZZ_SETTINGS.branchingFactors) {
+    describe(`branching factor ${maxNodeSize}`, () => {
+      for (const collisionChance of FUZZ_SETTINGS.collisionChances) {
+        for (const oom of FUZZ_SETTINGS.ooms) {
+          const size = 5 * Math.pow(10, oom);
+          for (const fractionA of FUZZ_SETTINGS.fractionsPerOOM) {
+            const fractionB = 1 - fractionA;
+            const collisionLabel = collisionChance.toFixed(2);
+
+            test(`size ${size}, fractionA ${fractionA.toFixed(2)}, fractionB ${fractionB.toFixed(2)}, collision ${collisionLabel}`, () => {
+              const treeA = new BTree<number, number>([], compare, maxNodeSize);
+              const treeB = new BTree<number, number>([], compare, maxNodeSize);
+
+              const keys = makeArray(size, true, 1, collisionChance, rng);
+
+              for (const value of keys) {
+                const assignToA = rng.random() < fractionA;
+                const assignToB = rng.random() < fractionB;
+
+                if (!assignToA && !assignToB) {
+                  if (rng.random() < 0.5)
+                    treeA.set(value, value);
+                  else
+                    treeB.set(value, value);
+                  continue;
+                }
+
+                if (assignToA)
+                  treeA.set(value, value);
+                if (assignToB)
+                  treeB.set(value, value);
+              }
+
+              const aArray = treeA.toArray();
+              const bArray = treeB.toArray();
+              const bMap = new Map<number, number>(bArray);
+              const expected: Array<[number, number, number]> = [];
+              for (const [key, leftValue] of aArray) {
+                const rightValue = bMap.get(key);
+                if (rightValue !== undefined)
+                  expected.push([key, leftValue, rightValue]);
+              }
+
+              const actual: Array<[number, number, number]> = [];
+              treeA.intersect(treeB, (key, leftValue, rightValue) => {
+                actual.push([key, leftValue, rightValue]);
+              });
+              expect(actual).toEqual(expected);
+
+              const swappedActual: Array<[number, number, number]> = [];
+              treeB.intersect(treeA, (key, leftValue, rightValue) => {
+                swappedActual.push([key, leftValue, rightValue]);
+              });
+              const swappedExpected = expected.map(([key, leftValue, rightValue]) => [key, rightValue, leftValue]);
+              expect(swappedActual).toEqual(swappedExpected);
+
+              expect(treeA.toArray()).toEqual(aArray);
+              expect(treeB.toArray()).toEqual(bArray);
+              treeA.checkValid();
+              treeB.checkValid();
+            });
+          }
+        }
+      }
+    });
+  }
 });
 
 describe('BTree merge tests with fanout 32', testMerge.bind(null, 32));
