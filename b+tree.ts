@@ -1237,10 +1237,16 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
     for (let s = spine.length - 1; s >= 0; s--) {
       const parent = spine[s].node;
-      const indexOf = parent.indexOf(targetKey, 0, cmp); // insertion index or exact
-      const stepDownIndex = indexOf + (isInclusive ? 0 : (indexOf < parent.keys.length && cmp(parent.keys[indexOf], targetKey) === 0 ? 1 : 0));
+      const indexOf = parent.indexOf(targetKey, -1, cmp);
+      let stepDownIndex: number;
+      if (indexOf < 0) {
+        stepDownIndex = ~indexOf;
+      } else {
+        stepDownIndex = isInclusive ? indexOf : indexOf + 1;
+      }
+
       // Note: when key not found, indexOf with failXor=0 already returns insertion index
-      if (stepDownIndex <= parent.keys.length - 1) {
+      if (stepDownIndex < parent.keys.length) {
         descentLevel = s;
         descentIndex = stepDownIndex;
         break;

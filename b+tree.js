@@ -1023,10 +1023,16 @@ var BTree = /** @class */ (function () {
         var descentIndex = -1;
         for (var s = spine.length - 1; s >= 0; s--) {
             var parent = spine[s].node;
-            var indexOf = parent.indexOf(targetKey, 0, cmp); // insertion index or exact
-            var stepDownIndex = indexOf + (isInclusive ? 0 : (indexOf < parent.keys.length && cmp(parent.keys[indexOf], targetKey) === 0 ? 1 : 0));
+            var indexOf = parent.indexOf(targetKey, -1, cmp);
+            var stepDownIndex = void 0;
+            if (indexOf < 0) {
+                stepDownIndex = ~indexOf;
+            }
+            else {
+                stepDownIndex = isInclusive ? indexOf : indexOf + 1;
+            }
             // Note: when key not found, indexOf with failXor=0 already returns insertion index
-            if (stepDownIndex <= parent.keys.length - 1) {
+            if (stepDownIndex < parent.keys.length) {
                 descentLevel = s;
                 descentIndex = stepDownIndex;
                 break;
