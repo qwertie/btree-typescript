@@ -790,30 +790,32 @@ var BTree = /** @class */ (function () {
         var pending = [];
         var tallestIndex = -1, tallestHeight = -1;
         var flushPendingEntries = function () {
-            // Flush pending overlapped entries into new leaves
-            if (pending.length > 0) {
-                var max = left._maxNodeSize;
-                var total = pending.length;
-                var remaining = total;
-                var leafCount = Math.ceil(total / max);
-                var offset = 0;
-                while (leafCount > 0) {
-                    var newLeafSize = Math.ceil(remaining / leafCount);
-                    var slice = pending.slice(offset, offset + newLeafSize);
-                    offset += newLeafSize;
-                    remaining -= newLeafSize;
-                    var keys = slice.map(function (p) { return p[0]; });
-                    var vals = slice.map(function (p) { return p[1]; });
-                    var leaf = new BNode(keys, vals);
-                    disjoint.push([0, leaf]);
-                    if (0 > tallestHeight) {
-                        tallestIndex = disjoint.length - 1;
-                        tallestHeight = 0;
-                    }
-                    leafCount--;
+            var total = pending.length;
+            if (total === 0)
+                return;
+            var max = left._maxNodeSize;
+            var leafCount = Math.ceil(total / max);
+            var remaining = total;
+            var offset = 0;
+            while (leafCount > 0) {
+                var chunkSize = Math.ceil(remaining / leafCount);
+                var keys = new Array(chunkSize);
+                var vals = new Array(chunkSize);
+                for (var i = 0; i < chunkSize; ++i) {
+                    var entry = pending[offset++];
+                    keys[i] = entry[0];
+                    vals[i] = entry[1];
                 }
-                pending.length = 0;
+                remaining -= chunkSize;
+                leafCount--;
+                var leaf = new BNode(keys, vals);
+                disjoint.push([0, leaf]);
+                if (tallestHeight < 0) {
+                    tallestIndex = disjoint.length - 1;
+                    tallestHeight = 0;
+                }
             }
+            pending.length = 0;
         };
         // Have to do this as cast to convince TS it's ever assigned
         var highestDisjoint = undefined;
@@ -833,23 +835,27 @@ var BTree = /** @class */ (function () {
             }
         };
         var disqualifySpine = function (cursor, depthFrom) {
+            var spine = cursor.spine;
             for (var i = depthFrom; i >= 0; --i) {
-                var entry = cursor.spine[i];
-                if (entry.payload.disqualified)
+                var payload = spine[i].payload;
+                if (payload.disqualified)
                     break;
-                entry.payload.disqualified = true;
+                payload.disqualified = true;
             }
         };
         // Cursor payload factory
         var makePayload = function () { return ({ disqualified: false }); };
         var pushLeafRange = function (leaf, from, toExclusive) {
+            var keys = leaf.keys;
+            var values = leaf.values;
             for (var i = from; i < toExclusive; ++i)
-                pending.push([leaf.keys[i], leaf.values[i]]);
+                pending.push([keys[i], values[i]]);
         };
         var onMoveInLeaf = function (leaf, payload, fromIndex, toIndex, startedEqual) {
             check(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
             var start = startedEqual ? fromIndex + 1 : fromIndex;
-            pushLeafRange(leaf, start, toIndex);
+            if (start < toIndex)
+                pushLeafRange(leaf, start, toIndex);
         };
         var onExitLeaf = function (leaf, payload, startingIndex, startedEqual, cursorThis) {
             highestDisjoint = undefined;
@@ -863,11 +869,15 @@ var BTree = /** @class */ (function () {
             }
             else {
                 var start = startedEqual ? startingIndex + 1 : startingIndex;
-                pushLeafRange(leaf, start, leaf.keys.length);
+                var leafSize = leaf.keys.length;
+                if (start < leafSize)
+                    pushLeafRange(leaf, start, leafSize);
             }
         };
         var onStepUp = function (parent, height, payload, fromIndex, spineIndex, stepDownIndex, cursorThis) {
-            if (Number.isNaN(stepDownIndex) /* still walking up */
+            var children = parent.children;
+            var nextHeight = height - 1;
+            if (stepDownIndex !== stepDownIndex /* NaN: still walking up */
                 || stepDownIndex === Number.POSITIVE_INFINITY /* target key is beyond edge of tree, done with walk */) {
                 if (!payload.disqualified) {
                     highestDisjoint = { node: parent, height: height };
@@ -878,8 +888,9 @@ var BTree = /** @class */ (function () {
                 }
                 else {
                     addHighestDisjoint();
-                    for (var i = fromIndex + 1; i < parent.children.length; ++i)
-                        addSharedNodeToDisjointSet(parent.children[i], height - 1);
+                    var len = children.length;
+                    for (var i = fromIndex + 1; i < len; ++i)
+                        addSharedNodeToDisjointSet(children[i], nextHeight);
                 }
             }
             else {
@@ -891,7 +902,7 @@ var BTree = /** @class */ (function () {
                 }
                 addHighestDisjoint();
                 for (var i = fromIndex + 1; i < stepDownIndex; ++i)
-                    addSharedNodeToDisjointSet(parent.children[i], height - 1);
+                    addSharedNodeToDisjointSet(children[i], nextHeight);
             }
         };
         var onStepDown = function (node, height, spineIndex, stepDownIndex, cursorThis) {
@@ -903,8 +914,10 @@ var BTree = /** @class */ (function () {
                 // If a child overlaps, the entire spine overlaps because a parent in a btree always encloses the range
                 // of its children.
                 disqualifySpine(cursorThis, spineIndex);
+                var children = node.children;
+                var nextHeight = height - 1;
                 for (var i = 0; i < stepDownIndex; ++i)
-                    addSharedNodeToDisjointSet(node.children[i], height - 1);
+                    addSharedNodeToDisjointSet(children[i], nextHeight);
             }
         };
         var onEnterLeaf = function (leaf, destIndex, cursorThis, cursorOther) {
@@ -953,17 +966,18 @@ var BTree = /** @class */ (function () {
         initDisqualify(curB, curA);
         // Walk both cursors in alternating hops
         while (true) {
-            var order = cmp(BTree.getKey(curA), BTree.getKey(curB));
+            var keyA = curA.leaf.keys[curA.leafIndex];
+            var keyB = curB.leaf.keys[curB.leafIndex];
+            var order = cmp(keyA, keyB);
             var areEqual = order === 0;
             if (areEqual) {
-                var key = BTree.getKey(curA);
                 var vA = curA.leaf.values[curA.leafIndex];
                 var vB = curB.leaf.values[curB.leafIndex];
-                var merged = mergeValues(key, vA, vB);
+                var merged = mergeValues(keyA, vA, vB);
                 if (merged !== undefined)
-                    pending.push([key, merged]);
-                var outT = BTree.moveTo(curB, curA, key, false, areEqual, cmp);
-                var outL = BTree.moveTo(curA, curB, key, false, areEqual, cmp);
+                    pending.push([keyA, merged]);
+                var outT = BTree.moveTo(curB, curA, keyA, false, areEqual, cmp);
+                var outL = BTree.moveTo(curA, curB, keyA, false, areEqual, cmp);
                 if (outT || outL) {
                     if (!outT || !outL) {
                         // In these cases, we pass areEqual=false because a return value of "out of tree" means
@@ -1005,20 +1019,29 @@ var BTree = /** @class */ (function () {
      * Returns true if end-of-tree was reached (cursor not structurally mutated).
      */
     BTree.moveTo = function (cur, other, targetKey, isInclusive, startedEqual, cmp) {
+        var onMoveInLeaf = cur.onMoveInLeaf;
+        var onExitLeaf = cur.onExitLeaf;
+        var onStepUp = cur.onStepUp;
+        var onStepDown = cur.onStepDown;
+        var onEnterLeaf = cur.onEnterLeaf;
+        var makePayload = cur.makePayload;
         // Fast path: destination within current leaf
         var leaf = cur.leaf;
+        var leafPayload = cur.leafPayload;
         var i = leaf.indexOf(targetKey, -1, cmp);
         var destInLeaf = i < 0 ? ~i : (isInclusive ? i : i + 1);
-        if (destInLeaf < leaf.keys.length) {
-            cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, destInLeaf, startedEqual);
+        var leafKeyCount = leaf.keys.length;
+        if (destInLeaf < leafKeyCount) {
+            onMoveInLeaf(leaf, leafPayload, cur.leafIndex, destInLeaf, startedEqual);
             cur.leafIndex = destInLeaf;
             return false;
         }
         // Find first ancestor with a viable right step
         var spine = cur.spine;
+        var initialSpineLength = spine.length;
         var descentLevel = -1;
         var descentIndex = -1;
-        for (var s = spine.length - 1; s >= 0; s--) {
+        for (var s = initialSpineLength - 1; s >= 0; s--) {
             var parent = spine[s].node;
             var indexOf = parent.indexOf(targetKey, -1, cmp);
             var stepDownIndex = void 0;
@@ -1037,46 +1060,54 @@ var BTree = /** @class */ (function () {
         }
         // Exit leaf; we did walk out of it conceptually
         var startIndex = cur.leafIndex;
-        cur.onExitLeaf(leaf, cur.leafPayload, startIndex, startedEqual, cur);
+        onExitLeaf(leaf, leafPayload, startIndex, startedEqual, cur);
         if (descentLevel < 0) {
             // No descent point; step up all the way; last callback gets infinity
-            for (var depth = spine.length - 1; depth >= 0; depth--) {
+            for (var depth = initialSpineLength - 1; depth >= 0; depth--) {
                 var entry_1 = spine[depth];
                 var sd = depth === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
-                cur.onStepUp(entry_1.node, BTree.heightOf(spine, depth), entry_1.payload, entry_1.childIndex, depth, sd, cur);
+                onStepUp(entry_1.node, initialSpineLength - depth, entry_1.payload, entry_1.childIndex, depth, sd, cur);
             }
             return true;
         }
         // Step up through ancestors above the descentLevel
-        for (var depth = spine.length - 1; depth > descentLevel; depth--) {
+        for (var depth = initialSpineLength - 1; depth > descentLevel; depth--) {
             var entry_2 = spine[depth];
-            cur.onStepUp(entry_2.node, BTree.heightOf(spine, depth), entry_2.payload, entry_2.childIndex, depth, NaN, cur);
+            onStepUp(entry_2.node, initialSpineLength - depth, entry_2.payload, entry_2.childIndex, depth, Number.NaN, cur);
         }
         var entry = spine[descentLevel];
-        cur.onStepUp(entry.node, BTree.heightOf(spine, descentLevel), entry.payload, entry.childIndex, descentLevel, descentIndex, cur);
+        onStepUp(entry.node, initialSpineLength - descentLevel, entry.payload, entry.childIndex, descentLevel, descentIndex, cur);
         entry.childIndex = descentIndex;
         // Descend, invoking onStepDown and creating payloads
-        var height = BTree.heightOf(spine, descentLevel) - 1; // calculate height before changing length
+        var height = initialSpineLength - descentLevel - 1; // calculate height before changing length
         spine.length = descentLevel + 1;
         var node = spine[descentLevel].node.children[descentIndex];
         while (!node.isLeaf) {
             var ni = node;
-            var j = ni.indexOf(targetKey, 0, cmp);
-            var stepDownIndex = j + (isInclusive ? 0 : (j < ni.keys.length && cmp(ni.keys[j], targetKey) === 0 ? 1 : 0));
-            var payload = cur.makePayload();
+            var keys = ni.keys;
+            var stepDownIndex = ni.indexOf(targetKey, 0, cmp);
+            if (!isInclusive && stepDownIndex < keys.length && cmp(keys[stepDownIndex], targetKey) === 0)
+                stepDownIndex++;
+            var payload = makePayload();
+            var spineIndex = spine.length;
             spine.push({ node: ni, childIndex: stepDownIndex, payload: payload });
-            cur.onStepDown(ni, height, spine.length - 1, stepDownIndex, cur);
+            onStepDown(ni, height, spineIndex, stepDownIndex, cur);
             node = ni.children[stepDownIndex];
             height -= 1;
         }
         // Enter destination leaf
         var idx = node.indexOf(targetKey, -1, cmp);
-        var destIndex = idx < 0 ? ~idx : (isInclusive ? idx : idx + 1);
-        check(destIndex >= 0 && destIndex < node.keys.length, "moveTo: destination out of bounds");
+        var destIndex;
+        if (idx < 0)
+            destIndex = ~idx;
+        else
+            destIndex = isInclusive ? idx : idx + 1;
+        var nodeKeys = node.keys;
+        check(destIndex >= 0 && destIndex < nodeKeys.length, "moveTo: destination out of bounds");
         cur.leaf = node;
-        cur.leafPayload = cur.makePayload();
+        cur.leafPayload = makePayload();
         cur.leafIndex = destIndex;
-        cur.onEnterLeaf(node, destIndex, cur, other);
+        onEnterLeaf(node, destIndex, cur, other);
         return false;
     };
     /**
