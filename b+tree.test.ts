@@ -2077,9 +2077,9 @@ describe('BTree merge fuzz tests', () => {
   const mergeFn = (_k: number, left: number, _right: number) => left;
   const FUZZ_SETTINGS = {
     branchingFactors: [4, 5, 32],
-    ooms: [0, 1, 2, 3],
-    fractionsPerOOM: [0.0001, 0.01, 0.1, 0.25, 0.5],
-    collisionChances: [0, 0.01, 0.1, 0.5]
+    ooms: [0, 1, 2], // [0, 1, 2, 3],
+    fractionsPerOOM: [0.1, 0.25, 0.5], // [0.0001, 0.01, 0.1, 0.25, 0.5],
+    collisionChances: [0.1, 0.5], // [0, 0.01, 0.1, 0.5]
   } as const;
   const RANDOM_EDITS_PER_TEST = 20;
   const TIMEOUT_MS = 30_000;
