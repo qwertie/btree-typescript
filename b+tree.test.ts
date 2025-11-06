@@ -2037,13 +2037,36 @@ function swap(keys: any[], i: number, j: number) {
   keys[j] = tmp;
 }
 
-function makeArray(size: number, randomOrder: boolean, spacing = 10) {
-  var keys: number[] = [], i, n;
-  for (i = 0, n = 0; i < size; i++, n += 1 + randInt(spacing))
-    keys[i] = n;
-  if (randomOrder)
-    for (i = 0; i < size; i++) 
-      swap(keys, i, randInt(size));
+function makeArray(size: number, randomOrder: boolean, spacing = 10, collisionChance = 0, rng?: MersenneTwister) {
+  const randomizer = rng ?? rand;
+  const useGlobalRand = rng === undefined;
+  const randomFloat = () => {
+    if (typeof randomizer.random === 'function')
+      return randomizer.random();
+    return Math.random();
+  };
+  const randomIntWithMax = (max: number) => {
+    if (max <= 0)
+      return 0;
+    if (useGlobalRand)
+      return randInt(max);
+    return Math.floor(randomFloat() * max);
+  };
+
+  const keys: number[] = [];
+  let current = 0;
+  for (let i = 0; i < size; i++) {
+    if (i > 0 && collisionChance > 0 && randomFloat() < collisionChance) {
+      keys[i] = keys[i - 1];
+    } else {
+      current += 1 + randomIntWithMax(spacing);
+      keys[i] = current;
+    }
+  }
+  if (randomOrder) {
+    for (let i = 0; i < size; i++)
+      swap(keys, i, randomIntWithMax(size));
+  }
   return keys;
 }
 
@@ -2055,7 +2078,8 @@ describe('BTree merge fuzz tests', () => {
   const FUZZ_SETTINGS = {
     branchingFactors: [4, 5, 32],
     ooms: [0, 1, 2, 3],
-    fractionsPerOOM: [0.0001, 0.01, 0.1, 0.25, 0.5]
+    fractionsPerOOM: [0.0001, 0.01, 0.1, 0.25, 0.5],
+    collisionChances: [0, 0.01, 0.1, 0.5]
   } as const;
   const RANDOM_EDITS_PER_TEST = 20;
   const TIMEOUT_MS = 30_000;
@@ -2064,6 +2088,10 @@ describe('BTree merge fuzz tests', () => {
     if (fraction < 0 || fraction > 1)
       throw new Error('FUZZ_SETTINGS.fractionsPerOOM must contain values between 0 and 1');
   });
+  FUZZ_SETTINGS.collisionChances.forEach(chance => {
+    if (chance < 0 || chance > 1)
+      throw new Error('FUZZ_SETTINGS.collisionChances must contain values between 0 and 1');
+  });
 
   jest.setTimeout(TIMEOUT_MS);
 
@@ -2071,58 +2099,57 @@ describe('BTree merge fuzz tests', () => {
 
   for (const maxNodeSize of FUZZ_SETTINGS.branchingFactors) {
     describe(`branching factor ${maxNodeSize}`, () => {
-      for (const oom of FUZZ_SETTINGS.ooms) {
-        const size = 5 * Math.pow(10, oom);
-        for (const fractionA of FUZZ_SETTINGS.fractionsPerOOM) {
-          const fractionB = 1 - fractionA;
+      for (const collisionChance of FUZZ_SETTINGS.collisionChances) {
+        for (const oom of FUZZ_SETTINGS.ooms) {
+          const size = 5 * Math.pow(10, oom);
+          for (const fractionA of FUZZ_SETTINGS.fractionsPerOOM) {
+            const fractionB = 1 - fractionA;
+            const collisionLabel = collisionChance.toFixed(2);
 
-          test(`size ${size}, fractionA ${fractionA.toFixed(2)}, fractionB ${fractionB.toFixed(2)}`, () => {
-            const treeA = new BTree<number, number>([], compare, maxNodeSize);
-            const treeB = new BTree<number, number>([], compare, maxNodeSize);
+            test(`size ${size}, fractionA ${fractionA.toFixed(2)}, fractionB ${fractionB.toFixed(2)}, collision ${collisionLabel}`, () => {
+              const treeA = new BTree<number, number>([], compare, maxNodeSize);
+              const treeB = new BTree<number, number>([], compare, maxNodeSize);
 
-            const keys = makeArray(size, true, 1);
-            const sorted = Array.from(new Set(keys)).sort(compare);
+              const keys = makeArray(size, true, 1, collisionChance, rng);
+              const sorted = Array.from(new Set(keys)).sort(compare);
 
-            const aArray: [number, number][] = [];
-            const bArray: [number, number][] = [];
-            for (const value of keys) {
-              if (rng.random() < fractionA) {
-                aArray.push([value, value]);
-                treeA.set(value, value);
-              } else {
-                bArray.push([value, value]);
-                treeB.set(value, value);
+              for (const value of keys) {
+                if (rng.random() < fractionA) {
+                  treeA.set(value, value);
+                } else {
+                  treeB.set(value, value);
+                }
               }
-            }
 
-            aArray.sort((a, b) => compare(a[0], b[0]));
-            bArray.sort((a, b) => compare(a[0], b[0]));
+              const aArray = treeA.toArray();
+              const bArray = treeB.toArray();
 
-            const merged = treeA.merge(treeB, mergeFn);
-            merged.checkValid();
+              const merged = treeA.merge(treeB, mergeFn);
+              merged.checkValid();
 
-            expect(merged.toArray()).toEqual(sorted.map(k => [k, k]));
+              expect(merged.toArray()).toEqual(sorted.map(k => [k, k]));
 
-            // Merge should not have mutated inputs
-            expect(treeA.toArray()).toEqual(aArray);
-            expect(treeB.toArray()).toEqual(bArray);
+              // Merge should not have mutated inputs
+              expect(treeA.toArray()).toEqual(aArray);
+              expect(treeB.toArray()).toEqual(bArray);
 
-            for (let edit = 0; edit < RANDOM_EDITS_PER_TEST; edit++) {
-              const key = 1 + randomInt(rng, size);
-              const action = rng.random();
-              if (action < 0.33) {
-                merged.set(key, key);
-              } else if (action < 0.66) {
-                merged.set(key, -key);
-              } else {
-                merged.delete(key);
+              for (let edit = 0; edit < RANDOM_EDITS_PER_TEST; edit++) {
+                const key = 1 + randomInt(rng, size);
+                const action = rng.random();
+                if (action < 0.33) {
+                  merged.set(key, key);
+                } else if (action < 0.66) {
+                  merged.set(key, -key);
+                } else {
+                  merged.delete(key);
+                }
               }
-            };
 
-            // Check for shared mutability issues
-            expect(treeA.toArray()).toEqual(aArray);
-            expect(treeB.toArray()).toEqual(bArray);
-          });
+              // Check for shared mutability issues
+              expect(treeA.toArray()).toEqual(aArray);
+              expect(treeB.toArray()).toEqual(bArray);
+            });
+          }
         }
       }
     });
