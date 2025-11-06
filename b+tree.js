@@ -509,35 +509,41 @@ var BTree = /** @class */ (function () {
             return;
         var makePayload = function () { return undefined; };
         // Initialize cursors at minimum keys.
-        var curA = BTree.createCursor(this, makePayload, BTree.noop, BTree.noop, BTree.noop, BTree.noop, BTree.noop);
-        var curB = BTree.createCursor(other, makePayload, BTree.noop, BTree.noop, BTree.noop, BTree.noop, BTree.noop);
-        // Walk both cursors
+        var cursorA = BTree.createCursor(this, makePayload, BTree.noop, BTree.noop, BTree.noop, BTree.noop, BTree.noop);
+        var cursorB = BTree.createCursor(other, makePayload, BTree.noop, BTree.noop, BTree.noop, BTree.noop, BTree.noop);
+        var leading = cursorA;
+        var trailing = cursorB;
+        var order = cmp(BTree.getKey(leading), BTree.getKey(trailing));
         while (true) {
-            var order = cmp(BTree.getKey(curA), BTree.getKey(curB));
             var areEqual = order === 0;
             if (areEqual) {
-                var key = BTree.getKey(curA);
-                var vA = curA.leaf.values[curA.leafIndex];
-                var vB = curB.leaf.values[curB.leafIndex];
+                var key = BTree.getKey(leading);
+                var vA = cursorA.leaf.values[cursorA.leafIndex];
+                var vB = cursorB.leaf.values[cursorB.leafIndex];
                 intersection(key, vA, vB);
-                var outT = BTree.moveTo(curB, curA, key, false, areEqual, cmp);
-                var outL = BTree.moveTo(curA, curB, key, false, areEqual, cmp);
+                var outT = BTree.moveOne(trailing, leading, key, false, areEqual, cmp);
+                var outL = BTree.moveOne(leading, trailing, key, false, areEqual, cmp);
                 if (outT && outL)
                     break;
+                order = cmp(BTree.getKey(leading), BTree.getKey(trailing));
             }
             else {
-                var leading = void 0, trailing = void 0;
-                if (order > 0) {
-                    trailing = curB;
-                    leading = curA;
+                if (order < 0) {
+                    var tmp = trailing;
+                    trailing = leading;
+                    leading = tmp;
                 }
-                else {
-                    trailing = curA;
-                    leading = curB;
-                }
-                if (BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp)) {
+                // At this point, leading is guaranteed to be ahead of trailing.
+                var _a = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp), out = _a[0], nowEqual = _a[1];
+                if (out) {
                     // We've reached the end of one tree, so intersections are guaranteed to be done.
                     break;
+                }
+                else if (nowEqual) {
+                    order = 0;
+                }
+                else {
+                    order = -1; // trailing is ahead of leading
                 }
             }
         }
@@ -976,8 +982,8 @@ var BTree = /** @class */ (function () {
                 var merged = mergeValues(keyA, vA, vB);
                 if (merged !== undefined)
                     BTree.alternatingPush(pending, keyA, merged);
-                var outT = BTree.moveTo(curB, curA, keyA, false, areEqual, cmp);
-                var outL = BTree.moveTo(curA, curB, keyA, false, areEqual, cmp);
+                var outT = BTree.moveTo(curB, curA, keyA, false, areEqual, cmp)[0];
+                var outL = BTree.moveTo(curA, curB, keyA, false, areEqual, cmp)[0];
                 if (outT || outL) {
                     if (!outT || !outL) {
                         // In these cases, we pass areEqual=false because a return value of "out of tree" means
@@ -1003,7 +1009,7 @@ var BTree = /** @class */ (function () {
                     trailing = curA;
                     leading = curB;
                 }
-                var out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp);
+                var out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp)[0];
                 if (out) {
                     BTree.moveTo(leading, trailing, maxKey, false, areEqual, cmp);
                     break;
@@ -1026,6 +1032,17 @@ var BTree = /** @class */ (function () {
         // Micro benchmarks show this is the fastest way to do this
         list.push(first, second);
     };
+    BTree.moveOne = function (cur, other, targetKey, isInclusive, startedEqual, cmp) {
+        var leaf = cur.leaf;
+        var nextIndex = cur.leafIndex + 1;
+        if (nextIndex < leaf.keys.length) {
+            // Still within current leaf
+            cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, nextIndex, startedEqual);
+            cur.leafIndex = nextIndex;
+            return false;
+        }
+        return BTree.moveTo(cur, other, targetKey, isInclusive, startedEqual, cmp)[0];
+    };
     /**
      * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
      * Returns true if end-of-tree was reached (cursor not structurally mutated).
@@ -1041,12 +1058,27 @@ var BTree = /** @class */ (function () {
         var leaf = cur.leaf;
         var leafPayload = cur.leafPayload;
         var i = leaf.indexOf(targetKey, -1, cmp);
-        var destInLeaf = i < 0 ? ~i : (isInclusive ? i : i + 1);
+        var destInLeaf;
+        var areEqual;
+        if (i < 0) {
+            destInLeaf = ~i;
+            areEqual = false;
+        }
+        else {
+            if (isInclusive) {
+                destInLeaf = i;
+                areEqual = true;
+            }
+            else {
+                destInLeaf = i + 1;
+                areEqual = false;
+            }
+        }
         var leafKeyCount = leaf.keys.length;
         if (destInLeaf < leafKeyCount) {
             onMoveInLeaf(leaf, leafPayload, cur.leafIndex, destInLeaf, startedEqual);
             cur.leafIndex = destInLeaf;
-            return false;
+            return [false, areEqual];
         }
         // Find first ancestor with a viable right step
         var spine = cur.spine;
@@ -1080,7 +1112,7 @@ var BTree = /** @class */ (function () {
                 var sd = depth === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
                 onStepUp(entry_1.node, initialSpineLength - depth, entry_1.payload, entry_1.childIndex, depth, sd, cur);
             }
-            return true;
+            return [true, false];
         }
         // Step up through ancestors above the descentLevel
         for (var depth = initialSpineLength - 1; depth > descentLevel; depth--) {
@@ -1110,15 +1142,25 @@ var BTree = /** @class */ (function () {
         // Enter destination leaf
         var idx = node.indexOf(targetKey, -1, cmp);
         var destIndex;
-        if (idx < 0)
+        if (idx < 0) {
             destIndex = ~idx;
-        else
-            destIndex = isInclusive ? idx : idx + 1;
+            areEqual = false;
+        }
+        else {
+            if (isInclusive) {
+                destIndex = idx;
+                areEqual = true;
+            }
+            else {
+                destIndex = idx + 1;
+                areEqual = false;
+            }
+        }
         cur.leaf = node;
         cur.leafPayload = makePayload();
         cur.leafIndex = destIndex;
         onEnterLeaf(node, destIndex, cur, other);
-        return false;
+        return [false, areEqual];
     };
     /**
      * Create a cursor pointing to the leftmost key of the supplied tree.
