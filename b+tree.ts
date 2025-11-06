@@ -1020,10 +1020,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const makePayload = (): MergeCursorPayload => ({ disqualified: false });
 
     const pushLeafRange = (leaf: BNode<K,V>, from: number, toExclusive: number) => {
-      if (from < toExclusive) {
-        for (let i = from; i < toExclusive; ++i)
-          pending.push([leaf.keys[i], leaf.values[i]]);
-      }
+      for (let i = from; i < toExclusive; ++i)
+        pending.push([leaf.keys[i], leaf.values[i]]);
     };
 
     const onMoveInLeaf = (
@@ -1208,6 +1206,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     return { disjoint, tallestIndex };
   }
 
+  private static heightOf<K,V,TP>(spine: MergeCursor<K,V,TP>['spine'], depth: number) { return spine.length - depth; }
+
   /**
    * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
    * Returns true if end-of-tree was reached (cursor not structurally mutated).
@@ -1220,10 +1220,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     startedEqual: boolean,
     cmp: (a:K,b:K)=>number
   ): boolean {
-    // We should start before the target (or at it if inclusive)
-    const keyPos = cmp(BTree.getKey(cur), targetKey);
-    check(isInclusive && keyPos < 0 || !isInclusive && keyPos <= 0, "moveTo requires alternating hop pattern");
-
     // Fast path: destination within current leaf
     const leaf = cur.leaf;
     const i = leaf.indexOf(targetKey, -1, cmp);
@@ -1251,9 +1247,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       }
     }
 
-    // Heights for callbacks: height = distance to leaf. Parent-of-leaf height = 1.
-    const heightOf = (depth: number) => spine.length - depth;
-
     // Exit leaf; we did walk out of it conceptually
     const startIndex = cur.leafIndex;
     cur.onExitLeaf(leaf, cur.leafPayload, startIndex, startedEqual, cur);
@@ -1263,7 +1256,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       for (let depth = spine.length - 1; depth >= 0; depth--) {
         const entry = spine[depth];
         const sd = depth === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
-        cur.onStepUp(entry.node, heightOf(depth), entry.payload, entry.childIndex, depth, sd, cur);
+        cur.onStepUp(entry.node, BTree.heightOf(spine, depth), entry.payload, entry.childIndex, depth, sd, cur);
       }
       return true;
     }
@@ -1271,15 +1264,15 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     // Step up through ancestors above the descentLevel
     for (let depth = spine.length - 1; depth > descentLevel; depth--) {
       const entry = spine[depth];
-      cur.onStepUp(entry.node, heightOf(depth), entry.payload, entry.childIndex, depth, NaN, cur);
+      cur.onStepUp(entry.node, BTree.heightOf(spine, depth), entry.payload, entry.childIndex, depth, NaN, cur);
     }
 
     const entry = spine[descentLevel];
-    cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentLevel, descentIndex, cur);
+    cur.onStepUp(entry.node, BTree.heightOf(spine, descentLevel), entry.payload, entry.childIndex, descentLevel, descentIndex, cur);
     entry.childIndex = descentIndex;
 
     // Descend, invoking onStepDown and creating payloads
-    let height = heightOf(descentLevel) - 1; // calculate height before changing length
+    let height = BTree.heightOf(spine, descentLevel) - 1; // calculate height before changing length
     spine.length = descentLevel + 1;
     let node: BNode<K,V> = spine[descentLevel].node.children[descentIndex];
 

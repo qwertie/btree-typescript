@@ -850,10 +850,8 @@ var BTree = /** @class */ (function () {
         // Cursor payload factory
         var makePayload = function () { return ({ disqualified: false }); };
         var pushLeafRange = function (leaf, from, toExclusive) {
-            if (from < toExclusive) {
-                for (var i = from; i < toExclusive; ++i)
-                    pending.push([leaf.keys[i], leaf.values[i]]);
-            }
+            for (var i = from; i < toExclusive; ++i)
+                pending.push([leaf.keys[i], leaf.values[i]]);
         };
         var onMoveInLeaf = function (leaf, payload, fromIndex, toIndex, startedEqual) {
             check(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
@@ -1004,14 +1002,12 @@ var BTree = /** @class */ (function () {
         flushPendingEntries();
         return { disjoint: disjoint, tallestIndex: tallestIndex };
     };
+    BTree.heightOf = function (spine, depth) { return spine.length - depth; };
     /**
      * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
      * Returns true if end-of-tree was reached (cursor not structurally mutated).
      */
     BTree.moveTo = function (cur, other, targetKey, isInclusive, startedEqual, cmp) {
-        // We should start before the target (or at it if inclusive)
-        var keyPos = cmp(BTree.getKey(cur), targetKey);
-        check(isInclusive && keyPos < 0 || !isInclusive && keyPos <= 0, "moveTo requires alternating hop pattern");
         // Fast path: destination within current leaf
         var leaf = cur.leaf;
         var i = leaf.indexOf(targetKey, -1, cmp);
@@ -1036,8 +1032,6 @@ var BTree = /** @class */ (function () {
                 break;
             }
         }
-        // Heights for callbacks: height = distance to leaf. Parent-of-leaf height = 1.
-        var heightOf = function (depth) { return spine.length - depth; };
         // Exit leaf; we did walk out of it conceptually
         var startIndex = cur.leafIndex;
         cur.onExitLeaf(leaf, cur.leafPayload, startIndex, startedEqual, cur);
@@ -1046,20 +1040,20 @@ var BTree = /** @class */ (function () {
             for (var depth = spine.length - 1; depth >= 0; depth--) {
                 var entry_1 = spine[depth];
                 var sd = depth === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
-                cur.onStepUp(entry_1.node, heightOf(depth), entry_1.payload, entry_1.childIndex, depth, sd, cur);
+                cur.onStepUp(entry_1.node, BTree.heightOf(spine, depth), entry_1.payload, entry_1.childIndex, depth, sd, cur);
             }
             return true;
         }
         // Step up through ancestors above the descentLevel
         for (var depth = spine.length - 1; depth > descentLevel; depth--) {
             var entry_2 = spine[depth];
-            cur.onStepUp(entry_2.node, heightOf(depth), entry_2.payload, entry_2.childIndex, depth, NaN, cur);
+            cur.onStepUp(entry_2.node, BTree.heightOf(spine, depth), entry_2.payload, entry_2.childIndex, depth, NaN, cur);
         }
         var entry = spine[descentLevel];
-        cur.onStepUp(entry.node, heightOf(descentLevel), entry.payload, entry.childIndex, descentLevel, descentIndex, cur);
+        cur.onStepUp(entry.node, BTree.heightOf(spine, descentLevel), entry.payload, entry.childIndex, descentLevel, descentIndex, cur);
         entry.childIndex = descentIndex;
         // Descend, invoking onStepDown and creating payloads
-        var height = heightOf(descentLevel) - 1; // calculate height before changing length
+        var height = BTree.heightOf(spine, descentLevel) - 1; // calculate height before changing length
         spine.length = descentLevel + 1;
         var node = spine[descentLevel].node.children[descentIndex];
         while (!node.isLeaf) {
