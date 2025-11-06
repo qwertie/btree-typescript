@@ -1035,7 +1035,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     ) => {
       check(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
       const start = startedEqual ? fromIndex + 1 : fromIndex;
-      pushLeafRange(leaf, start, Math.min(toIndex, leaf.keys.length));
+      pushLeafRange(leaf, start, toIndex);
     };
 
     const onExitLeaf = (
@@ -1128,7 +1128,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
         cursorOther.leafPayload.disqualified = true;
         disqualifySpine(cursorThis, cursorThis.spine.length - 1);
         disqualifySpine(cursorOther, cursorOther.spine.length - 1);
-        pushLeafRange(leaf, 0, Math.min(destIndex, leaf.keys.length));
+        pushLeafRange(leaf, 0, destIndex);
       }
     };
 

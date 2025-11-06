@@ -858,7 +858,7 @@ var BTree = /** @class */ (function () {
         var onMoveInLeaf = function (leaf, payload, fromIndex, toIndex, startedEqual) {
             check(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
             var start = startedEqual ? fromIndex + 1 : fromIndex;
-            pushLeafRange(leaf, start, Math.min(toIndex, leaf.keys.length));
+            pushLeafRange(leaf, start, toIndex);
         };
         var onExitLeaf = function (leaf, payload, startingIndex, startedEqual, cursorThis) {
             highestDisjoint = undefined;
@@ -925,7 +925,7 @@ var BTree = /** @class */ (function () {
                 cursorOther.leafPayload.disqualified = true;
                 disqualifySpine(cursorThis, cursorThis.spine.length - 1);
                 disqualifySpine(cursorOther, cursorOther.spine.length - 1);
-                pushLeafRange(leaf, 0, Math.min(destIndex, leaf.keys.length));
+                pushLeafRange(leaf, 0, destIndex);
             }
         };
         // Need the max key of both trees to perform the "finishing" walk of which ever cursor finishes second
