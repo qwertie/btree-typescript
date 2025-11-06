@@ -2054,13 +2054,6 @@ describe('BTree merge fuzz tests', () => {
         for (const fractionA of FUZZ_SETTINGS.fractionsPerOOM) {
           const fractionB = 1 - fractionA;
 
-          const expectEqualsArray = (tree: BTree<number, number>, array: [number, number][]) => {
-            expect(tree.size).toBe(array.length);
-            for (const [key, value] of array) {
-              expect(tree.get(key)).toBe(value);
-            }
-          };
-
           test(`size ${size}, fractionA ${fractionA.toFixed(2)}, fractionB ${fractionB.toFixed(2)}`, () => {
             const treeA = new BTree<number, number>([], compare, maxNodeSize);
             const treeB = new BTree<number, number>([], compare, maxNodeSize);
@@ -2080,15 +2073,17 @@ describe('BTree merge fuzz tests', () => {
               }
             }
 
+            aArray.sort((a, b) => compare(a[0], b[0]));
+            bArray.sort((a, b) => compare(a[0], b[0]));
+
             const merged = treeA.merge(treeB, mergeFn);
             merged.checkValid();
 
-            const mergedArray = merged.toArray();
-            expect(mergedArray).toEqual(sorted.map(k => [k, k]));
+            expect(merged.toArray()).toEqual(sorted.map(k => [k, k]));
 
             // Merge should not have mutated inputs
-            expectEqualsArray(treeA, aArray);
-            expectEqualsArray(treeB, bArray);
+            expect(treeA.toArray()).toEqual(aArray);
+            expect(treeB.toArray()).toEqual(bArray);
 
             for (let edit = 0; edit < RANDOM_EDITS_PER_TEST; edit++) {
               const key = 1 + randomInt(rng, size);
@@ -2103,8 +2098,8 @@ describe('BTree merge fuzz tests', () => {
             };
 
             // Check for shared mutability issues
-            expectEqualsArray(treeA, aArray);
-            expectEqualsArray(treeB, bArray);
+            expect(treeA.toArray()).toEqual(aArray);
+            expect(treeB.toArray()).toEqual(bArray);
           });
         }
       }
