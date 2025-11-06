@@ -970,49 +970,55 @@ var BTree = /** @class */ (function () {
         };
         initDisqualify(curA, curB);
         initDisqualify(curB, curA);
+        var leading = curA;
+        var trailing = curB;
+        var order = cmp(BTree.getKey(leading), BTree.getKey(trailing));
         // Walk both cursors in alternating hops
         while (true) {
-            var keyA = curA.leaf.keys[curA.leafIndex];
-            var keyB = curB.leaf.keys[curB.leafIndex];
-            var order = cmp(keyA, keyB);
             var areEqual = order === 0;
             if (areEqual) {
+                var key = BTree.getKey(leading);
                 var vA = curA.leaf.values[curA.leafIndex];
                 var vB = curB.leaf.values[curB.leafIndex];
-                var merged = mergeValues(keyA, vA, vB);
+                // Perform the actual merge of values here. The cursors will avoid adding a duplicate of this key/value
+                // to pending because they respect the areEqual flag during their moves.
+                var merged = mergeValues(key, vA, vB);
                 if (merged !== undefined)
-                    BTree.alternatingPush(pending, keyA, merged);
-                var outT = BTree.moveTo(curB, curA, keyA, false, areEqual, cmp)[0];
-                var outL = BTree.moveTo(curA, curB, keyA, false, areEqual, cmp)[0];
-                if (outT || outL) {
-                    if (!outT || !outL) {
+                    BTree.alternatingPush(pending, key, merged);
+                var outTrailing = BTree.moveOne(trailing, leading, key, false, areEqual, cmp);
+                var outLeading = BTree.moveOne(leading, trailing, key, false, areEqual, cmp);
+                if (outTrailing || outLeading) {
+                    if (!outTrailing || !outLeading) {
                         // In these cases, we pass areEqual=false because a return value of "out of tree" means
                         // the cursor did not move. This must be true because they started equal and one of them had more tree
                         // to walk (one is !out), so they cannot be equal at this point.
-                        if (outT) {
-                            BTree.moveTo(curA, curB, maxKey, false, false, cmp);
+                        if (outTrailing) {
+                            BTree.moveTo(leading, trailing, maxKey, false, false, cmp);
                         }
                         else {
-                            BTree.moveTo(curB, curA, maxKey, false, false, cmp);
+                            BTree.moveTo(trailing, leading, maxKey, false, false, cmp);
                         }
                     }
                     break;
                 }
+                order = cmp(BTree.getKey(leading), BTree.getKey(trailing));
             }
             else {
-                var trailing = void 0, leading = void 0;
-                if (order > 0) {
-                    trailing = curB;
-                    leading = curA;
+                if (order < 0) {
+                    var tmp = trailing;
+                    trailing = leading;
+                    leading = tmp;
                 }
-                else {
-                    trailing = curA;
-                    leading = curB;
-                }
-                var out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp)[0];
+                var _a = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp), out = _a[0], nowEqual = _a[1];
                 if (out) {
                     BTree.moveTo(leading, trailing, maxKey, false, areEqual, cmp);
                     break;
+                }
+                else if (nowEqual) {
+                    order = 0;
+                }
+                else {
+                    order = -1;
                 }
             }
         }
