@@ -307,10 +307,16 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
     private static alternatingGetFirst;
     private static alternatingGetSecond;
     private static alternatingPush;
-    private static moveOne;
+    /**
+     * Walks the cursor forward by one key.
+     * Should only be called to advance cursors that started equal.
+     * Returns true if end-of-tree was reached (cursor not structurally mutated).
+     */
+    private static moveForwardOne;
     /**
      * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
-     * Returns true if end-of-tree was reached (cursor not structurally mutated).
+     * Returns a boolean indicating if end-of-tree was reached (cursor not structurally mutated).
+     * Also returns a boolean indicating if the target key was landed on exactly.
      */
     private static moveTo;
     /**

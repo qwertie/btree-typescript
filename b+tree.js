@@ -500,7 +500,6 @@ var BTree = /** @class */ (function () {
      */
     BTree.prototype.intersect = function (other, intersection) {
         var cmp = this._compare;
-        // Ensure both trees share the same comparator reference
         if (cmp !== other._compare)
             throw new Error("Cannot merge BTrees with different comparators.");
         if (this._maxNodeSize !== other._maxNodeSize)
@@ -508,12 +507,14 @@ var BTree = /** @class */ (function () {
         if (other.size === 0 || this.size === 0)
             return;
         var makePayload = function () { return undefined; };
-        // Initialize cursors at minimum keys.
         var cursorA = BTree.createCursor(this, makePayload, BTree.noop, BTree.noop, BTree.noop, BTree.noop, BTree.noop);
         var cursorB = BTree.createCursor(other, makePayload, BTree.noop, BTree.noop, BTree.noop, BTree.noop, BTree.noop);
         var leading = cursorA;
         var trailing = cursorB;
         var order = cmp(BTree.getKey(leading), BTree.getKey(trailing));
+        // The intersect walk is somewhat similar to a merge walk in that it does an alternating hop walk with cursors.
+        // However, the only thing we care about is when the two cursors are equal (equality is intersection).
+        // When they are not equal we just advance the trailing cursor.
         while (true) {
             var areEqual = order === 0;
             if (areEqual) {
@@ -521,8 +522,8 @@ var BTree = /** @class */ (function () {
                 var vA = cursorA.leaf.values[cursorA.leafIndex];
                 var vB = cursorB.leaf.values[cursorB.leafIndex];
                 intersection(key, vA, vB);
-                var outT = BTree.moveOne(trailing, leading, key, false, areEqual, cmp);
-                var outL = BTree.moveOne(leading, trailing, key, false, areEqual, cmp);
+                var outT = BTree.moveForwardOne(trailing, leading, key, cmp);
+                var outL = BTree.moveForwardOne(leading, trailing, key, cmp);
                 if (outT && outL)
                     break;
                 order = cmp(BTree.getKey(leading), BTree.getKey(trailing));
@@ -985,8 +986,8 @@ var BTree = /** @class */ (function () {
                 var merged = mergeValues(key, vA, vB);
                 if (merged !== undefined)
                     BTree.alternatingPush(pending, key, merged);
-                var outTrailing = BTree.moveOne(trailing, leading, key, false, areEqual, cmp);
-                var outLeading = BTree.moveOne(leading, trailing, key, false, areEqual, cmp);
+                var outTrailing = BTree.moveForwardOne(trailing, leading, key, cmp);
+                var outLeading = BTree.moveForwardOne(leading, trailing, key, cmp);
                 if (outTrailing || outLeading) {
                     if (!outTrailing || !outLeading) {
                         // In these cases, we pass areEqual=false because a return value of "out of tree" means
@@ -1038,20 +1039,28 @@ var BTree = /** @class */ (function () {
         // Micro benchmarks show this is the fastest way to do this
         list.push(first, second);
     };
-    BTree.moveOne = function (cur, other, targetKey, isInclusive, startedEqual, cmp) {
+    /**
+     * Walks the cursor forward by one key.
+     * Should only be called to advance cursors that started equal.
+     * Returns true if end-of-tree was reached (cursor not structurally mutated).
+     */
+    BTree.moveForwardOne = function (cur, other, currentKey, cmp) {
         var leaf = cur.leaf;
         var nextIndex = cur.leafIndex + 1;
         if (nextIndex < leaf.keys.length) {
             // Still within current leaf
-            cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, nextIndex, startedEqual);
+            cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, nextIndex, true);
             cur.leafIndex = nextIndex;
             return false;
         }
-        return BTree.moveTo(cur, other, targetKey, isInclusive, startedEqual, cmp)[0];
+        // If our optimizaed step within leaf failed, use full moveTo logic
+        // Pass isInclusive=false to ensure we walk forward to the key exactly after the current
+        return BTree.moveTo(cur, other, currentKey, false, true, cmp)[0];
     };
     /**
      * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
-     * Returns true if end-of-tree was reached (cursor not structurally mutated).
+     * Returns a boolean indicating if end-of-tree was reached (cursor not structurally mutated).
+     * Also returns a boolean indicating if the target key was landed on exactly.
      */
     BTree.moveTo = function (cur, other, targetKey, isInclusive, startedEqual, cmp) {
         var onMoveInLeaf = cur.onMoveInLeaf;
@@ -1065,26 +1074,26 @@ var BTree = /** @class */ (function () {
         var leafPayload = cur.leafPayload;
         var i = leaf.indexOf(targetKey, -1, cmp);
         var destInLeaf;
-        var areEqual;
+        var targetExactlyReached;
         if (i < 0) {
             destInLeaf = ~i;
-            areEqual = false;
+            targetExactlyReached = false;
         }
         else {
             if (isInclusive) {
                 destInLeaf = i;
-                areEqual = true;
+                targetExactlyReached = true;
             }
             else {
                 destInLeaf = i + 1;
-                areEqual = false;
+                targetExactlyReached = false;
             }
         }
         var leafKeyCount = leaf.keys.length;
         if (destInLeaf < leafKeyCount) {
             onMoveInLeaf(leaf, leafPayload, cur.leafIndex, destInLeaf, startedEqual);
             cur.leafIndex = destInLeaf;
-            return [false, areEqual];
+            return [false, targetExactlyReached];
         }
         // Find first ancestor with a viable right step
         var spine = cur.spine;
@@ -1150,23 +1159,23 @@ var BTree = /** @class */ (function () {
         var destIndex;
         if (idx < 0) {
             destIndex = ~idx;
-            areEqual = false;
+            targetExactlyReached = false;
         }
         else {
             if (isInclusive) {
                 destIndex = idx;
-                areEqual = true;
+                targetExactlyReached = true;
             }
             else {
                 destIndex = idx + 1;
-                areEqual = false;
+                targetExactlyReached = false;
             }
         }
         cur.leaf = node;
         cur.leafPayload = makePayload();
         cur.leafIndex = destIndex;
         onEnterLeaf(node, destIndex, cur, other);
-        return [false, areEqual];
+        return [false, targetExactlyReached];
     };
     /**
      * Create a cursor pointing to the leftmost key of the supplied tree.

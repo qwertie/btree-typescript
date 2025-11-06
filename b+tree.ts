@@ -578,7 +578,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    */
   intersect(other: BTree<K,V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void {
     const cmp = this._compare;
-    // Ensure both trees share the same comparator reference
     if (cmp !== other._compare)
       throw new Error("Cannot merge BTrees with different comparators.");
     if (this._maxNodeSize !== other._maxNodeSize)
@@ -588,14 +587,15 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       return;
 
     const makePayload = (): undefined => undefined;
-
-    // Initialize cursors at minimum keys.
     let cursorA = BTree.createCursor<K,V,undefined>(this, makePayload, BTree.noop, BTree.noop, BTree.noop, BTree.noop, BTree.noop);
     let cursorB = BTree.createCursor<K,V,undefined>(other, makePayload, BTree.noop, BTree.noop, BTree.noop, BTree.noop, BTree.noop);
     let leading = cursorA;
     let trailing = cursorB;
     let order = cmp(BTree.getKey(leading), BTree.getKey(trailing));
     
+    // The intersect walk is somewhat similar to a merge walk in that it does an alternating hop walk with cursors.
+    // However, the only thing we care about is when the two cursors are equal (equality is intersection).
+    // When they are not equal we just advance the trailing cursor.
     while (true) {
       const areEqual = order === 0;
       if (areEqual) {
@@ -603,8 +603,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
         const vA = cursorA.leaf.values[cursorA.leafIndex];
         const vB = cursorB.leaf.values[cursorB.leafIndex];
         intersection(key, vA, vB);
-        const outT = BTree.moveOne(trailing, leading, key, false, areEqual, cmp);
-        const outL = BTree.moveOne(leading, trailing, key, false, areEqual, cmp);
+        const outT = BTree.moveForwardOne(trailing, leading, key, cmp);
+        const outL = BTree.moveForwardOne(leading, trailing, key, cmp);
         if (outT && outL)
           break;
         order = cmp(BTree.getKey(leading), BTree.getKey(trailing));
@@ -1193,8 +1193,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
         const merged = mergeValues(key, vA, vB);
         if (merged !== undefined)
           BTree.alternatingPush<K,V>(pending, key, merged);
-        const outTrailing = BTree.moveOne(trailing, leading, key, false, areEqual, cmp);
-        const outLeading = BTree.moveOne(leading, trailing, key, false, areEqual, cmp);
+        const outTrailing = BTree.moveForwardOne(trailing, leading, key, cmp);
+        const outLeading = BTree.moveForwardOne(leading, trailing, key, cmp);
         if (outTrailing || outLeading) {
           if (!outTrailing || !outLeading) {
             // In these cases, we pass areEqual=false because a return value of "out of tree" means
@@ -1248,28 +1248,35 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     list.push(first, second);
   }
 
-  private static moveOne<K,V,TP>(
+  /**
+   * Walks the cursor forward by one key.
+   * Should only be called to advance cursors that started equal.
+   * Returns true if end-of-tree was reached (cursor not structurally mutated).
+   */
+  private static moveForwardOne<K,V,TP>(
     cur: MergeCursor<K,V,TP>,
     other: MergeCursor<K,V,TP>,
-    targetKey: K,
-    isInclusive: boolean,
-    startedEqual: boolean,
+    currentKey: K,
     cmp: (a:K,b:K)=>number
   ): boolean {
     const leaf = cur.leaf;
     const nextIndex = cur.leafIndex + 1;
     if (nextIndex < leaf.keys.length) {
       // Still within current leaf
-      cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, nextIndex, startedEqual);
+      cur.onMoveInLeaf(leaf, cur.leafPayload, cur.leafIndex, nextIndex, true);
       cur.leafIndex = nextIndex;
       return false;
     }
-    return BTree.moveTo(cur, other, targetKey, isInclusive, startedEqual, cmp)[0];
+
+    // If our optimizaed step within leaf failed, use full moveTo logic
+    // Pass isInclusive=false to ensure we walk forward to the key exactly after the current
+    return BTree.moveTo(cur, other, currentKey, false, true, cmp)[0];
   }
 
   /**
    * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
-   * Returns true if end-of-tree was reached (cursor not structurally mutated).
+   * Returns a boolean indicating if end-of-tree was reached (cursor not structurally mutated).
+   * Also returns a boolean indicating if the target key was landed on exactly.
    */
   private static moveTo<K,V,TP>(
     cur: MergeCursor<K,V,TP>,
@@ -1278,7 +1285,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     isInclusive: boolean,
     startedEqual: boolean,
     cmp: (a:K,b:K)=>number
-  ): [outOfTree: boolean, areEqual: boolean] {
+  ): [outOfTree: boolean, targetExactlyReached: boolean] {
     const onMoveInLeaf = cur.onMoveInLeaf;
     const onExitLeaf = cur.onExitLeaf;
     const onStepUp = cur.onStepUp;
@@ -1290,24 +1297,24 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const leafPayload = cur.leafPayload;
     const i = leaf.indexOf(targetKey, -1, cmp);
     let destInLeaf: number;
-    let areEqual: boolean;
+    let targetExactlyReached: boolean;
     if (i < 0) {
       destInLeaf = ~i;
-      areEqual = false;
+      targetExactlyReached = false;
     } else {
       if (isInclusive) {
         destInLeaf = i;
-        areEqual = true;
+        targetExactlyReached = true;
       } else {
         destInLeaf = i + 1;
-        areEqual = false;
+        targetExactlyReached = false;
       }
     }
     const leafKeyCount = leaf.keys.length;
     if (destInLeaf < leafKeyCount) {
       onMoveInLeaf(leaf, leafPayload, cur.leafIndex, destInLeaf, startedEqual);
       cur.leafIndex = destInLeaf;
-      return [false, areEqual];
+      return [false, targetExactlyReached];
     }
 
     // Find first ancestor with a viable right step
@@ -1382,21 +1389,21 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     let destIndex: number;
     if (idx < 0) {
       destIndex = ~idx;
-      areEqual = false;
+      targetExactlyReached = false;
     } else {
       if (isInclusive) {
         destIndex = idx;
-        areEqual = true;
+        targetExactlyReached = true;
       } else {
         destIndex = idx + 1;
-        areEqual = false;
+        targetExactlyReached = false;
       }
     }
     cur.leaf = node;
     cur.leafPayload = makePayload();
     cur.leafIndex = destIndex;
     onEnterLeaf(node, destIndex, cur, other);
-    return [false, areEqual];
+    return [false, targetExactlyReached];
   }
 
   /**
