@@ -496,14 +496,20 @@ var BTree = /** @class */ (function () {
      * Neither tree is modified.
      * @param other The other tree to intersect with this one.
      * @param intersection Called for keys that appear in both trees.
-     * @description Complexity: O(N + M), but often much faster in practice due to skipping any non-intersecting subtrees.
+     * @description Complexity is bounded O(N + M) time and O(log(N + M)) for allocations.
+     * However, time is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
+     * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
+     * keys with significant numbers of non-overlapping key ranges it is O(log(N + M) * D) which is much faster.
+     * The algorithm achieves this additional non-linear bound by skipping over non-intersecting subtrees entirely.
+     * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than calling `toArray`
+     * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
      */
     BTree.prototype.intersect = function (other, intersection) {
         var cmp = this._compare;
         if (cmp !== other._compare)
-            throw new Error("Cannot merge BTrees with different comparators.");
+            throw new Error("Cannot intersect BTrees with different comparators.");
         if (this._maxNodeSize !== other._maxNodeSize)
-            throw new Error("Cannot merge BTrees with different max node sizes.");
+            throw new Error("Cannot intersect BTrees with different max node sizes.");
         if (other.size === 0 || this.size === 0)
             return;
         var makePayload = function () { return undefined; };
@@ -556,7 +562,13 @@ var BTree = /** @class */ (function () {
      * @param merge Called for keys that appear in both trees. Return the desired value, or
      *        `undefined` to omit the key from the result.
      * @returns A new BTree that contains the merged key/value pairs.
-     * @description Complexity: O(N + M), but often much faster in practice due to skipping any non-intersecting subtrees.
+     * @description Complexity is bounded O(N + M) for both time and allocations.
+     * However, it is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
+     * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
+     * keys with significant numbers of non-overlapping key ranges it is O(log(N + M) * D) which is much faster.
+     * The algorithm achieves this additional non-linear bound by skipping over non-intersecting subtrees entirely.
+     * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than cloning `this`
+     * and inserting the contents of `other` into the clone.
      */
     BTree.prototype.merge = function (other, merge) {
         if (this._compare !== other._compare)

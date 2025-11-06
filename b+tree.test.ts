@@ -1238,13 +1238,13 @@ function testIntersect(maxNodeSize: number) {
     const compareB = (a: number, b: number) => a - b;
     const tree1 = new BTree<number, number>([[1, 1]], compareA, maxNodeSize);
     const tree2 = new BTree<number, number>([[1, 1]], compareB, maxNodeSize);
-    expect(() => tree1.intersect(tree2, () => {})).toThrow("Cannot merge BTrees with different comparators.");
+    expect(() => tree1.intersect(tree2, () => {})).toThrow("Cannot intersect BTrees with different comparators.");
   });
 
   test('Intersect throws for max node size mismatch', () => {
     const tree1 = new BTree<number, number>([[1, 1]], compare, maxNodeSize);
     const tree2 = new BTree<number, number>([[1, 1]], compare, maxNodeSize + 1);
-    expect(() => tree1.intersect(tree2, () => {})).toThrow("Cannot merge BTrees with different max node sizes.");
+    expect(() => tree1.intersect(tree2, () => {})).toThrow("Cannot intersect BTrees with different max node sizes.");
   });
 }
 
