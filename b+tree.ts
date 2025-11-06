@@ -596,22 +596,25 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     // Walk both cursors
     while (true) {
       const order = cmp(BTree.getKey(curA), BTree.getKey(curB));
-      let trailing = curA, leading = curB;
-      if (order > 0) { trailing = curB; leading = curA; }
       const areEqual = order === 0;
 
       if (areEqual) {
-        const key = BTree.getKey(leading);
+        const key = BTree.getKey(curA);
         const vA = curA.leaf.values[curA.leafIndex];
         const vB = curB.leaf.values[curB.leafIndex];
         intersection(key, vA, vB);
-        const outT = BTree.moveTo(trailing, leading, key, false, areEqual, cmp);
-        const outL = BTree.moveTo(leading, trailing, key, false, areEqual, cmp);
+        const outT = BTree.moveTo(curB, curA, key, false, areEqual, cmp);
+        const outL = BTree.moveTo(curA, curB, key, false, areEqual, cmp);
         if (outT && outL)
           break;
       } else {
-        const out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp);
-        if (out) {
+        let leading: MergeCursor<K,V,undefined>, trailing: MergeCursor<K,V,undefined>;
+        if (order > 0) {
+          trailing = curB; leading = curA;
+        } else {
+          trailing = curA; leading = curB;
+        }
+        if (BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp)) {
           // We've reached the end of one tree, so intersections are guaranteed to be done.
           break;
         }
@@ -1156,32 +1159,36 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     // Walk both cursors in alternating hops
     while (true) {
       const order = cmp(BTree.getKey(curA), BTree.getKey(curB));
-      let trailing = curA, leading = curB;
-      if (order > 0) { trailing = curB; leading = curA; }
       const areEqual = order === 0;
 
       if (areEqual) {
-        const key = BTree.getKey(leading);
+        const key = BTree.getKey(curA);
         const vA = curA.leaf.values[curA.leafIndex];
         const vB = curB.leaf.values[curB.leafIndex];
         const merged = mergeValues(key, vA, vB);
         if (merged !== undefined) pending.push([key, merged]);
-        const outT = BTree.moveTo(trailing, leading, key, false, areEqual, cmp);
-        const outL = BTree.moveTo(leading, trailing, key, false, areEqual, cmp);
+        const outT = BTree.moveTo(curB, curA, key, false, areEqual, cmp);
+        const outL = BTree.moveTo(curA, curB, key, false, areEqual, cmp);
         if (outT || outL) {
           if (!outT || !outL) {
             // In these cases, we pass areEqual=false because a return value of "out of tree" means
             // the cursor did not move. This must be true because they started equal and one of them had more tree
             // to walk (one is !out), so they cannot be equal at this point.
             if (outT) {
-              BTree.moveTo(leading, trailing, maxKey, false, false, cmp);
+              BTree.moveTo(curA, curB, maxKey, false, false, cmp);
             } else {
-              BTree.moveTo(trailing, leading, maxKey, false, false, cmp);
+              BTree.moveTo(curB, curA, maxKey, false, false, cmp);
             }
           }
           break;
         }
       } else {
+        let trailing: MergeCursor<K,V,MergeCursorPayload>, leading: MergeCursor<K,V,MergeCursorPayload>;
+        if (order > 0) {
+          trailing = curB; leading = curA;
+        } else {
+          trailing = curA; leading = curB;
+        }
         const out = BTree.moveTo(trailing, leading, BTree.getKey(leading), true, areEqual, cmp);
         if (out) {
           BTree.moveTo(leading, trailing, maxKey, false, areEqual, cmp);
