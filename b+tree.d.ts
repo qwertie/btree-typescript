@@ -303,6 +303,10 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
      */
     private static decompose;
+    private static alternatingCount;
+    private static alternatingGetFirst;
+    private static alternatingGetSecond;
+    private static alternatingPush;
     /**
      * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
      * Returns true if end-of-tree was reached (cursor not structurally mutated).

@@ -565,14 +565,15 @@ var BTree = /** @class */ (function () {
             return this.clone();
         // Decompose into disjoint subtrees and merged leaves
         var _a = BTree.decompose(this, other, merge), disjoint = _a.disjoint, tallestIndex = _a.tallestIndex;
+        var disjointEntryCount = BTree.alternatingCount(disjoint);
         // Start result at the tallest subtree from the disjoint set
-        var initialRoot = disjoint[tallestIndex][1];
+        var initialRoot = BTree.alternatingGetSecond(disjoint, tallestIndex);
         var branchingFactor = this._maxNodeSize;
         var frontier = [initialRoot];
         // Process all subtrees to the right of the tallest subtree
-        if (tallestIndex + 1 <= disjoint.length - 1) {
+        if (tallestIndex + 1 <= disjointEntryCount - 1) {
             BTree.updateFrontier(frontier, 0, BTree.getRightmostIndex);
-            BTree.processSide(branchingFactor, disjoint, frontier, tallestIndex + 1, disjoint.length, 1, BTree.getRightmostIndex, BTree.getRightInsertionIndex, BTree.splitOffRightSide, BTree.updateRightMax);
+            BTree.processSide(branchingFactor, disjoint, frontier, tallestIndex + 1, disjointEntryCount, 1, BTree.getRightmostIndex, BTree.getRightInsertionIndex, BTree.splitOffRightSide, BTree.updateRightMax);
         }
         // Process all subtrees to the left of the tallest subtree (reverse order)
         if (tallestIndex - 1 >= 0) {
@@ -607,8 +608,8 @@ var BTree = /** @class */ (function () {
         // Iterate the assigned half of the disjoint set
         for (var i = start; i != end; i += step) {
             var currentHeight = spine.length - 1; // height is number of internal levels; 0 means leaf
-            var subtree = disjoint[i][1];
-            var subtreeHeight = disjoint[i][0];
+            var subtree = BTree.alternatingGetSecond(disjoint, i);
+            var subtreeHeight = BTree.alternatingGetFirst(disjoint, i);
             var insertionDepth = currentHeight - (subtreeHeight + 1); // node at this depth has children of height 'subtreeHeight'
             // Ensure path is unshared before mutation
             BTree.ensureNotShared(spine, isSharedFrontierDepth, insertionDepth, sideIndex);
@@ -790,28 +791,27 @@ var BTree = /** @class */ (function () {
         var pending = [];
         var tallestIndex = -1, tallestHeight = -1;
         var flushPendingEntries = function () {
-            var total = pending.length;
-            if (total === 0)
+            var totalPairs = BTree.alternatingCount(pending);
+            if (totalPairs === 0)
                 return;
             var max = left._maxNodeSize;
-            var leafCount = Math.ceil(total / max);
-            var remaining = total;
-            var offset = 0;
+            var leafCount = Math.ceil(totalPairs / max);
+            var remaining = totalPairs;
+            var pairIndex = 0;
             while (leafCount > 0) {
                 var chunkSize = Math.ceil(remaining / leafCount);
                 var keys = new Array(chunkSize);
                 var vals = new Array(chunkSize);
-                for (var i = 0; i < chunkSize; ++i) {
-                    var entry = pending[offset++];
-                    keys[i] = entry[0];
-                    vals[i] = entry[1];
+                for (var i = 0; i < chunkSize; ++i, ++pairIndex) {
+                    keys[i] = BTree.alternatingGetFirst(pending, pairIndex);
+                    vals[i] = BTree.alternatingGetSecond(pending, pairIndex);
                 }
                 remaining -= chunkSize;
                 leafCount--;
                 var leaf = new BNode(keys, vals);
-                disjoint.push([0, leaf]);
+                BTree.alternatingPush(disjoint, 0, leaf);
                 if (tallestHeight < 0) {
-                    tallestIndex = disjoint.length - 1;
+                    tallestIndex = BTree.alternatingCount(disjoint) - 1;
                     tallestHeight = 0;
                 }
             }
@@ -822,9 +822,9 @@ var BTree = /** @class */ (function () {
         var addSharedNodeToDisjointSet = function (node, height) {
             flushPendingEntries();
             node.isShared = true;
-            disjoint.push([height, node]);
+            BTree.alternatingPush(disjoint, height, node);
             if (height > tallestHeight) {
-                tallestIndex = disjoint.length - 1;
+                tallestIndex = BTree.alternatingCount(disjoint) - 1;
                 tallestHeight = height;
             }
         };
@@ -849,7 +849,7 @@ var BTree = /** @class */ (function () {
             var keys = leaf.keys;
             var values = leaf.values;
             for (var i = from; i < toExclusive; ++i)
-                pending.push([keys[i], values[i]]);
+                BTree.alternatingPush(pending, keys[i], values[i]);
         };
         var onMoveInLeaf = function (leaf, payload, fromIndex, toIndex, startedEqual) {
             check(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
@@ -975,7 +975,7 @@ var BTree = /** @class */ (function () {
                 var vB = curB.leaf.values[curB.leafIndex];
                 var merged = mergeValues(keyA, vA, vB);
                 if (merged !== undefined)
-                    pending.push([keyA, merged]);
+                    BTree.alternatingPush(pending, keyA, merged);
                 var outT = BTree.moveTo(curB, curA, keyA, false, areEqual, cmp);
                 var outL = BTree.moveTo(curA, curB, keyA, false, areEqual, cmp);
                 if (outT || outL) {
@@ -1012,6 +1012,19 @@ var BTree = /** @class */ (function () {
         }
         flushPendingEntries();
         return { disjoint: disjoint, tallestIndex: tallestIndex };
+    };
+    BTree.alternatingCount = function (list) {
+        return list.length >> 1;
+    };
+    BTree.alternatingGetFirst = function (list, index) {
+        return list[index << 1];
+    };
+    BTree.alternatingGetSecond = function (list, index) {
+        return list[(index << 1) + 1];
+    };
+    BTree.alternatingPush = function (list, first, second) {
+        // Micro benchmarks show this is the fastest way to do this
+        list.push(first, second);
     };
     /**
      * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.

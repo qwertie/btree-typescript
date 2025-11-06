@@ -647,21 +647,22 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
     // Decompose into disjoint subtrees and merged leaves
     const { disjoint, tallestIndex } = BTree.decompose(this, other, merge);
+    const disjointEntryCount = BTree.alternatingCount(disjoint);
 
     // Start result at the tallest subtree from the disjoint set
-    const initialRoot = disjoint[tallestIndex][1];
+    const initialRoot = BTree.alternatingGetSecond<number, BNode<K,V>>(disjoint, tallestIndex);
     const branchingFactor = this._maxNodeSize;
     const frontier: BNode<K,V>[] = [initialRoot];
 
     // Process all subtrees to the right of the tallest subtree
-    if (tallestIndex + 1 <= disjoint.length - 1) {
+    if (tallestIndex + 1 <= disjointEntryCount - 1) {
       BTree.updateFrontier(frontier, 0, BTree.getRightmostIndex);
       BTree.processSide(
         branchingFactor,
         disjoint,
         frontier,
         tallestIndex + 1,
-        disjoint.length, 1,
+        disjointEntryCount, 1,
         BTree.getRightmostIndex,
         BTree.getRightInsertionIndex,
         BTree.splitOffRightSide,
@@ -699,7 +700,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    */
   private static processSide<K,V>(
     branchingFactor: number,
-    disjoint: DisjointEntry<K,V>[],
+    disjoint: (number | BNode<K,V>)[],
     spine: BNode<K,V>[],
     start: number,
     end: number,
@@ -728,8 +729,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     // Iterate the assigned half of the disjoint set
     for (let i = start; i != end; i += step) {
       const currentHeight = spine.length - 1; // height is number of internal levels; 0 means leaf
-      const subtree = disjoint[i][1];
-      const subtreeHeight = disjoint[i][0];
+      const subtree = BTree.alternatingGetSecond<number, BNode<K,V>>(disjoint, i);
+      const subtreeHeight = BTree.alternatingGetFirst<number, BNode<K,V>>(disjoint, i);
       const insertionDepth = currentHeight - (subtreeHeight + 1); // node at this depth has children of height 'subtreeHeight'
 
       // Ensure path is unshared before mutation
@@ -947,38 +948,37 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   ): DecomposeResult<K,V> {
     const cmp = left._compare;
     check(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
-    const disjoint: DisjointEntry<K,V>[] = [];
-    const pending: [K,V][] = [];
+    const disjoint: (number | BNode<K,V>)[] = [];
+    const pending: (K | V)[] = [];
     let tallestIndex = -1, tallestHeight = -1;
 
     const flushPendingEntries = () => {
-        const total = pending.length;
-      if (total === 0)
+      const totalPairs = BTree.alternatingCount(pending);
+      if (totalPairs === 0)
         return;
 
       const max = left._maxNodeSize;
-        let leafCount = Math.ceil(total / max);
-      let remaining = total;
-        let offset = 0;
-        while (leafCount > 0) {
+      let leafCount = Math.ceil(totalPairs / max);
+      let remaining = totalPairs;
+      let pairIndex = 0;
+      while (leafCount > 0) {
         const chunkSize = Math.ceil(remaining / leafCount);
         const keys = new Array<K>(chunkSize);
         const vals = new Array<V>(chunkSize);
-        for (let i = 0; i < chunkSize; ++i) {
-          const entry = pending[offset++];
-          keys[i] = entry[0];
-          vals[i] = entry[1];
+        for (let i = 0; i < chunkSize; ++i, ++pairIndex) {
+          keys[i] = BTree.alternatingGetFirst<K,V>(pending, pairIndex);
+          vals[i] = BTree.alternatingGetSecond<K,V>(pending, pairIndex);
         }
         remaining -= chunkSize;
         leafCount--;
-          const leaf = new BNode<K,V>(keys, vals);
-          disjoint.push([0, leaf]);
+        const leaf = new BNode<K,V>(keys, vals);
+        BTree.alternatingPush<number, BNode<K,V>>(disjoint, 0, leaf);
         if (tallestHeight < 0) {
-            tallestIndex = disjoint.length - 1;
-            tallestHeight = 0;
-          }
+          tallestIndex = BTree.alternatingCount(disjoint) - 1;
+          tallestHeight = 0;
         }
-        pending.length = 0;
+      }
+      pending.length = 0;
     };
 
     // Have to do this as cast to convince TS it's ever assigned
@@ -987,9 +987,9 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     const addSharedNodeToDisjointSet = (node: BNode<K,V>, height: number) => {
       flushPendingEntries();
       node.isShared = true;
-      disjoint.push([height, node]);
+      BTree.alternatingPush<number, BNode<K,V>>(disjoint, height, node);
       if (height > tallestHeight) {
-        tallestIndex = disjoint.length - 1;
+        tallestIndex = BTree.alternatingCount(disjoint) - 1;
         tallestHeight = height;
       }
     };
@@ -1018,7 +1018,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
       const keys = leaf.keys;
       const values = leaf.values;
       for (let i = from; i < toExclusive; ++i)
-        pending.push([keys[i], values[i]]);
+        BTree.alternatingPush<K,V>(pending, keys[i], values[i]);
     };
 
     const onMoveInLeaf = (
@@ -1181,7 +1181,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
         const vA = curA.leaf.values[curA.leafIndex];
         const vB = curB.leaf.values[curB.leafIndex];
         const merged = mergeValues(keyA, vA, vB);
-        if (merged !== undefined) pending.push([keyA, merged]);
+        if (merged !== undefined)
+          BTree.alternatingPush<K,V>(pending, keyA, merged);
         const outT = BTree.moveTo(curB, curA, keyA, false, areEqual, cmp);
         const outL = BTree.moveTo(curA, curB, keyA, false, areEqual, cmp);
         if (outT || outL) {
@@ -1214,6 +1215,23 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
     flushPendingEntries();
     return { disjoint, tallestIndex };
+  }
+
+  private static alternatingCount(list: unknown[]): number {
+    return list.length >> 1;
+  }
+
+  private static alternatingGetFirst<TFirst, TSecond>(list: Array<TFirst | TSecond>, index: number): TFirst {
+    return list[index << 1] as TFirst;
+  }
+
+  private static alternatingGetSecond<TFirst, TSecond>(list: Array<TFirst | TSecond>, index: number): TSecond {
+    return list[(index << 1) + 1] as TSecond;
+  }
+
+  private static alternatingPush<TFirst, TSecond>(list: Array<TFirst | TSecond>, first: TFirst, second: TSecond): void {
+    // Micro benchmarks show this is the fastest way to do this
+    list.push(first, second);
   }
 
   /**
@@ -2701,8 +2719,7 @@ interface MergeCursor<K, V, TPayload> {
   onEnterLeaf: (leaf: BNode<K, V>, destIndex: number, cursorThis: MergeCursor<K, V, TPayload>, cursorOther: MergeCursor<K, V, TPayload>) => void;
 }
 
-type DisjointEntry<K,V> = [height: number, node: BNode<K,V>];
-type DecomposeResult<K,V> = { disjoint: DisjointEntry<K,V>[], tallestIndex: number };
+type DecomposeResult<K,V> = { disjoint: (number | BNode<K,V>)[], tallestIndex: number };
 
 /**
  * Determines whether two nodes are overlapping in key range.
