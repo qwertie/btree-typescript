@@ -1013,7 +1013,6 @@ var BTree = /** @class */ (function () {
         flushPendingEntries();
         return { disjoint: disjoint, tallestIndex: tallestIndex };
     };
-    BTree.heightOf = function (spine, depth) { return spine.length - depth; };
     /**
      * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
      * Returns true if end-of-tree was reached (cursor not structurally mutated).
@@ -1102,8 +1101,6 @@ var BTree = /** @class */ (function () {
             destIndex = ~idx;
         else
             destIndex = isInclusive ? idx : idx + 1;
-        var nodeKeys = node.keys;
-        check(destIndex >= 0 && destIndex < nodeKeys.length, "moveTo: destination out of bounds");
         cur.leaf = node;
         cur.leafPayload = makePayload();
         cur.leafIndex = destIndex;
