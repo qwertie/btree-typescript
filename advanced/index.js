@@ -21,6 +21,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdvancedBTree = void 0;
 var index_1 = __importDefault(require("../core/index"));
 var algorithms_1 = require("../algorithms");
+var assert_1 = require("../internal/assert");
 var getInternals = function (tree) {
     return tree;
 };
@@ -32,6 +33,10 @@ var wrapBaseTree = function (tree) {
     target._size = source._size;
     return wrapped;
 };
+var ensureAdvancedTree = function (tree) {
+    (0, assert_1.check)(tree instanceof AdvancedBTree, 'Expected a BTree instance.');
+    return tree;
+};
 var AdvancedBTree = /** @class */ (function (_super) {
     __extends(AdvancedBTree, _super);
     function AdvancedBTree() {
@@ -42,6 +47,40 @@ var AdvancedBTree = /** @class */ (function (_super) {
     };
     AdvancedBTree.prototype.greedyClone = function (force) {
         return wrapBaseTree(_super.prototype.greedyClone.call(this, force));
+    };
+    AdvancedBTree.prototype.with = function (key, value, overwrite) {
+        var result = _super.prototype.with.call(this, key, value, overwrite);
+        return result === this
+            ? this
+            : ensureAdvancedTree(result);
+    };
+    AdvancedBTree.prototype.withPairs = function (pairs, overwrite) {
+        var result = _super.prototype.withPairs.call(this, pairs, overwrite);
+        return result === this ? this : ensureAdvancedTree(result);
+    };
+    AdvancedBTree.prototype.withKeys = function (keys, returnThisIfUnchanged) {
+        var result = _super.prototype.withKeys.call(this, keys, returnThisIfUnchanged);
+        return result === this ? this : ensureAdvancedTree(result);
+    };
+    AdvancedBTree.prototype.without = function (key, returnThisIfUnchanged) {
+        var result = _super.prototype.without.call(this, key, returnThisIfUnchanged);
+        return result === this ? this : ensureAdvancedTree(result);
+    };
+    AdvancedBTree.prototype.withoutKeys = function (keys, returnThisIfUnchanged) {
+        var result = _super.prototype.withoutKeys.call(this, keys, returnThisIfUnchanged);
+        return result === this ? this : ensureAdvancedTree(result);
+    };
+    AdvancedBTree.prototype.withoutRange = function (low, high, includeHigh, returnThisIfUnchanged) {
+        var result = _super.prototype.withoutRange.call(this, low, high, includeHigh, returnThisIfUnchanged);
+        return result === this ? this : ensureAdvancedTree(result);
+    };
+    AdvancedBTree.prototype.filter = function (callback, returnThisIfUnchanged) {
+        var result = _super.prototype.filter.call(this, callback, returnThisIfUnchanged);
+        return result === this ? this : ensureAdvancedTree(result);
+    };
+    AdvancedBTree.prototype.mapValues = function (callback) {
+        var result = _super.prototype.mapValues.call(this, callback);
+        return ensureAdvancedTree(result);
     };
     AdvancedBTree.prototype.diffAgainst = function (other, onlyThis, onlyOther, different) {
         return (0, algorithms_1.diffAgainst)(this, other, onlyThis, onlyOther, different);
