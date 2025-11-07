@@ -288,20 +288,34 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      * Merges each subtree in the disjoint set from start to end (exclusive) into the given spine.
      */
     private static processSide;
+    /**
+     * Append a subtree at a given depth on the chosen side; cascade splits upward if needed.
+     * All un-propagated sizes must have already been applied to the spine up to the end of any cascading expansions.
+     * This method guarantees that the size of the inserted subtree will not propagate upward beyond the insertion point.
+     * Returns a new root if the root was split, otherwise undefined.
+     */
     private static appendAndCascade;
+    /**
+     * Clone along the spine from [isSharedFrontierDepth to depthTo] inclusive so path is safe to mutate.
+     * Short-circuits if first shared node is deeper than depthTo (the insertion depth).
+     */
     private static ensureNotShared;
     /**
-     * Refresh sizes on the spine for nodes in (isSharedFrontierDepth, depthTo)
+     * Propogates size updates and updates max keys for nodes in (isSharedFrontierDepth, depthTo)
      */
     private static updateSizeAndMax;
     /**
-     * Update a spine (frontier) from a specific depth down, inclusive
+     * Update a spine (frontier) from a specific depth down, inclusive.
+     * Extends the frontier array if it is not already as long as the frontier.
      */
     private static updateFrontier;
     /**
-     * Find the first ancestor (starting at insertionDepth) with capacity
+     * Find the first ancestor (starting at insertionDepth) with capacity.
      */
     private static findCascadeEndDepth;
+    /**
+     * Inserts the child without updating cached size counts.
+     */
     private static insertNoCount;
     private static getLeftmostIndex;
     private static getRightmostIndex;
@@ -311,8 +325,13 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
     private static updateRightMax;
     private static noop;
     /**
-     * Decomposes two BTrees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
+     * Decomposes two trees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
      * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
+     * The algorithm is a parallel tree walk using two cursors. The trailing cursor (behind in key space) is walked forward
+     * until it is at or after the leading cursor. As it does this, any whole nodes or subtrees it passes are guaranteed to
+     * be disjoint. This is true because the leading cursor was also previously walked in this way, and is thus pointing to
+     * the first key at or after the trailing cursor's previous position.
+     * The cursor walk is efficient, meaning it skips over disjoint subtrees entirely rather than visiting every leaf.
      */
     private static decompose;
     private static alternatingCount;
