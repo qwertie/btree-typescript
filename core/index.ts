@@ -1,7 +1,7 @@
 // B+ tree by David Piepgrass. License: MIT
 import { ISortedMap, ISortedMapF, ISortedSet } from '../interfaces';
 import { check } from '../internal/assert';
-import { BNode, BNodeInternal, EmptyLeaf, BTreeNodeHost } from '../internal/nodes';
+import { BNode, BNodeInternal, EmptyLeaf } from '../internal/nodes';
 import type { EditRangeResult } from './types';
 
 export {
@@ -209,10 +209,6 @@ export default class BTree<K=any, V=any>
       this.setPairs(entries);
   }
 
-  private asHost(): BTreeNodeHost<K, V> {
-    return this as unknown as BTreeNodeHost<K, V>;
-  }
-  
   /////////////////////////////////////////////////////////////////////////////
   // ES6 Map<K,V> methods /////////////////////////////////////////////////////
 
@@ -271,7 +267,7 @@ export default class BTree<K=any, V=any>
    * @description Computational complexity: O(log size)
    */
   get(key: K, defaultValue?: V): V | undefined {
-    return this._root.get(key, defaultValue, this.asHost());
+    return this._root.get(key, defaultValue, this);
   }
   
   /**
@@ -291,7 +287,7 @@ export default class BTree<K=any, V=any>
   set(key: K, value: V, overwrite?: boolean): boolean { 
     if (this._root.isShared)
       this._root = this._root.clone();
-    var result = this._root.set(key, value, overwrite, this.asHost());
+    var result = this._root.set(key, value, overwrite, this);
     if (result === true || result === false)
       return result;
     // Root node has split, so create a new root node.
@@ -647,7 +643,7 @@ export default class BTree<K=any, V=any>
   /** Gets an array of all keys, sorted */
   keysArray() {
     var results: K[] = [];
-    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this.asHost(), 0, 
+    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this, 0, 
       (k,v) => { results.push(k); });
     return results;
   }
@@ -655,7 +651,7 @@ export default class BTree<K=any, V=any>
   /** Gets an array of all values, sorted by key */
   valuesArray() {
     var results: V[] = [];
-    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this.asHost(), 0,
+    this._root.forRange(this.minKey()!, this.maxKey()!, true, false, this, 0,
       (k,v) => { results.push(v); });
     return results;
   }
@@ -759,7 +755,7 @@ export default class BTree<K=any, V=any>
    */
   getRange(low: K, high: K, includeHigh?: boolean, maxLength: number = 0x3FFFFFF): [K,V][] {
     var results: [K,V][] = [];
-    this._root.forRange(low, high, includeHigh, false, this.asHost(), 0, (k,v) => {
+    this._root.forRange(low, high, includeHigh, false, this, 0, (k,v) => {
       results.push([k,v])
       return results.length > maxLength ? Break : undefined;
     });
@@ -803,7 +799,7 @@ export default class BTree<K=any, V=any>
    * @description Computational complexity: O(number of items scanned + log size)
    */
   forRange<R=number>(low: K, high: K, includeHigh: boolean, onFound?: (k:K,v:V,counter:number) => {break?:R}|void, initialCounter?: number): R|number {
-    var r = this._root.forRange(low, high, includeHigh, false, this.asHost(), initialCounter || 0, onFound);
+    var r = this._root.forRange(low, high, includeHigh, false, this, initialCounter || 0, onFound);
     return typeof r === "number" ? r : r.break!;
   }
 
@@ -841,7 +837,7 @@ export default class BTree<K=any, V=any>
     if (root.isShared)
       this._root = root = root.clone();
     try {
-      var r = root.forRange(low, high, includeHigh, true, this.asHost(), initialCounter || 0, onFound);
+      var r = root.forRange(low, high, includeHigh, true, this, initialCounter || 0, onFound);
       return typeof r === "number" ? r : r.break!;
     } finally {
       let isShared;
@@ -931,7 +927,7 @@ export default class BTree<K=any, V=any>
    *  skips the most expensive test - whether all keys are sorted - but it
    *  does check that maxKey() of the children of internal nodes are sorted. */
   checkValid() {
-    var size = this._root.checkValid(0, this.asHost(), 0);
+    var size = this._root.checkValid(0, this, 0);
     check(size === this.size, "size mismatch: counted ", size, "but stored", this.size);
   }
 }

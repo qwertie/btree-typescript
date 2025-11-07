@@ -148,9 +148,6 @@ var BTree = /** @class */ (function () {
         if (entries)
             this.setPairs(entries);
     }
-    BTree.prototype.asHost = function () {
-        return this;
-    };
     Object.defineProperty(BTree.prototype, "size", {
         /////////////////////////////////////////////////////////////////////////////
         // ES6 Map<K,V> methods /////////////////////////////////////////////////////
@@ -215,7 +212,7 @@ var BTree = /** @class */ (function () {
      * @description Computational complexity: O(log size)
      */
     BTree.prototype.get = function (key, defaultValue) {
-        return this._root.get(key, defaultValue, this.asHost());
+        return this._root.get(key, defaultValue, this);
     };
     /**
      * Adds or overwrites a key-value pair in the B+ tree.
@@ -234,7 +231,7 @@ var BTree = /** @class */ (function () {
     BTree.prototype.set = function (key, value, overwrite) {
         if (this._root.isShared)
             this._root = this._root.clone();
-        var result = this._root.set(key, value, overwrite, this.asHost());
+        var result = this._root.set(key, value, overwrite, this);
         if (result === true || result === false)
             return result;
         // Root node has split, so create a new root node.
@@ -552,13 +549,13 @@ var BTree = /** @class */ (function () {
     /** Gets an array of all keys, sorted */
     BTree.prototype.keysArray = function () {
         var results = [];
-        this._root.forRange(this.minKey(), this.maxKey(), true, false, this.asHost(), 0, function (k, v) { results.push(k); });
+        this._root.forRange(this.minKey(), this.maxKey(), true, false, this, 0, function (k, v) { results.push(k); });
         return results;
     };
     /** Gets an array of all values, sorted by key */
     BTree.prototype.valuesArray = function () {
         var results = [];
-        this._root.forRange(this.minKey(), this.maxKey(), true, false, this.asHost(), 0, function (k, v) { results.push(v); });
+        this._root.forRange(this.minKey(), this.maxKey(), true, false, this, 0, function (k, v) { results.push(v); });
         return results;
     };
     /** Gets a string representing the tree's data based on toArray(). */
@@ -652,7 +649,7 @@ var BTree = /** @class */ (function () {
     BTree.prototype.getRange = function (low, high, includeHigh, maxLength) {
         if (maxLength === void 0) { maxLength = 0x3FFFFFF; }
         var results = [];
-        this._root.forRange(low, high, includeHigh, false, this.asHost(), 0, function (k, v) {
+        this._root.forRange(low, high, includeHigh, false, this, 0, function (k, v) {
             results.push([k, v]);
             return results.length > maxLength ? Break : undefined;
         });
@@ -692,7 +689,7 @@ var BTree = /** @class */ (function () {
      * @description Computational complexity: O(number of items scanned + log size)
      */
     BTree.prototype.forRange = function (low, high, includeHigh, onFound, initialCounter) {
-        var r = this._root.forRange(low, high, includeHigh, false, this.asHost(), initialCounter || 0, onFound);
+        var r = this._root.forRange(low, high, includeHigh, false, this, initialCounter || 0, onFound);
         return typeof r === "number" ? r : r.break;
     };
     /**
@@ -729,7 +726,7 @@ var BTree = /** @class */ (function () {
         if (root.isShared)
             this._root = root = root.clone();
         try {
-            var r = root.forRange(low, high, includeHigh, true, this.asHost(), initialCounter || 0, onFound);
+            var r = root.forRange(low, high, includeHigh, true, this, initialCounter || 0, onFound);
             return typeof r === "number" ? r : r.break;
         }
         finally {
@@ -820,7 +817,7 @@ var BTree = /** @class */ (function () {
      *  skips the most expensive test - whether all keys are sorted - but it
      *  does check that maxKey() of the children of internal nodes are sorted. */
     BTree.prototype.checkValid = function () {
-        var size = this._root.checkValid(0, this.asHost(), 0);
+        var size = this._root.checkValid(0, this, 0);
         (0, assert_1.check)(size === this.size, "size mismatch: counted ", size, "but stored", this.size);
     };
     return BTree;

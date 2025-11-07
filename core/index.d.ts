@@ -118,7 +118,6 @@ export default class BTree<K = any, V = any> {
      *   Must be in range 4..256. If undefined or <4 then default is used; if >256 then 256.
      */
     constructor(entries?: [K, V][], compare?: (a: K, b: K) => number, maxNodeSize?: number);
-    private asHost;
     /** Gets the number of key-value pairs in the tree. */
     get size(): number;
     /** Gets the number of key-value pairs in the tree. */
