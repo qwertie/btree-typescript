@@ -1,5 +1,5 @@
 import BTree from '../core/index';
-import type { AdvancedTreeInternals } from './internals';
+import type { AdvancedTreeInternals } from '../internal/treeInternals';
 import { diffAgainst as diffAgainstAlgorithm } from '../algorithms';
 
 const getInternals = <K, V>(tree: BTree<K, V>): AdvancedTreeInternals<K, V> => {

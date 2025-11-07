@@ -1,4 +1,4 @@
-import type { BNode, BTreeNodeHost } from '../internal/nodes';
+import type { BNode, BTreeNodeHost } from './nodes';
 
 /** @internal */
 export interface AdvancedTreeInternals<K, V> extends BTreeNodeHost<K, V> {

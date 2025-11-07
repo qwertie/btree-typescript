@@ -1,7 +1,7 @@
 import BTree from '../core/index';
 import { BNode, BNodeInternal } from '../internal/nodes';
 import { check } from '../internal/assert';
-import type { AdvancedTreeInternals } from '../advanced/internals';
+import type { AdvancedTreeInternals } from '../internal/treeInternals';
 
 type DiffCursor<K, V> = {
   height: number;
