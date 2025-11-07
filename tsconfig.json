@@ -14,6 +14,7 @@
     // Note: BTree does not rely on ES6 runtime APIs, just compile-time interfaces
     "lib": ["es6"],             // APIs expected to exist at runtime
     "downlevelIteration": false, // for-of loops and yield statement in ES5
+    "stripInternal": true,
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules", "tests", "b+tree.test.ts"],

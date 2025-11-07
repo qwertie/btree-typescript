@@ -5,6 +5,17 @@ B+ trees are ordered collections of key-value pairs, sorted by key.
 
 This is a fast B+ tree implementation, largely compatible with the standard Map, but with a much more diverse and powerful API. To use it, `import BTree from 'sorted-btree'`.
 
+### Modular builds
+
+`sorted-btree` now ships multiple entry points so you can opt into heavier algorithms only when you need them:
+
+| Import | Description |
+| --- | --- |
+| `import BTree from 'sorted-btree'` (or `'sorted-btree/core'`) | The lightweight core tree with the original feature set. This remains the default to avoid any breaking changes. |
+| `import AdvancedBTree from 'sorted-btree/advanced'` | A subclass that layers optional helpers such as `diffAgainst` onto the core structure. |
+
+You can start with the core tree for minimal bundle size, and instantiate `AdvancedBTree`—or promote an existing tree via your own helper—when you need the additional algorithms.
+
 `BTree` is faster and/or uses less memory than other popular JavaScript sorted trees (see Benchmarks). However, data structures in JavaScript tend to be slower than the built-in `Array` and `Map` data structures in typical cases, because the built-in data structures are mostly implemented in a faster language such as C++. Even so, if you have a large amount of data that you want to keep sorted, the built-in data structures will not serve you well, and `BTree` offers features like fast cloning that the built-in types don't.
 
 Use `npm install sorted-btree` in a terminal to install it in your npm-based project.
@@ -78,6 +89,11 @@ Features
 - Includes neat stuff such as `Range` methods for batch operations
 - Throws an exception if you try to use `NaN` as a key, but infinity is allowed.
 - No dependencies. 19.8K minified.
+
+### Benchmarks and size tracking
+
+- Run `npm run benchmark` (see `bench/README.md`) to execute the existing comparison harness, which now exercises both the core tree and the diff-enabled advanced build.
+- Run `npm run size-report` (see `size/README.md`) after `npm run build` to print raw/minified/gzip sizes for `core`, `advanced`, and the default entry point.
 - Includes a lattice of interfaces for TypeScript users (see below)
 - Supports diffing computation between two trees that is highly optimized for the case
   in which a majority of nodes are shared (such as when persistent methods are used).

@@ -1,4 +1,5 @@
 import BTree, {IMap, EmptyBTree, defaultComparator, simpleComparator} from './b+tree';
+import AdvancedBTree from './advanced';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
 
@@ -12,6 +13,13 @@ function expectTreeEqualTo(a: BTree, b: SortedArray) {
 }
 function addToBoth<K,V>(a: IMap<K,V>, b: IMap<K,V>, k: K, v: V) {
   expect(a.set(k,v)).toEqual(b.set(k,v));
+}
+
+function toAdvanced<K, V>(tree: BTree<K, V>): AdvancedBTree<K, V> {
+  const promoted = new AdvancedBTree<K, V>(undefined, (tree as any)._compare, (tree as any)._maxNodeSize);
+  (promoted as any)._root = (tree as any)._root;
+  (promoted as any)._size = (tree as any)._size;
+  return promoted;
 }
 
 describe('defaultComparator', () =>
@@ -378,7 +386,7 @@ describe("cloning and sharing tests", () => {
   test("Regression test for failing to propagate shared when removing top two layers", () => {
     // This tests make a full 3 layer tree (height = 2), so use a small branching factor.
     const maxNodeSize = 4;
-    const tree = new BTree<number, number>(
+    const tree = new AdvancedBTree<number, number>(
       undefined,
       simpleComparator,
       maxNodeSize
@@ -415,7 +423,7 @@ describe("cloning and sharing tests", () => {
 
   test("Regression test for greedyClone(true) not copying all nodes", () => {
     const maxNodeSize = 4;
-    const tree = new BTree<number, number>(
+    const tree = new AdvancedBTree<number, number>(
       undefined,
       simpleComparator,
       maxNodeSize
@@ -475,8 +483,8 @@ describe("cloning and sharing tests", () => {
       }
     }
 
-    const deepClone = tree.greedyClone(true);
-    const cheapClone = tree.clone();
+    const deepClone = toAdvanced(tree.greedyClone(true));
+    const cheapClone = toAdvanced(tree.clone());
 
     // These two clones should remain unchanged forever.
     // The bug this is testing for resulted in the cheap clone getting modified:
@@ -790,7 +798,7 @@ function testBTree(maxNodeSize: number)
       expect(different.length).toEqual(0);
     }
 
-    function expectDiffCorrect(treeThis: BTree<number, number>, treeOther: BTree<number, number>): void {
+    function expectDiffCorrect(treeThis: AdvancedBTree<number, number>, treeOther: AdvancedBTree<number, number>): void {
       reset();
       treeThis.diffAgainst(treeOther, OnlyThis, OnlyOther, Different);
       let onlyThisT: Map<number, number> = new Map();
@@ -816,15 +824,15 @@ function testBTree(maxNodeSize: number)
     }
 
     test(`Diff of trees with different comparators is an error`, () => {
-      const treeA = new BTree<number, number>([], compare);
-      const treeB = new BTree<number, number>([], (a, b) => b - a);
+      const treeA = new AdvancedBTree<number, number>([], compare);
+      const treeB = new AdvancedBTree<number, number>([], (a, b) => b - a);
       expect(() => treeA.diffAgainst(treeB, OnlyThis, OnlyOther, Different)).toThrow('comparators');
     });
 
     const entriesGroup: [number, number][][] = [[], [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]];
     entriesGroup.forEach(entries => {
       test(`Diff of the same tree ${entries.length > 0 ? "(non-empty)" : "(empty)"}`, () => {
-        const tree = new BTree<number, number>(entries, compare, maxNodeSize);
+        const tree = new AdvancedBTree<number, number>(entries, compare, maxNodeSize);
         expectDiffCorrect(tree, tree);
         expect(onlyOther.size).toEqual(0);
         expect(onlyThis.size).toEqual(0);
@@ -833,22 +841,22 @@ function testBTree(maxNodeSize: number)
     });
 
     test(`Diff of identical trees`, () => {
-      const treeA = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
-      const treeB = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
+      const treeA = new AdvancedBTree<number, number>(entriesGroup[1], compare, maxNodeSize);
+      const treeB = new AdvancedBTree<number, number>(entriesGroup[1], compare, maxNodeSize);
       expectDiffCorrect(treeA, treeB);
     });
 
     [entriesGroup, [...entriesGroup].reverse()].forEach(doubleEntries => {
       test(`Diff of an ${doubleEntries[0].length === 0 ? 'empty' : 'non-empty'} tree and a ${doubleEntries[1].length === 0 ? 'empty' : 'non-empty'} one`, () => {
-        const treeA = new BTree<number, number>(doubleEntries[0], compare, maxNodeSize);
-        const treeB = new BTree<number, number>(doubleEntries[1], compare, maxNodeSize);
+        const treeA = new AdvancedBTree<number, number>(doubleEntries[0], compare, maxNodeSize);
+        const treeB = new AdvancedBTree<number, number>(doubleEntries[1], compare, maxNodeSize);
         expectDiffCorrect(treeA, treeB);
       });
     });
 
     test(`Diff of different trees`, () => {
-      const treeA = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
-      const treeB = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
+      const treeA = new AdvancedBTree<number, number>(entriesGroup[1], compare, maxNodeSize);
+      const treeB = new AdvancedBTree<number, number>(entriesGroup[1], compare, maxNodeSize);
       treeB.set(-1, -1);
       treeB.delete(2);
       treeB.set(3, 4);
@@ -857,13 +865,16 @@ function testBTree(maxNodeSize: number)
     });
 
     test(`Diff of odds and evens`, () => {
-      const treeA = new BTree<number, number>([[1, 1], [3, 3], [5, 5], [7, 7]], compare, maxNodeSize);
-      const treeB = new BTree<number, number>([[2, 2], [4, 4], [6, 6], [8, 8]], compare, maxNodeSize);
+      const treeA = new AdvancedBTree<number, number>([[1, 1], [3, 3], [5, 5], [7, 7]], compare, maxNodeSize);
+      const treeB = new AdvancedBTree<number, number>([[2, 2], [4, 4], [6, 6], [8, 8]], compare, maxNodeSize);
       expectDiffCorrect(treeA, treeB);
       expectDiffCorrect(treeB, treeA);
     });
 
-    function applyChanges(treeA: BTree<number, number>, duplicate: (tree: BTree<number, number>) => BTree<number, number>): void {
+    function applyChanges(
+      treeA: AdvancedBTree<number, number>,
+      duplicate: (tree: AdvancedBTree<number, number>) => AdvancedBTree<number, number>
+    ): void {
       const treeB = duplicate(treeA);
       const maxKey: number = treeA.maxKey()!;
       const onlyInA = -10;
@@ -882,9 +893,9 @@ function testBTree(maxNodeSize: number)
       expectDiffCorrect(treeA, treeB);
     }
 
-    function makeLargeTree(size?: number): BTree<number, number> {
+    function makeLargeTree(size?: number): AdvancedBTree<number, number> {
       size = size ?? Math.pow(maxNodeSize, 3);
-      const tree = new BTree<number, number>([], compare, maxNodeSize);
+      const tree = new AdvancedBTree<number, number>([], compare, maxNodeSize);
       for (let i = 0; i < size; i++) {
         tree.set(i, i);
       }

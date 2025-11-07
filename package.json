@@ -4,18 +4,43 @@
   "description": "A sorted list of key-value pairs in a fast, typed in-memory B+ tree with a powerful API.",
   "main": "b+tree.js",
   "typings": "b+tree",
+  "exports": {
+    ".": {
+      "types": "./b+tree.d.ts",
+      "import": "./b+tree.js",
+      "require": "./b+tree.js"
+    },
+    "./core": {
+      "types": "./core/index.d.ts",
+      "import": "./core/index.js",
+      "require": "./core/index.js"
+    },
+    "./advanced": {
+      "types": "./advanced/index.d.ts",
+      "import": "./advanced/index.js",
+      "require": "./advanced/index.js"
+    }
+  },
+  "sideEffects": false,
   "scripts": {
     "test": "tsc && echo //ts-jest-issue-657 >interfaces.js && jest",
     "build": "tsc && npm run minify",
     "minify": "uglifyjs -cm -o b+tree.min.js -- b+tree.js",
     "prepare": "npm run build",
     "safePublish": "npm run build && testpack && npm publish",
-    "benchmark": "npm run build && node benchmarks.js"
+    "benchmark": "npm run build && node benchmarks.js",
+    "size-report": "node size/report.js"
   },
   "files": [
     "b+tree.js",
     "b+tree.d.ts",
     "b+tree.min.js",
+    "core/*.js",
+    "core/*.d.ts",
+    "advanced/*.js",
+    "advanced/*.d.ts",
+    "internal/*.js",
+    "internal/*.d.ts",
     "sorted-array.js",
     "sorted-array.d.ts",
     "interfaces.d.ts",
@@ -65,6 +90,11 @@
   "jest": {
     "transform": {
       "^.+\\.tsx?$": "ts-jest"
+    },
+    "globals": {
+      "ts-jest": {
+        "diagnostics": false
+      }
     },
     "testRegex": "(/tests/.*|(\\.|/)test)\\.(jsx?|tsx?)$",
     "testPathIgnorePatterns": [
