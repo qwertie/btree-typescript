@@ -13,8 +13,9 @@ This is a fast B+ tree implementation, largely compatible with the standard Map,
 | --- | --- |
 | `import BTree from 'sorted-btree'` (or `'sorted-btree/core'`) | The lightweight core tree with the original feature set. This remains the default to avoid any breaking changes. |
 | `import AdvancedBTree from 'sorted-btree/advanced'` | A subclass that layers optional helpers such as `diffAgainst` onto the core structure. |
+| `import { diffAgainst } from 'sorted-btree/algorithms'` | Standalone advanced helpers so you can cherry-pick algorithms without paying for the whole subclass bundle. |
 
-You can start with the core tree for minimal bundle size, and instantiate `AdvancedBTree`—or promote an existing tree via your own helper—when you need the additional algorithms.
+You can start with the core tree for minimal bundle size, and instantiate `AdvancedBTree`—or promote an existing tree via your own helper—when you need the full set of advanced algorithms. If you only need a single helper, import it directly from `'sorted-btree/algorithms'` to avoid the additional code.
 
 `BTree` is faster and/or uses less memory than other popular JavaScript sorted trees (see Benchmarks). However, data structures in JavaScript tend to be slower than the built-in `Array` and `Map` data structures in typical cases, because the built-in data structures are mostly implemented in a faster language such as C++. Even so, if you have a large amount of data that you want to keep sorted, the built-in data structures will not serve you well, and `BTree` offers features like fast cloning that the built-in types don't.
 
@@ -115,7 +116,7 @@ Features
 - Get largest key/pair that is lower than `k`: `t.nextLowerKey(k)`, `t.nextLowerPair(k)`
 - Freeze to prevent modifications: `t.freeze()` (you can also `t.unfreeze()`)
 - Fast clone: `t.clone()`
-- Compute a diff between two trees (quickly skipping shared subtrees): `t.diffAgainst(otherTree, ...)`
+- Compute a diff between two trees (quickly skipping shared subtrees): `t.diffAgainst(otherTree, ...)` or `diffAgainst(treeA, treeB, ...)`
 - For more information, **see [full documentation](https://github.com/qwertie/btree-typescript/blob/master/b%2Btree.ts) in the source code.**
 
 **Note:** Confusingly, the ES6 `Map.forEach(c)` method calls `c(value,key)` instead of `c(key,value)`, in contrast to other methods such as `set()` and `entries()` which put the key first. I can only assume that they reversed the order on the hypothesis that users would usually want to examine values and ignore keys. BTree's `forEach()` therefore works the same way, but there is a second method `.forEachPair((key,value)=>{...})` which sends you the key first and the value second; this method is slightly faster because it is the "native" for-each method for this class.

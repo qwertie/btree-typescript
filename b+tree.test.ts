@@ -1,5 +1,6 @@
 import BTree, {IMap, EmptyBTree, defaultComparator, simpleComparator} from './b+tree';
 import AdvancedBTree from './advanced';
+import { diffAgainst as diffAlgorithm } from './algorithms';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
 
@@ -822,6 +823,24 @@ function testBTree(maxNodeSize: number)
       expectMapsEquals(onlyOther, onlyOtherT);
       expectMapsEquals(different, differentT);
     }
+
+    test(`Standalone algorithms diffAgainst works with core trees`, () => {
+      const treeA = new BTree<number, number>([[1, 1], [2, 2], [4, 4]], compare, maxNodeSize);
+      const treeB = new BTree<number, number>([[1, 1], [2, 22], [3, 3]], compare, maxNodeSize);
+      const onlyThisKeys: number[] = [];
+      const onlyOtherKeys: number[] = [];
+      const differentKeys: number[] = [];
+      diffAlgorithm(
+        treeA,
+        treeB,
+        (k) => { onlyThisKeys.push(k); },
+        (k) => { onlyOtherKeys.push(k); },
+        (k) => { differentKeys.push(k); }
+      );
+      expect(onlyThisKeys).toEqual([4]);
+      expect(onlyOtherKeys).toEqual([3]);
+      expect(differentKeys).toEqual([2]);
+    });
 
     test(`Diff of trees with different comparators is an error`, () => {
       const treeA = new AdvancedBTree<number, number>([], compare);

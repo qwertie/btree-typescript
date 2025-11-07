@@ -19,6 +19,11 @@
       "types": "./advanced/index.d.ts",
       "import": "./advanced/index.js",
       "require": "./advanced/index.js"
+    },
+    "./algorithms": {
+      "types": "./algorithms/index.d.ts",
+      "import": "./algorithms/index.js",
+      "require": "./algorithms/index.js"
     }
   },
   "sideEffects": false,
@@ -39,6 +44,8 @@
     "core/*.d.ts",
     "advanced/*.js",
     "advanced/*.d.ts",
+    "algorithms/*.js",
+    "algorithms/*.d.ts",
     "internal/*.js",
     "internal/*.d.ts",
     "sorted-array.js",

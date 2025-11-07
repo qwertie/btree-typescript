@@ -9,10 +9,5 @@ export declare class AdvancedBTree<K = any, V = any> extends BTree<K, V> {
     } | void, different?: (k: K, vThis: V, vOther: V) => {
         break?: R;
     } | void): R | undefined;
-    private static finishCursorWalk;
-    private static stepToEnd;
-    private static makeDiffCursor;
-    private static step;
-    private static compare;
 }
 export default AdvancedBTree;
