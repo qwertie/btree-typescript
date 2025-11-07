@@ -81,6 +81,8 @@ Features
 - Includes a lattice of interfaces for TypeScript users (see below)
 - Supports diffing computation between two trees that is highly optimized for the case
   in which a majority of nodes are shared (such as when persistent methods are used).
+- Supports fast merge & intersection operations with asymptotic speedups when large disjoint ranges of keys are present.
+  The merge operation generates a new tree that shares nodes with the original trees when possible.
 
 ### Additional operations supported on this B+ tree ###
 
@@ -100,6 +102,8 @@ Features
 - Freeze to prevent modifications: `t.freeze()` (you can also `t.unfreeze()`)
 - Fast clone: `t.clone()`
 - Compute a diff between two trees (quickly skipping shared subtrees): `t.diffAgainst(otherTree, ...)`
+- Efficiently merge two trees, sharing nodes where possible: `t.merge(other, ...)`
+- Efficiently intersect two trees: `t.intersect(other, ...)`
 - For more information, **see [full documentation](https://github.com/qwertie/btree-typescript/blob/master/b%2Btree.ts) in the source code.**
 
 **Note:** Confusingly, the ES6 `Map.forEach(c)` method calls `c(value,key)` instead of `c(key,value)`, in contrast to other methods such as `set()` and `entries()` which put the key first. I can only assume that they reversed the order on the hypothesis that users would usually want to examine values and ignore keys. BTree's `forEach()` therefore works the same way, but there is a second method `.forEachPair((key,value)=>{...})` which sends you the key first and the value second; this method is slightly faster because it is the "native" for-each method for this class.
@@ -122,6 +126,7 @@ The "scanning" methods (`forEach, forRange, editRange, deleteRange`) will normal
 - Get a new tree with one pair removed: `t.without(key)`
 - Get a new tree with specific pairs removed: `t.withoutKeys(keys)`
 - Get a new tree with a range of keys removed: `t.withoutRange(low, high, includeHi)`
+- Get a new tree that is the result of a merge: `t.merge(other, mergeFn)`
 
 **Things to keep in mind:** I ran a test which suggested `t.with` is three times slower than `t.set`. These methods do not return a frozen tree even if the original tree was frozen (for performance reasons, e.g. frozen trees use slightly more memory.)
 
