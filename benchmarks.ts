@@ -1,5 +1,5 @@
 #!/usr/bin/env ts-node
-import BTree, {IMap} from '.';
+import BTree from '.';
 import SortedArray from './sorted-array';
 // Note: The `bintrees` package also includes a `BinTree` type which turned
 // out to be an unbalanced binary tree. It is faster than `RBTree` for
@@ -77,8 +77,6 @@ function intersectBySorting(
 ) {
   const left = tree1.toArray();
   const right = tree2.toArray();
-  left.sort((a, b) => a[0] - b[0]);
-  right.sort((a, b) => a[0] - b[0]);
   let i = 0;
   let j = 0;
   const leftLen = left.length;
