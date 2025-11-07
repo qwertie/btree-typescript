@@ -5,21 +5,21 @@ B+ trees are ordered collections of key-value pairs, sorted by key.
 
 This is a fast B+ tree implementation, largely compatible with the standard Map, but with a much more diverse and powerful API. To use it, `import BTree from 'sorted-btree'`.
 
+`BTree` is faster and/or uses less memory than other popular JavaScript sorted trees (see Benchmarks). However, data structures in JavaScript tend to be slower than the built-in `Array` and `Map` data structures in typical cases, because the built-in data structures are mostly implemented in a faster language such as C++. Even so, if you have a large amount of data that you want to keep sorted, the built-in data structures will not serve you well, and `BTree` offers features like fast cloning that the built-in types don't.
+
+Use `npm install sorted-btree` in a terminal to install it in your npm-based project.
+
 ### Modular builds
 
 `sorted-btree` now ships multiple entry points so you can opt into heavier algorithms only when you need them:
 
 | Import | Description |
 | --- | --- |
-| `import BTree from 'sorted-btree'` (or `'sorted-btree/core'`) | The lightweight core tree with the original feature set. This remains the default to avoid any breaking changes. |
-| `import AdvancedBTree from 'sorted-btree/advanced'` | A subclass that layers optional helpers such as `diffAgainst` onto the core structure. |
-| `import { diffAgainst } from 'sorted-btree/algorithms'` | Standalone advanced helpers so you can cherry-pick algorithms without paying for the whole subclass bundle. |
+| `import BTree from 'sorted-btree'` (or `'sorted-btree/core'`) | The core tree with the expected feature set. This is the default entry so existing apps get the smallest bundle automatically. |
+| `import AdvancedBTree from 'sorted-btree/advanced'` | A subclass that adds on the advanced algorithms (e.g. `diffAgainst`) onto the core structure. Importing it pulls in the full feature set. |
+| `import { diffAgainst } from 'sorted-btree/algorithms'` | Standalone helpers so you can cherry-pick specific algorithms; bundlers only include the functions you import. |
 
-You can start with the core tree for minimal bundle size, and instantiate `AdvancedBTree`—or promote an existing tree via your own helper—when you need the full set of advanced algorithms. If you only need a single helper, import it directly from `'sorted-btree/algorithms'` to avoid the additional code.
-
-`BTree` is faster and/or uses less memory than other popular JavaScript sorted trees (see Benchmarks). However, data structures in JavaScript tend to be slower than the built-in `Array` and `Map` data structures in typical cases, because the built-in data structures are mostly implemented in a faster language such as C++. Even so, if you have a large amount of data that you want to keep sorted, the built-in data structures will not serve you well, and `BTree` offers features like fast cloning that the built-in types don't.
-
-Use `npm install sorted-btree` in a terminal to install it in your npm-based project.
+Use the core tree for minimal bundle size, and leverage `AdvancedBTree` (or import from the algorithms module) when you need the heavier helpers.
 
 Ukraine is still under attack
 -----------------------------
