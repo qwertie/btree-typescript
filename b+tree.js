@@ -678,7 +678,7 @@ var BTree = /** @class */ (function () {
      * Returns a new root if the root was split, otherwise undefined.
      */
     BTree.appendAndCascade = function (spine, insertionDepth, branchingFactor, subtree, sideIndex, sideInsertionIndex, splitOffSide) {
-        // We must take care to avoid accidental propogation upward of the size of the inserted subtree.
+        // We must take care to avoid accidental propagation upward of the size of the inserted subtree.
         // To do this, we first split nodes upward from the insertion point until we find a node with capacity
         // or create a new root. Since all un-propagated sizes have already been applied to the spine up to this point,
         // inserting at the end ensures no accidental propagation.
@@ -756,7 +756,7 @@ var BTree = /** @class */ (function () {
     };
     ;
     /**
-     * Propogates size updates and updates max keys for nodes in (isSharedFrontierDepth, depthTo)
+     * Propagates size updates and updates max keys for nodes in (isSharedFrontierDepth, depthTo)
      */
     BTree.updateSizeAndMax = function (spine, unflushedSizes, isSharedFrontierDepth, depthUpToInclusive, updateMax) {
         // If isSharedFrontierDepth is <= depthUpToInclusive there is nothing to update because
@@ -857,7 +857,7 @@ var BTree = /** @class */ (function () {
         // disjoint subtree is added to the disjoint set.
         // Note that there are unavoidable cases in which this will generate underfilled leaves.
         // An example of this would be a leaf in one tree that contained keys [0, 100, 101, 102].
-        // In the other tree, there is a leaf that contains [2, 3, 4, 5]. This leaf can be ruesed entirely,
+        // In the other tree, there is a leaf that contains [2, 3, 4, 5]. This leaf can be reused entirely,
         // but the first tree's leaf must be decomposed into [0] and [100, 101, 102]
         var pending = [];
         var tallestIndex = -1, tallestHeight = -1;
@@ -1131,7 +1131,7 @@ var BTree = /** @class */ (function () {
             cur.leafIndex = nextIndex;
             return false;
         }
-        // If our optimizaed step within leaf failed, use full moveTo logic
+        // If our optimized step within leaf failed, use full moveTo logic
         // Pass isInclusive=false to ensure we walk forward to the key exactly after the current
         return BTree.moveTo(cur, other, currentKey, false, true, cmp)[0];
     };

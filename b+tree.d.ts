@@ -301,7 +301,7 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      */
     private static ensureNotShared;
     /**
-     * Propogates size updates and updates max keys for nodes in (isSharedFrontierDepth, depthTo)
+     * Propagates size updates and updates max keys for nodes in (isSharedFrontierDepth, depthTo)
      */
     private static updateSizeAndMax;
     /**
