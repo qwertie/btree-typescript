@@ -11,8 +11,6 @@ export {
 
 export type { EditRangeResult } from './types';
 
-type index = number;
-
 // Informative microbenchmarks & stuff:
 // http://www.jayconrod.com/posts/52/a-tour-of-v8-object-representation (very educational)
 // https://blog.mozilla.org/luke/2012/10/02/optimizing-javascript-variable-access/ (local vars are faster than properties)
