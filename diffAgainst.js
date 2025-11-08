@@ -5,6 +5,19 @@ var b_tree_1 = require("./b+tree");
 var getInternals = function (tree) {
     return tree;
 };
+/**
+ * Computes the differences between `treeThis` and `treeOther`.
+ * For efficiency, the diff is returned via invocations of supplied handlers.
+ * The computation is optimized for the case in which the two trees have large amounts of shared data
+ * (obtained by calling the `clone` or `with` APIs) and will avoid any iteration of shared state.
+ * The handlers can cause computation to early exit by returning `{ break: R }`.
+ * Neither collection should be mutated during the comparison (inside your callbacks), as this method assumes they remain stable.
+ * @param treeThis The tree whose differences will be reported via the callbacks.
+ * @param treeOther The tree to compute a diff against.
+ * @param onlyThis Callback invoked for all keys only present in `treeThis`.
+ * @param onlyOther Callback invoked for all keys only present in `treeOther`.
+ * @param different Callback invoked for all keys with differing values.
+ */
 function diffAgainst(treeThis, treeOther, onlyThis, onlyOther, different) {
     var thisInternals = getInternals(treeThis);
     var otherInternals = getInternals(treeOther);
@@ -23,20 +36,42 @@ function diffAgainst(treeThis, treeOther, onlyThis, onlyOther, different) {
             ? undefined
             : stepToEnd(makeDiffCursor(treeThis, thisInternals), onlyThis);
     }
+    // Cursor-based diff algorithm is as follows:
+    // - Until neither cursor has navigated to the end of the tree, do the following:
+    //   - If the `treeThis` cursor is "behind" the `treeOther` cursor (strictly <, via compare), advance it.
+    //   - Otherwise, advance the `treeOther` cursor.
+    //   - Any time a cursor is stepped, perform the following:
+    //     - If either cursor points to a key/value pair:
+    //       - If thisCursor === otherCursor and the values differ, it is a Different.
+    //       - If thisCursor > otherCursor and otherCursor is at a key/value pair, it is an OnlyOther.
+    //       - If thisCursor < otherCursor and thisCursor is at a key/value pair, it is an OnlyThis as long as the most recent
+    //         cursor step was *not* otherCursor advancing from a tie. The extra condition avoids erroneous OnlyOther calls
+    //         that would occur due to otherCursor being the "leader".
+    //     - Otherwise, if both cursors point to nodes, compare them. If they are equal by reference (shared), skip
+    //       both cursors to the next node in the walk.
+    // - Once one cursor has finished stepping, any remaining steps (if any) are taken and key/value pairs are logged
+    //   as OnlyOther (if otherCursor is stepping) or OnlyThis (if thisCursor is stepping).
+    // This algorithm gives the critical guarantee that all locations (both nodes and key/value pairs) in both trees that
+    // are identical by value (and possibly by reference) will be visited *at the same time* by the cursors.
+    // This removes the possibility of emitting incorrect diffs, as well as allowing for skipping shared nodes.
     var compareKeys = thisInternals._compare;
     var thisCursor = makeDiffCursor(treeThis, thisInternals);
     var otherCursor = makeDiffCursor(treeOther, otherInternals);
     var thisSuccess = true;
     var otherSuccess = true;
+    // It doesn't matter how thisSteppedLast is initialized.
+    // Step order is only used when either cursor is at a leaf, and cursors always start at a node.
     var prevCursorOrder = compareDiffCursors(thisCursor, otherCursor, compareKeys);
     while (thisSuccess && otherSuccess) {
         var cursorOrder = compareDiffCursors(thisCursor, otherCursor, compareKeys);
         var thisLeaf = thisCursor.leaf, thisInternalSpine = thisCursor.internalSpine, thisLevelIndices = thisCursor.levelIndices;
         var otherLeaf = otherCursor.leaf, otherInternalSpine = otherCursor.internalSpine, otherLevelIndices = otherCursor.levelIndices;
         if (thisLeaf || otherLeaf) {
+            // If the cursors were at the same location last step, then there is no work to be done.
             if (prevCursorOrder !== 0) {
                 if (cursorOrder === 0) {
                     if (thisLeaf && otherLeaf && different) {
+                        // Equal keys, check for modifications
                         var valThis = thisLeaf.values[thisLevelIndices[thisLevelIndices.length - 1]];
                         var valOther = otherLeaf.values[otherLevelIndices[otherLevelIndices.length - 1]];
                         if (!Object.is(valThis, valOther)) {
@@ -47,6 +82,10 @@ function diffAgainst(treeThis, treeOther, onlyThis, onlyOther, different) {
                     }
                 }
                 else if (cursorOrder > 0) {
+                    // If this is the case, we know that either:
+                    // 1. otherCursor stepped last from a starting position that trailed thisCursor, and is still behind, or
+                    // 2. thisCursor stepped last and leapfrogged otherCursor
+                    // Either of these cases is an "only other"
                     if (otherLeaf && onlyOther) {
                         var otherVal = otherLeaf.values[otherLevelIndices[otherLevelIndices.length - 1]];
                         var result = onlyOther(otherCursor.currentKey, otherVal);
@@ -91,6 +130,9 @@ function diffAgainst(treeThis, treeOther, onlyThis, onlyOther, different) {
     return undefined;
 }
 exports.diffAgainst = diffAgainst;
+/**
+ * Finishes walking `cursor` once the other cursor has already completed its walk.
+ */
 var finishCursorWalk = function (cursor, cursorFinished, compareKeys, callback) {
     var compared = compareDiffCursors(cursor, cursorFinished, compareKeys);
     if (compared === 0) {
@@ -102,6 +144,9 @@ var finishCursorWalk = function (cursor, cursorFinished, compareKeys, callback) 
     }
     return stepToEnd(cursor, callback);
 };
+/**
+ * Walks the cursor to the end of the tree, invoking the callback for each key/value pair.
+ */
 var stepToEnd = function (cursor, callback) {
     var canStep = true;
     while (canStep) {
@@ -126,22 +171,32 @@ var makeDiffCursor = function (tree, internals) {
         currentKey: root.maxKey()
     };
 };
+/**
+ * Advances the cursor to the next step in the walk of its tree.
+ * Cursors are walked backwards in sort order, as this allows them to leverage maxKey() in order to be compared in O(1).
+ */
 var stepDiffCursor = function (cursor, stepToNode) {
     var internalSpine = cursor.internalSpine, levelIndices = cursor.levelIndices, leaf = cursor.leaf;
     if (stepToNode === true || leaf) {
         var levelsLength = levelIndices.length;
+        // Step to the next node only if:
+        // - We are explicitly directed to via stepToNode, or
+        // - There are no key/value pairs left to step to in this leaf
         if (stepToNode === true || levelIndices[levelsLength - 1] === 0) {
             var spineLength = internalSpine.length;
             if (spineLength === 0)
                 return false;
+            // Walk back up the tree until we find a new subtree to descend into
             var nodeLevelIndex = spineLength - 1;
             var levelIndexWalkBack = nodeLevelIndex;
             while (levelIndexWalkBack >= 0) {
                 if (levelIndices[levelIndexWalkBack] > 0) {
                     if (levelIndexWalkBack < levelsLength - 1) {
+                        // Remove leaf state from cursor
                         cursor.leaf = undefined;
                         levelIndices.pop();
                     }
+                    // If we walked upwards past any internal node, slice them out
                     if (levelIndexWalkBack < nodeLevelIndex)
                         cursor.internalSpine = internalSpine.slice(0, levelIndexWalkBack + 1);
                     cursor.currentKey = internalSpine[levelIndexWalkBack][--levelIndices[levelIndexWalkBack]].maxKey();
@@ -149,15 +204,17 @@ var stepDiffCursor = function (cursor, stepToNode) {
                 }
                 levelIndexWalkBack--;
             }
+            // Cursor is in the far left leaf of the tree, no more nodes to enumerate
             return false;
         }
         else {
+            // Move to new leaf value
             var valueIndex = --levelIndices[levelsLength - 1];
             cursor.currentKey = leaf.keys[valueIndex];
             return true;
         }
     }
-    else {
+    else { // Cursor does not point to a value in a leaf, so move downwards
         var nextLevel = internalSpine.length;
         var currentLevel = nextLevel - 1;
         var node = internalSpine[currentLevel][levelIndices[currentLevel]];
@@ -176,12 +233,22 @@ var stepDiffCursor = function (cursor, stepToNode) {
         return true;
     }
 };
+/**
+ * Compares two cursors and returns which cursor is ahead in the traversal.
+ * Note that cursors advance in reverse sort order.
+ */
 var compareDiffCursors = function (cursorA, cursorB, compareKeys) {
     var heightA = cursorA.height, currentKeyA = cursorA.currentKey, levelIndicesA = cursorA.levelIndices;
     var heightB = cursorB.height, currentKeyB = cursorB.currentKey, levelIndicesB = cursorB.levelIndices;
+    // Reverse the comparison order, as cursors are advanced in reverse sorting order
     var keyComparison = compareKeys(currentKeyB, currentKeyA);
     if (keyComparison !== 0)
         return keyComparison;
+    // Normalize depth values relative to the shortest tree.
+    // This ensures that concurrent cursor walks of trees of differing heights can reliably land on shared nodes at the same time.
+    // To accomplish this, a cursor that is on an internal node at depth D1 with maxKey X is considered "behind" a cursor on an
+    // internal node at depth D2 with maxKey Y, when D1 < D2. Thus, always walking the cursor that is "behind" will allow the cursor
+    // at shallower depth (but equal maxKey) to "catch up" and land on shared nodes.
     var heightMin = heightA < heightB ? heightA : heightB;
     var depthANormalized = levelIndicesA.length - (heightA - heightMin);
     var depthBNormalized = levelIndicesB.length - (heightB - heightMin);
