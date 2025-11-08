@@ -435,6 +435,10 @@ Benchmarks (in milliseconds for integer keys/values)
 Version history
 ---------------
 
+### v1.9.0 ###
+
+- Refactored structure to expose advanced algorithms separately from the base tree to optimize bundle size. See the [Modular builds](#modular-builds) section for more details.
+
 ### v1.8.0 ###
 
 - Argument of `ISortedSetSource.nextHigherKey(key: K)` changed to `key?: K`
