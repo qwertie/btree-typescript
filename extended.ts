@@ -2,74 +2,58 @@ import BTree from './b+tree';
 import type { ExtendedTreeInternals } from './diffAgainst';
 import { diffAgainst as diffAgainstAlgorithm } from './diffAgainst';
 
-const getInternals = <K, V>(tree: BTree<K, V>): ExtendedTreeInternals<K, V> => {
-  return tree as unknown as ExtendedTreeInternals<K, V>;
-};
-
-const wrapBaseTree = <K, V>(tree: BTree<K, V>): BTreeEx<K, V> => {
-  const source = getInternals(tree);
-  const wrapped = new BTreeEx<K, V>(undefined, source._compare, source._maxNodeSize);
-  const target = getInternals(wrapped);
-  target._root = source._root;
-  target._size = source._size;
-  return wrapped;
-};
-
-const ensureExtendedTree = <K, V>(tree: BTree<K, V>): BTreeEx<K, V> => {
-  return tree instanceof BTreeEx ? tree : wrapBaseTree(tree);
-};
-
 export class BTreeEx<K = any, V = any> extends BTree<K, V> {
   clone(): BTreeEx<K, V> {
-    return wrapBaseTree(super.clone());
+    const source = this as unknown as ExtendedTreeInternals<K, V>;
+    source._root.isShared = true;
+    const result = new BTreeEx<K, V>(undefined, this._compare, this._maxNodeSize);
+    const target = result as unknown as ExtendedTreeInternals<K, V>;
+    target._root = source._root;
+    target._size = source._size;
+    return result;
   }
 
   greedyClone(force?: boolean): BTreeEx<K, V> {
-    return wrapBaseTree(super.greedyClone(force));
+    const source = this as unknown as ExtendedTreeInternals<K, V>;
+    const result = new BTreeEx<K, V>(undefined, this._compare, this._maxNodeSize);
+    const target = result as unknown as ExtendedTreeInternals<K, V>;
+    target._root = source._root.greedyClone(force);
+    target._size = source._size;
+    return result;
   }
 
   with(key: K): BTreeEx<K, V | undefined>;
   with<V2>(key: K, value: V2, overwrite?: boolean): BTreeEx<K, V | V2>;
   with<V2>(key: K, value?: V2, overwrite?: boolean): BTreeEx<K, V | V2 | undefined> {
-    const result = super.with(key, value as V2, overwrite) as BTree<K, V | V2 | undefined>;
-    return result === this
-      ? (this as BTreeEx<K, V | V2 | undefined>)
-      : ensureExtendedTree(result);
+    return super.with(key, value as V2, overwrite) as BTreeEx<K, V | V2 | undefined>;
   }
 
   withPairs<V2>(pairs: [K, V | V2][], overwrite: boolean): BTreeEx<K, V | V2> {
-    const result = super.withPairs(pairs, overwrite) as BTree<K, V | V2>;
-    return result === this ? (this as BTreeEx<K, V | V2>) : ensureExtendedTree(result);
+    return super.withPairs(pairs, overwrite) as BTreeEx<K, V | V2>;
   }
 
   withKeys(keys: K[], returnThisIfUnchanged?: boolean): BTreeEx<K, V | undefined> {
-    const result = super.withKeys(keys, returnThisIfUnchanged) as BTree<K, V | undefined>;
-    return result === this ? (this as BTreeEx<K, V | undefined>) : ensureExtendedTree(result);
+    return super.withKeys(keys, returnThisIfUnchanged) as BTreeEx<K, V | undefined>;
   }
 
   without(key: K, returnThisIfUnchanged?: boolean): BTreeEx<K, V> {
-    const result = super.without(key, returnThisIfUnchanged);
-    return result === this ? this : ensureExtendedTree(result);
+    return super.without(key, returnThisIfUnchanged) as BTreeEx<K, V>;
   }
 
   withoutKeys(keys: K[], returnThisIfUnchanged?: boolean): BTreeEx<K, V> {
-    const result = super.withoutKeys(keys, returnThisIfUnchanged);
-    return result === this ? this : ensureExtendedTree(result);
+    return super.withoutKeys(keys, returnThisIfUnchanged) as BTreeEx<K, V>;
   }
 
   withoutRange(low: K, high: K, includeHigh: boolean, returnThisIfUnchanged?: boolean): BTreeEx<K, V> {
-    const result = super.withoutRange(low, high, includeHigh, returnThisIfUnchanged);
-    return result === this ? this : ensureExtendedTree(result);
+    return super.withoutRange(low, high, includeHigh, returnThisIfUnchanged) as BTreeEx<K, V>;
   }
 
   filter(callback: (k: K, v: V, counter: number) => boolean, returnThisIfUnchanged?: boolean): BTreeEx<K, V> {
-    const result = super.filter(callback, returnThisIfUnchanged);
-    return result === this ? this : ensureExtendedTree(result);
+    return super.filter(callback, returnThisIfUnchanged) as BTreeEx<K, V>;
   }
 
   mapValues<R>(callback: (v: V, k: K, counter: number) => R): BTreeEx<K, R> {
-    const result = super.mapValues(callback) as BTree<K, R>;
-    return ensureExtendedTree(result);
+    return super.mapValues(callback) as BTreeEx<K, R>;
   }
 
   diffAgainst<R>(
