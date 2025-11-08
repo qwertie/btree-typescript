@@ -1,5 +1,5 @@
 // B+ tree by David Piepgrass. License: MIT
-import { ISortedMap, ISortedMapF, ISortedSet } from '../interfaces';
+import { ISortedSet } from '../interfaces';
 import { check } from '../internal/assert';
 import { BNode, BNodeInternal, EmptyLeaf } from '../internal/nodes';
 import type { EditRangeResult } from './types';
