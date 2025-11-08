@@ -109,7 +109,7 @@ Features
 - Get largest key/pair that is lower than `k`: `t.nextLowerKey(k)`, `t.nextLowerPair(k)`
 - Freeze to prevent modifications: `t.freeze()` (you can also `t.unfreeze()`)
 - Fast clone: `t.clone()`
-- Compute a diff between two trees (quickly skipping shared subtrees): `BTreeEx#diffAgainst(otherTree, ...)` or the standalone `diffAgainst(treeA, treeB, ...)` helper from `sorted-btree/extended`
+- Compute a diff between two trees (quickly skipping shared subtrees): `BTreeEx#diffAgainst(otherTree, ...)` or the standalone `diffAgainst(treeA, treeB, ...)` helper from `sorted-btree/extended` (breaking change in v1.9: the default `BTree` no longer includes `diffAgainst`)
 - For more information, **see [full documentation](https://github.com/qwertie/btree-typescript/blob/master/b%2Btree.ts) in the source code.**
 
 **Note:** Confusingly, the ES6 `Map.forEach(c)` method calls `c(value,key)` instead of `c(key,value)`, in contrast to other methods such as `set()` and `entries()` which put the key first. I can only assume that they reversed the order on the hypothesis that users would usually want to examine values and ignore keys. BTree's `forEach()` therefore works the same way, but there is a second method `.forEachPair((key,value)=>{...})` which sends you the key first and the value second; this method is slightly faster because it is the "native" for-each method for this class.
@@ -427,6 +427,11 @@ Benchmarks (in milliseconds for integer keys/values)
 
 Version history
 ---------------
+
+### v1.9.0 ###
+
+- Introduced the new `sorted-btree/extended` entry point that holds `BTreeEx` and the standalone `diffAgainst` helper so apps can opt into the heavier algorithms only when needed. The default `sorted-btree` export stays lean (tree-shakable) while the extended build keeps parity with the old API surface.
+- **Breaking change:** `diffAgainst` is no longer available on the default `BTree` export. Switch to `BTreeEx#diffAgainst` (imported from `sorted-btree/extended`) or the standalone `diffAgainst(treeA, treeB, ...)` helper to continue using the diff API.
 
 ### v1.8.0 ###
 
