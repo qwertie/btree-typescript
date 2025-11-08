@@ -2,6 +2,7 @@
   "name": "sorted-btree",
   "version": "1.9.0",
   "description": "A sorted list of key-value pairs in a fast, typed in-memory B+ tree with a powerful API.",
+  "sideEffects": false,
   "main": "b+tree.js",
   "typings": "b+tree",
   "scripts": {
