@@ -90,14 +90,14 @@ Features
 - Includes neat stuff such as `Range` methods for batch operations
 - Throws an exception if you try to use `NaN` as a key, but infinity is allowed.
 - No dependencies. 19.8K minified.
+- Includes a lattice of interfaces for TypeScript users (see below)
+- Supports diffing computation between two trees that is highly optimized for the case
+  in which a majority of nodes are shared (such as when persistent methods are used).
 
 ### Benchmarks and size tracking
 
 - Run `npm run benchmark` (see `bench/README.md`) to execute the existing comparison harness, which now exercises both the core tree and the diff-enabled advanced build.
 - Run `npm run size-report` (see `size/README.md`) after `npm run build` to print raw/minified/gzip sizes for `core`, `advanced`, and the default entry point.
-- Includes a lattice of interfaces for TypeScript users (see below)
-- Supports diffing computation between two trees that is highly optimized for the case
-  in which a majority of nodes are shared (such as when persistent methods are used).
 
 ### Additional operations supported on this B+ tree ###
 
