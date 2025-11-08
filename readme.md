@@ -9,6 +9,16 @@ This is a fast B+ tree implementation, largely compatible with the standard Map,
 
 Use `npm install sorted-btree` in a terminal to install it in your npm-based project.
 
+### Extended algorithms
+
+The default export gives you the core tree and functionality. If you need the advanced helpers (like diffing), import from the extended module instead:
+
+```ts
+import BTreeEx, { diffAgainst } from 'sorted-btree/extended';
+```
+
+`BTreeEx` is a drop-in subclass of `BTree` that keeps advanced helpers like `diffAgainst` on the instance, and the named exports let you cherry-pick the standalone versions for maximum tree-shakability.
+
 Ukraine is still under attack
 -----------------------------
 
@@ -99,7 +109,7 @@ Features
 - Get largest key/pair that is lower than `k`: `t.nextLowerKey(k)`, `t.nextLowerPair(k)`
 - Freeze to prevent modifications: `t.freeze()` (you can also `t.unfreeze()`)
 - Fast clone: `t.clone()`
-- Compute a diff between two trees (quickly skipping shared subtrees): `t.diffAgainst(otherTree, ...)`
+- Compute a diff between two trees (quickly skipping shared subtrees): `BTreeEx#diffAgainst(otherTree, ...)` or the standalone `diffAgainst(treeA, treeB, ...)` helper from `sorted-btree/extended`
 - For more information, **see [full documentation](https://github.com/qwertie/btree-typescript/blob/master/b%2Btree.ts) in the source code.**
 
 **Note:** Confusingly, the ES6 `Map.forEach(c)` method calls `c(value,key)` instead of `c(key,value)`, in contrast to other methods such as `set()` and `entries()` which put the key first. I can only assume that they reversed the order on the hypothesis that users would usually want to examine values and ignore keys. BTree's `forEach()` therefore works the same way, but there is a second method `.forEachPair((key,value)=>{...})` which sends you the key first and the value second; this method is slightly faster because it is the "native" for-each method for this class.

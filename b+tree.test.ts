@@ -1,4 +1,5 @@
-import BTree, {IMap, EmptyBTree, defaultComparator, simpleComparator} from './b+tree';
+import BTree, {IMap, defaultComparator, simpleComparator} from './b+tree';
+import BTreeEx, { diffAgainst } from './extended';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
 
@@ -447,7 +448,7 @@ describe("cloning and sharing tests", () => {
   test("Regression test for mergeSibling setting isShared", () => {
     // This tests make a 3 layer tree (height = 2), so use a small branching factor.
     const maxNodeSize = 4;
-    const tree = new BTree<number, number>(
+    const tree = new BTreeEx<number, number>(
       undefined,
       simpleComparator,
       maxNodeSize
@@ -790,7 +791,7 @@ function testBTree(maxNodeSize: number)
       expect(different.length).toEqual(0);
     }
 
-    function expectDiffCorrect(treeThis: BTree<number, number>, treeOther: BTree<number, number>): void {
+    function expectDiffCorrect(treeThis: BTreeEx<number, number>, treeOther: BTreeEx<number, number>): void {
       reset();
       treeThis.diffAgainst(treeOther, OnlyThis, OnlyOther, Different);
       let onlyThisT: Map<number, number> = new Map();
@@ -816,15 +817,33 @@ function testBTree(maxNodeSize: number)
     }
 
     test(`Diff of trees with different comparators is an error`, () => {
-      const treeA = new BTree<number, number>([], compare);
-      const treeB = new BTree<number, number>([], (a, b) => b - a);
+      const treeA = new BTreeEx<number, number>([], compare);
+      const treeB = new BTreeEx<number, number>([], (a, b) => b - a);
       expect(() => treeA.diffAgainst(treeB, OnlyThis, OnlyOther, Different)).toThrow('comparators');
+    });
+
+    test(`Standalone diffAgainst works with core trees`, () => {
+      const treeA = new BTree<number, number>([[1, 1], [2, 2], [4, 4]], compare, maxNodeSize);
+      const treeB = new BTree<number, number>([[1, 1], [2, 22], [3, 3]], compare, maxNodeSize);
+      const onlyThisKeys: number[] = [];
+      const onlyOtherKeys: number[] = [];
+      const differentKeys: number[] = [];
+      diffAgainst(
+        treeA,
+        treeB,
+        (k) => { onlyThisKeys.push(k); },
+        (k) => { onlyOtherKeys.push(k); },
+        (k) => { differentKeys.push(k); }
+      );
+      expect(onlyThisKeys).toEqual([4]);
+      expect(onlyOtherKeys).toEqual([3]);
+      expect(differentKeys).toEqual([2]);
     });
 
     const entriesGroup: [number, number][][] = [[], [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5]]];
     entriesGroup.forEach(entries => {
       test(`Diff of the same tree ${entries.length > 0 ? "(non-empty)" : "(empty)"}`, () => {
-        const tree = new BTree<number, number>(entries, compare, maxNodeSize);
+        const tree = new BTreeEx<number, number>(entries, compare, maxNodeSize);
         expectDiffCorrect(tree, tree);
         expect(onlyOther.size).toEqual(0);
         expect(onlyThis.size).toEqual(0);
@@ -833,22 +852,22 @@ function testBTree(maxNodeSize: number)
     });
 
     test(`Diff of identical trees`, () => {
-      const treeA = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
-      const treeB = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
+      const treeA = new BTreeEx<number, number>(entriesGroup[1], compare, maxNodeSize);
+      const treeB = new BTreeEx<number, number>(entriesGroup[1], compare, maxNodeSize);
       expectDiffCorrect(treeA, treeB);
     });
 
     [entriesGroup, [...entriesGroup].reverse()].forEach(doubleEntries => {
       test(`Diff of an ${doubleEntries[0].length === 0 ? 'empty' : 'non-empty'} tree and a ${doubleEntries[1].length === 0 ? 'empty' : 'non-empty'} one`, () => {
-        const treeA = new BTree<number, number>(doubleEntries[0], compare, maxNodeSize);
-        const treeB = new BTree<number, number>(doubleEntries[1], compare, maxNodeSize);
+        const treeA = new BTreeEx<number, number>(doubleEntries[0], compare, maxNodeSize);
+        const treeB = new BTreeEx<number, number>(doubleEntries[1], compare, maxNodeSize);
         expectDiffCorrect(treeA, treeB);
       });
     });
 
     test(`Diff of different trees`, () => {
-      const treeA = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
-      const treeB = new BTree<number, number>(entriesGroup[1], compare, maxNodeSize);
+      const treeA = new BTreeEx<number, number>(entriesGroup[1], compare, maxNodeSize);
+      const treeB = new BTreeEx<number, number>(entriesGroup[1], compare, maxNodeSize);
       treeB.set(-1, -1);
       treeB.delete(2);
       treeB.set(3, 4);
@@ -857,13 +876,13 @@ function testBTree(maxNodeSize: number)
     });
 
     test(`Diff of odds and evens`, () => {
-      const treeA = new BTree<number, number>([[1, 1], [3, 3], [5, 5], [7, 7]], compare, maxNodeSize);
-      const treeB = new BTree<number, number>([[2, 2], [4, 4], [6, 6], [8, 8]], compare, maxNodeSize);
+      const treeA = new BTreeEx<number, number>([[1, 1], [3, 3], [5, 5], [7, 7]], compare, maxNodeSize);
+      const treeB = new BTreeEx<number, number>([[2, 2], [4, 4], [6, 6], [8, 8]], compare, maxNodeSize);
       expectDiffCorrect(treeA, treeB);
       expectDiffCorrect(treeB, treeA);
     });
 
-    function applyChanges(treeA: BTree<number, number>, duplicate: (tree: BTree<number, number>) => BTree<number, number>): void {
+    function applyChanges(treeA: BTreeEx<number, number>, duplicate: (tree: BTreeEx<number, number>) => BTreeEx<number, number>): void {
       const treeB = duplicate(treeA);
       const maxKey: number = treeA.maxKey()!;
       const onlyInA = -10;
@@ -882,9 +901,9 @@ function testBTree(maxNodeSize: number)
       expectDiffCorrect(treeA, treeB);
     }
 
-    function makeLargeTree(size?: number): BTree<number, number> {
+    function makeLargeTree(size?: number): BTreeEx<number, number> {
       size = size ?? Math.pow(maxNodeSize, 3);
-      const tree = new BTree<number, number>([], compare, maxNodeSize);
+      const tree = new BTreeEx<number, number>([], compare, maxNodeSize);
       for (let i = 0; i < size; i++) {
         tree.set(i, i);
       }

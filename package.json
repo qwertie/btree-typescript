@@ -16,6 +16,8 @@
     "b+tree.js",
     "b+tree.d.ts",
     "b+tree.min.js",
+    "extended.js",
+    "extended.d.ts",
     "sorted-array.js",
     "sorted-array.d.ts",
     "interfaces.d.ts",

@@ -5,6 +5,7 @@ export declare type EditRangeResult<V, R = number> = {
     break?: R;
     delete?: boolean;
 };
+declare type index = number;
 /**
  * Types that BTree supports by default
  */
@@ -254,42 +255,6 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      */
     entriesReversed(highestKey?: K, reusedArray?: (K | V)[], skipHighest?: boolean): IterableIterator<[K, V]>;
     private findPath;
-    /**
-     * Computes the differences between `this` and `other`.
-     * For efficiency, the diff is returned via invocations of supplied handlers.
-     * The computation is optimized for the case in which the two trees have large amounts
-     * of shared data (obtained by calling the `clone` or `with` APIs) and will avoid
-     * any iteration of shared state.
-     * The handlers can cause computation to early exit by returning {break: R}.
-     * Neither of the collections should be changed during the comparison process (in your callbacks), as this method assumes they will not be mutated.
-     * @param other The tree to compute a diff against.
-     * @param onlyThis Callback invoked for all keys only present in `this`.
-     * @param onlyOther Callback invoked for all keys only present in `other`.
-     * @param different Callback invoked for all keys with differing values.
-     */
-    diffAgainst<R>(other: BTree<K, V>, onlyThis?: (k: K, v: V) => {
-        break?: R;
-    } | void, onlyOther?: (k: K, v: V) => {
-        break?: R;
-    } | void, different?: (k: K, vThis: V, vOther: V) => {
-        break?: R;
-    } | void): R | undefined;
-    private static finishCursorWalk;
-    private static stepToEnd;
-    private static makeDiffCursor;
-    /**
-     * Advances the cursor to the next step in the walk of its tree.
-     * Cursors are walked backwards in sort order, as this allows them to leverage maxKey() in order to be compared in O(1).
-     * @param cursor The cursor to step
-     * @param stepToNode If true, the cursor will be advanced to the next node (skipping values)
-     * @returns true if the step was completed and false if the step would have caused the cursor to move beyond the end of the tree.
-     */
-    private static step;
-    /**
-     * Compares the two cursors. Returns a value indicating which cursor is ahead in a walk.
-     * Note that cursors are advanced in reverse sorting order.
-     */
-    private static compare;
     /** Returns a new iterator for iterating the keys of each pair in ascending order.
      *  @param firstKey: Minimum key to include in the output. */
     keys(firstKey?: K): IterableIterator<K>;
@@ -462,5 +427,77 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
  *  was the intention, but TypeScript is acting weird and may return `ISortedSet<K>`
  *  even if `V` can't be `undefined` (discussion: btree-typescript issue #14) */
 export declare function asSet<K, V>(btree: BTree<K, V>): undefined extends V ? ISortedSet<K> : unknown;
+/** @internal */
+export declare class BNode<K, V> {
+    keys: K[];
+    values: V[];
+    isShared: true | undefined;
+    get isLeaf(): boolean;
+    constructor(keys?: K[], values?: V[]);
+    maxKey(): K;
+    indexOf(key: K, failXor: number, cmp: (a: K, b: K) => number): index;
+    minKey(): K | undefined;
+    minPair(reusedArray: [K, V]): [K, V] | undefined;
+    maxPair(reusedArray: [K, V]): [K, V] | undefined;
+    clone(): BNode<K, V>;
+    greedyClone(force?: boolean): BNode<K, V>;
+    get(key: K, defaultValue: V | undefined, tree: BTree<K, V>): V | undefined;
+    getPairOrNextLower(key: K, compare: (a: K, b: K) => number, inclusive: boolean, reusedArray: [K, V]): [K, V] | undefined;
+    getPairOrNextHigher(key: K, compare: (a: K, b: K) => number, inclusive: boolean, reusedArray: [K, V]): [K, V] | undefined;
+    checkValid(depth: number, tree: BTree<K, V>, baseIndex: number): number;
+    set(key: K, value: V, overwrite: boolean | undefined, tree: BTree<K, V>): boolean | BNode<K, V>;
+    reifyValues(): V[];
+    insertInLeaf(i: index, key: K, value: V, tree: BTree<K, V>): boolean;
+    takeFromRight(rhs: BNode<K, V>): void;
+    takeFromLeft(lhs: BNode<K, V>): void;
+    splitOffRightSide(): BNode<K, V>;
+    forRange<R>(low: K, high: K, includeHigh: boolean | undefined, editMode: boolean, tree: BTree<K, V>, count: number, onFound?: (k: K, v: V, counter: number) => EditRangeResult<V, R> | void): EditRangeResult<V, R> | number;
+    /** Adds entire contents of right-hand sibling (rhs is left unchanged) */
+    mergeSibling(rhs: BNode<K, V>, _: number): void;
+}
+/** Internal node (non-leaf node) ********************************************/
+/** @internal */
+export declare class BNodeInternal<K, V> extends BNode<K, V> {
+    children: BNode<K, V>[];
+    /**
+     * This does not mark `children` as shared, so it is the responsibility of the caller
+     * to ensure children are either marked shared, or aren't included in another tree.
+     */
+    constructor(children: BNode<K, V>[], keys?: K[]);
+    clone(): BNode<K, V>;
+    greedyClone(force?: boolean): BNode<K, V>;
+    minKey(): K | undefined;
+    minPair(reusedArray: [K, V]): [K, V] | undefined;
+    maxPair(reusedArray: [K, V]): [K, V] | undefined;
+    get(key: K, defaultValue: V | undefined, tree: BTree<K, V>): V | undefined;
+    getPairOrNextLower(key: K, compare: (a: K, b: K) => number, inclusive: boolean, reusedArray: [K, V]): [K, V] | undefined;
+    getPairOrNextHigher(key: K, compare: (a: K, b: K) => number, inclusive: boolean, reusedArray: [K, V]): [K, V] | undefined;
+    checkValid(depth: number, tree: BTree<K, V>, baseIndex: number): number;
+    set(key: K, value: V, overwrite: boolean | undefined, tree: BTree<K, V>): boolean | BNodeInternal<K, V>;
+    /**
+     * Inserts `child` at index `i`.
+     * This does not mark `child` as shared, so it is the responsibility of the caller
+     * to ensure that either child is marked shared, or it is not included in another tree.
+     */
+    insert(i: index, child: BNode<K, V>): void;
+    /**
+     * Split this node.
+     * Modifies this to remove the second half of the items, returning a separate node containing them.
+     */
+    splitOffRightSide(): BNodeInternal<K, V>;
+    takeFromRight(rhs: BNode<K, V>): void;
+    takeFromLeft(lhs: BNode<K, V>): void;
+    forRange<R>(low: K, high: K, includeHigh: boolean | undefined, editMode: boolean, tree: BTree<K, V>, count: number, onFound?: (k: K, v: V, counter: number) => EditRangeResult<V, R> | void): EditRangeResult<V, R> | number;
+    /** Merges child i with child i+1 if their combined size is not too large */
+    tryMerge(i: index, maxSize: number): boolean;
+    /**
+     * Move children from `rhs` into this.
+     * `rhs` must be part of this tree, and be removed from it after this call
+     * (otherwise isShared for its children could be incorrect).
+     */
+    mergeSibling(rhs: BNode<K, V>, maxNodeSize: number): void;
+}
+/** @internal */
+export declare function check(fact: boolean, ...args: any[]): void;
 /** A BTree frozen in the empty state. */
 export declare const EmptyBTree: BTree<any, any>;
