@@ -18,6 +18,8 @@
     "b+tree.min.js",
     "extended.js",
     "extended.d.ts",
+    "diffAgainst.js",
+    "diffAgainst.d.ts",
     "sorted-array.js",
     "sorted-array.d.ts",
     "interfaces.d.ts",

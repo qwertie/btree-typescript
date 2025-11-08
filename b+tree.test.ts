@@ -1,5 +1,6 @@
 import BTree, {IMap, defaultComparator, simpleComparator} from './b+tree';
-import BTreeEx, { diffAgainst } from './extended';
+import BTreeEx from './extended';
+import diffAlgorithm from './diffAgainst';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
 
@@ -828,7 +829,7 @@ function testBTree(maxNodeSize: number)
       const onlyThisKeys: number[] = [];
       const onlyOtherKeys: number[] = [];
       const differentKeys: number[] = [];
-      diffAgainst(
+      diffAlgorithm(
         treeA,
         treeB,
         (k) => { onlyThisKeys.push(k); },
