@@ -16,10 +16,10 @@ Use `npm install sorted-btree` in a terminal to install it in your npm-based pro
 | Import | Description |
 | --- | --- |
 | `import BTree from 'sorted-btree'` (or `'sorted-btree/core'`) | The core tree with the expected feature set. This is the default entry so existing apps get the smallest bundle automatically. |
-| `import AdvancedBTree from 'sorted-btree/advanced'` | A subclass that adds on the advanced algorithms (e.g. `diffAgainst`) onto the core structure. Importing it pulls in the full feature set. |
+| `import BTreeEx from 'sorted-btree/extended'` | A subclass that adds on the extended algorithms (e.g. `diffAgainst`) onto the core structure. Importing it pulls in the full feature set. |
 | `import { diffAgainst } from 'sorted-btree/algorithms'` | Standalone helpers so you can cherry-pick specific algorithms; bundlers only include the functions you import. |
 
-Use the core tree for minimal bundle size, and leverage `AdvancedBTree` (or import from the algorithms module) when you need the heavier helpers.
+Use the core tree for minimal bundle size, and leverage `BTreeEx` (or import from the algorithms module) when you need the heavier helpers.
 
 Ukraine is still under attack
 -----------------------------
@@ -96,8 +96,8 @@ Features
 
 ### Benchmarks and size tracking
 
-- Run `npm run benchmark` (see `bench/README.md`) to execute the existing comparison harness, which now exercises both the core tree and the diff-enabled advanced build.
-- Run `npm run size-report` (see `size/README.md`) after `npm run build` to print raw/minified/gzip sizes for `core`, `advanced`, and the default entry point.
+- Run `npm run benchmark` (see `bench/README.md`) to execute the existing comparison harness, which now exercises both the core tree and the diff-enabled extended build.
+- Run `npm run size-report` (see `size/README.md`) after `npm run build` to print raw/minified/gzip sizes for `core`, `extended`, and the default entry point.
 
 ### Additional operations supported on this B+ tree ###
 

@@ -15,10 +15,10 @@
       "import": "./core/index.js",
       "require": "./core/index.js"
     },
-    "./advanced": {
-      "types": "./advanced/index.d.ts",
-      "import": "./advanced/index.js",
-      "require": "./advanced/index.js"
+    "./extended": {
+      "types": "./extended/index.d.ts",
+      "import": "./extended/index.js",
+      "require": "./extended/index.js"
     },
     "./algorithms": {
       "types": "./algorithms/index.d.ts",
@@ -42,8 +42,8 @@
     "b+tree.min.js",
     "core/*.js",
     "core/*.d.ts",
-    "advanced/*.js",
-    "advanced/*.d.ts",
+    "extended/*.js",
+    "extended/*.d.ts",
     "algorithms/*.js",
     "algorithms/*.d.ts",
     "internal/*.js",

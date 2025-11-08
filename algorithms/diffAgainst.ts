@@ -1,7 +1,7 @@
 import BTree from '../core/index';
 import { BNode, BNodeInternal } from '../internal/nodes';
 import { check } from '../internal/assert';
-import type { AdvancedTreeInternals } from '../internal/treeInternals';
+import type { ExtendedTreeInternals } from '../internal/treeInternals';
 
 type DiffCursor<K, V> = {
   height: number;
@@ -11,8 +11,8 @@ type DiffCursor<K, V> = {
   currentKey: K;
 };
 
-const getInternals = <K, V>(tree: BTree<K, V>): AdvancedTreeInternals<K, V> => {
-  return tree as unknown as AdvancedTreeInternals<K, V>;
+const getInternals = <K, V>(tree: BTree<K, V>): ExtendedTreeInternals<K, V> => {
+  return tree as unknown as ExtendedTreeInternals<K, V>;
 };
 
 export function diffAgainst<K, V, R>(
@@ -142,7 +142,7 @@ const stepToEnd = <K, V, R>(
 
 const makeDiffCursor = <K, V>(
   tree: BTree<K, V>,
-  internals: AdvancedTreeInternals<K, V>
+  internals: ExtendedTreeInternals<K, V>
 ): DiffCursor<K, V> => {
   const root = internals._root;
   return {

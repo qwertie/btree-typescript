@@ -1,6 +1,6 @@
 #!/usr/bin/env ts-node
 import BTree, {IMap} from '.';
-import AdvancedBTree from './advanced';
+import BTreeEx from './extended';
 import SortedArray from './sorted-array';
 // Note: The `bintrees` package also includes a `BinTree` type which turned
 // out to be an unbalanced binary tree. It is faster than `RBTree` for
@@ -321,12 +321,12 @@ console.log("### Delta between B+ trees");
 
   sizes.forEach((size, i) => {
     for (let j = i; j < sizes.length; j++) {
-      const tree = new AdvancedBTree();
+      const tree = new BTreeEx();
       for (let k of makeArray(size, true))
         tree.set(k, k * 10);
 
       const otherSize = sizes[j];
-      const otherTree = new AdvancedBTree();
+      const otherTree = new BTreeEx();
       for (let k of makeArray(otherSize, true))
         otherTree.set(k, k * 10);
 
@@ -341,7 +341,7 @@ console.log("### Delta between B+ trees");
     for (let j = 0; j < sizes.length; j++) {
       const otherSize = sizes[j];
       const keys = makeArray(size + otherSize, true);
-      const tree = new AdvancedBTree();
+      const tree = new BTreeEx();
       for (let k of keys.slice(0, size))
         tree.set(k, k * 10);
       

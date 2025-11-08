@@ -5,7 +5,7 @@ const uglify = require('uglify-js');
 
 const targets = [
   { label: 'core', file: path.resolve(__dirname, '../core/index.js') },
-  { label: 'advanced', file: path.resolve(__dirname, '../advanced/index.js') },
+  { label: 'extended', file: path.resolve(__dirname, '../extended/index.js') },
   { label: 'algorithms', file: path.resolve(__dirname, '../algorithms/index.js') },
   { label: 'full', file: path.resolve(__dirname, '../b+tree.js') }
 ];
