@@ -8,7 +8,7 @@
   "scripts": {
     "test": "tsc && echo //ts-jest-issue-657 >interfaces.js && jest",
     "build": "tsc && npm run minify",
-    "minify": "uglifyjs -cm -o b+tree.min.js -- b+tree.js",
+    "minify": "node scripts/minify.js",
     "prepare": "npm run build",
     "safePublish": "npm run build && testpack && npm publish",
     "benchmark": "npm run build && node benchmarks.js"
@@ -19,8 +19,10 @@
     "b+tree.min.js",
     "extended.js",
     "extended.d.ts",
+    "extended.min.js",
     "diffAgainst.js",
     "diffAgainst.d.ts",
+    "diffAgainst.min.js",
     "sorted-array.js",
     "sorted-array.d.ts",
     "interfaces.d.ts",
