@@ -354,7 +354,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    *  to where the key would have been stored are cloned even when the key
    *  turns out not to exist and the collection is unchanged.
    */
-  without(key: K, returnThisIfUnchanged?: boolean): BTree<K,V> {
+  without(key: K, returnThisIfUnchanged?: boolean): this {
     return this.withoutRange(key, key, true, returnThisIfUnchanged);
   }
 
@@ -364,13 +364,13 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    *  node(s) leading to where the key would have been stored are cloned
    *  even when the key turns out not to exist.
    */
-  withoutKeys(keys: K[], returnThisIfUnchanged?: boolean): BTree<K,V> {
+  withoutKeys(keys: K[], returnThisIfUnchanged?: boolean): this {
     let nu = this.clone();
     return nu.deleteKeys(keys) || !returnThisIfUnchanged ? nu : this;
   }
 
   /** Returns a copy of the tree with the specified range of keys removed. */
-  withoutRange(low: K, high: K, includeHigh: boolean, returnThisIfUnchanged?: boolean): BTree<K,V> {
+  withoutRange(low: K, high: K, includeHigh: boolean, returnThisIfUnchanged?: boolean): this {
     let nu = this.clone();
     if (nu.deleteRange(low, high, includeHigh) === 0 && returnThisIfUnchanged)
       return this;
@@ -379,7 +379,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
 
   /** Returns a copy of the tree with pairs removed whenever the callback 
    *  function returns false. `where()` is a synonym for this method. */
-  filter(callback: (k:K,v:V,counter:number) => boolean, returnThisIfUnchanged?: boolean): BTree<K,V> {
+  filter(callback: (k:K,v:V,counter:number) => boolean, returnThisIfUnchanged?: boolean): this {
     var nu = this.greedyClone();
     var del: any;
     nu.editAll((k,v,i) => {
@@ -611,12 +611,12 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    *  nodes that are shared (or potentially shared) between the two
    *  copies are cloned so that the changes do not affect other copies.
    *  This is known as copy-on-write behavior, or "lazy copying". */
-  clone(): BTree<K,V> {
+  clone(): this {
     this._root.isShared = true;
     var result = new BTree<K,V>(undefined, this._compare, this._maxNodeSize);
     result._root = this._root;
     result._size = this._size;
-    return result;
+    return result as this;
   }
 
   /** Performs a greedy clone, immediately duplicating any nodes that are 
@@ -624,11 +624,11 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    *  additional nodes as shared.
    *  @param force Clone all nodes, even shared ones.
    */
-  greedyClone(force?: boolean): BTree<K,V> {
+  greedyClone(force?: boolean): this {
     var result = new BTree<K,V>(undefined, this._compare, this._maxNodeSize);
     result._root = this._root.greedyClone(force);
     result._size = this._size;
-    return result;
+    return result as this;
   }
 
   /** Gets an array filled with the contents of the tree, sorted by key */

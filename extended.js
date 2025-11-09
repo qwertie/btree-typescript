@@ -52,18 +52,6 @@ var BTreeEx = /** @class */ (function (_super) {
     BTreeEx.prototype.withKeys = function (keys, returnThisIfUnchanged) {
         return _super.prototype.withKeys.call(this, keys, returnThisIfUnchanged);
     };
-    BTreeEx.prototype.without = function (key, returnThisIfUnchanged) {
-        return _super.prototype.without.call(this, key, returnThisIfUnchanged);
-    };
-    BTreeEx.prototype.withoutKeys = function (keys, returnThisIfUnchanged) {
-        return _super.prototype.withoutKeys.call(this, keys, returnThisIfUnchanged);
-    };
-    BTreeEx.prototype.withoutRange = function (low, high, includeHigh, returnThisIfUnchanged) {
-        return _super.prototype.withoutRange.call(this, low, high, includeHigh, returnThisIfUnchanged);
-    };
-    BTreeEx.prototype.filter = function (callback, returnThisIfUnchanged) {
-        return _super.prototype.filter.call(this, callback, returnThisIfUnchanged);
-    };
     BTreeEx.prototype.mapValues = function (callback) {
         return _super.prototype.mapValues.call(this, callback);
     };
