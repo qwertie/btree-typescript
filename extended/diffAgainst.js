@@ -2,9 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.diffAgainst = void 0;
 var b_tree_1 = require("../b+tree");
-var getInternals = function (tree) {
-    return tree;
-};
 /**
  * Computes the differences between `treeThis` and `treeOther`.
  * For efficiency, the diff is returned via invocations of supplied handlers.
@@ -19,8 +16,8 @@ var getInternals = function (tree) {
  * @param different Callback invoked for all keys with differing values.
  */
 function diffAgainst(treeThis, treeOther, onlyThis, onlyOther, different) {
-    var thisInternals = getInternals(treeThis);
-    var otherInternals = getInternals(treeOther);
+    var thisInternals = treeThis;
+    var otherInternals = treeOther;
     if (otherInternals._compare !== thisInternals._compare) {
         throw new Error('Tree comparators are not the same.');
     }

@@ -29,10 +29,6 @@ export type ExtendedTreeInternals<K, V> = {
   _compare: (a: K, b: K) => number;
 };
 
-const getInternals = <K, V>(tree: BTree<K, V>): ExtendedTreeInternals<K, V> => {
-  return tree as unknown as ExtendedTreeInternals<K, V>;
-};
-
 /**
  * Computes the differences between `treeThis` and `treeOther`.
  * For efficiency, the diff is returned via invocations of supplied handlers.
@@ -53,8 +49,8 @@ export function diffAgainst<K, V, R>(
   onlyOther?: (k: K, v: V) => { break?: R } | void,
   different?: (k: K, vThis: V, vOther: V) => { break?: R } | void
 ): R | undefined {
-  const thisInternals = getInternals(treeThis);
-  const otherInternals = getInternals(treeOther);
+  const thisInternals = treeThis as unknown as ExtendedTreeInternals<K, V>;
+  const otherInternals = treeOther as unknown as ExtendedTreeInternals<K, V>;
   if (otherInternals._compare !== thisInternals._compare) {
     throw new Error('Tree comparators are not the same.');
   }
