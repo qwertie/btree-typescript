@@ -205,19 +205,19 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      *  to where the key would have been stored are cloned even when the key
      *  turns out not to exist and the collection is unchanged.
      */
-    without(key: K, returnThisIfUnchanged?: boolean): BTree<K, V>;
+    without(key: K, returnThisIfUnchanged?: boolean): this;
     /** Returns a copy of the tree with the specified keys removed.
      * @param returnThisIfUnchanged if true, returns this if none of the keys
      *  existed. Performance note: due to the architecture of this class,
      *  node(s) leading to where the key would have been stored are cloned
      *  even when the key turns out not to exist.
      */
-    withoutKeys(keys: K[], returnThisIfUnchanged?: boolean): BTree<K, V>;
+    withoutKeys(keys: K[], returnThisIfUnchanged?: boolean): this;
     /** Returns a copy of the tree with the specified range of keys removed. */
-    withoutRange(low: K, high: K, includeHigh: boolean, returnThisIfUnchanged?: boolean): BTree<K, V>;
+    withoutRange(low: K, high: K, includeHigh: boolean, returnThisIfUnchanged?: boolean): this;
     /** Returns a copy of the tree with pairs removed whenever the callback
      *  function returns false. `where()` is a synonym for this method. */
-    filter(callback: (k: K, v: V, counter: number) => boolean, returnThisIfUnchanged?: boolean): BTree<K, V>;
+    filter(callback: (k: K, v: V, counter: number) => boolean, returnThisIfUnchanged?: boolean): this;
     /** Returns a copy of the tree with all values altered by a callback function. */
     mapValues<R>(callback: (v: V, k: K, counter: number) => R): BTree<K, R>;
     /** Performs a reduce operation like the `reduce` method of `Array`.
@@ -254,42 +254,6 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      */
     entriesReversed(highestKey?: K, reusedArray?: (K | V)[], skipHighest?: boolean): IterableIterator<[K, V]>;
     private findPath;
-    /**
-     * Computes the differences between `this` and `other`.
-     * For efficiency, the diff is returned via invocations of supplied handlers.
-     * The computation is optimized for the case in which the two trees have large amounts
-     * of shared data (obtained by calling the `clone` or `with` APIs) and will avoid
-     * any iteration of shared state.
-     * The handlers can cause computation to early exit by returning {break: R}.
-     * Neither of the collections should be changed during the comparison process (in your callbacks), as this method assumes they will not be mutated.
-     * @param other The tree to compute a diff against.
-     * @param onlyThis Callback invoked for all keys only present in `this`.
-     * @param onlyOther Callback invoked for all keys only present in `other`.
-     * @param different Callback invoked for all keys with differing values.
-     */
-    diffAgainst<R>(other: BTree<K, V>, onlyThis?: (k: K, v: V) => {
-        break?: R;
-    } | void, onlyOther?: (k: K, v: V) => {
-        break?: R;
-    } | void, different?: (k: K, vThis: V, vOther: V) => {
-        break?: R;
-    } | void): R | undefined;
-    private static finishCursorWalk;
-    private static stepToEnd;
-    private static makeDiffCursor;
-    /**
-     * Advances the cursor to the next step in the walk of its tree.
-     * Cursors are walked backwards in sort order, as this allows them to leverage maxKey() in order to be compared in O(1).
-     * @param cursor The cursor to step
-     * @param stepToNode If true, the cursor will be advanced to the next node (skipping values)
-     * @returns true if the step was completed and false if the step would have caused the cursor to move beyond the end of the tree.
-     */
-    private static step;
-    /**
-     * Compares the two cursors. Returns a value indicating which cursor is ahead in a walk.
-     * Note that cursors are advanced in reverse sorting order.
-     */
-    private static compare;
     /** Returns a new iterator for iterating the keys of each pair in ascending order.
      *  @param firstKey: Minimum key to include in the output. */
     keys(firstKey?: K): IterableIterator<K>;
@@ -307,13 +271,13 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      *  nodes that are shared (or potentially shared) between the two
      *  copies are cloned so that the changes do not affect other copies.
      *  This is known as copy-on-write behavior, or "lazy copying". */
-    clone(): BTree<K, V>;
+    clone(): this;
     /** Performs a greedy clone, immediately duplicating any nodes that are
      *  not currently marked as shared, in order to avoid marking any
      *  additional nodes as shared.
      *  @param force Clone all nodes, even shared ones.
      */
-    greedyClone(force?: boolean): BTree<K, V>;
+    greedyClone(force?: boolean): this;
     /** Gets an array filled with the contents of the tree, sorted by key */
     toArray(maxLength?: number): [K, V][];
     /** Gets an array of all keys, sorted */
