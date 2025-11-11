@@ -204,19 +204,19 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      *  to where the key would have been stored are cloned even when the key
      *  turns out not to exist and the collection is unchanged.
      */
-    without(key: K, returnThisIfUnchanged?: boolean): BTree<K, V>;
+    without(key: K, returnThisIfUnchanged?: boolean): this;
     /** Returns a copy of the tree with the specified keys removed.
      * @param returnThisIfUnchanged if true, returns this if none of the keys
      *  existed. Performance note: due to the architecture of this class,
      *  node(s) leading to where the key would have been stored are cloned
      *  even when the key turns out not to exist.
      */
-    withoutKeys(keys: K[], returnThisIfUnchanged?: boolean): BTree<K, V>;
+    withoutKeys(keys: K[], returnThisIfUnchanged?: boolean): this;
     /** Returns a copy of the tree with the specified range of keys removed. */
-    withoutRange(low: K, high: K, includeHigh: boolean, returnThisIfUnchanged?: boolean): BTree<K, V>;
+    withoutRange(low: K, high: K, includeHigh: boolean, returnThisIfUnchanged?: boolean): this;
     /** Returns a copy of the tree with pairs removed whenever the callback
      *  function returns false. `where()` is a synonym for this method. */
-    filter(callback: (k: K, v: V, counter: number) => boolean, returnThisIfUnchanged?: boolean): BTree<K, V>;
+    filter(callback: (k: K, v: V, counter: number) => boolean, returnThisIfUnchanged?: boolean): this;
     /** Returns a copy of the tree with all values altered by a callback function. */
     mapValues<R>(callback: (v: V, k: K, counter: number) => R): BTree<K, R>;
     /** Performs a reduce operation like the `reduce` method of `Array`.
@@ -253,144 +253,6 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      */
     entriesReversed(highestKey?: K, reusedArray?: (K | V)[], skipHighest?: boolean): IterableIterator<[K, V]>;
     private findPath;
-    /**
-     * Intersects this tree with `other`, calling the supplied `intersection` callback for each intersecting key/value pair.
-     * Neither tree is modified.
-     * @param other The other tree to intersect with this one.
-     * @param intersection Called for keys that appear in both trees.
-     * @description Complexity is bounded O(N + M) time and O(log(N + M)) for allocations.
-     * However, time is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
-     * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
-     * keys with significant numbers of non-overlapping key ranges it is O(log(N + M) * D) which is much faster.
-     * The algorithm achieves this additional non-linear bound by skipping over non-intersecting subtrees entirely.
-     * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than calling `toArray`
-     * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
-     */
-    intersect(other: BTree<K, V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void;
-    /**
-     * Efficiently merges this tree with `other`, reusing subtrees wherever possible.
-     * Neither input tree is modified.
-     * @param other The other tree to merge into this one.
-     * @param merge Called for keys that appear in both trees. Return the desired value, or
-     *        `undefined` to omit the key from the result.
-     * @returns A new BTree that contains the merged key/value pairs.
-     * @description Complexity is bounded O(N + M) for both time and allocations.
-     * However, it is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
-     * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
-     * keys with significant numbers of non-overlapping key ranges it is O(log(N + M) * D) which is much faster.
-     * The algorithm achieves this additional non-linear bound by skipping over non-intersecting subtrees entirely.
-     * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than cloning `this`
-     * and inserting the contents of `other` into the clone.
-     */
-    merge(other: BTree<K, V>, merge: (key: K, leftValue: V, rightValue: V) => V | undefined): BTree<K, V>;
-    /**
-     * Processes one side (left or right) of the disjoint subtree set during a merge operation.
-     * Merges each subtree in the disjoint set from start to end (exclusive) into the given spine.
-     */
-    private static processSide;
-    /**
-     * Append a subtree at a given depth on the chosen side; cascade splits upward if needed.
-     * All un-propagated sizes must have already been applied to the spine up to the end of any cascading expansions.
-     * This method guarantees that the size of the inserted subtree will not propagate upward beyond the insertion point.
-     * Returns a new root if the root was split, otherwise undefined.
-     */
-    private static appendAndCascade;
-    /**
-     * Clone along the spine from [isSharedFrontierDepth to depthTo] inclusive so path is safe to mutate.
-     * Short-circuits if first shared node is deeper than depthTo (the insertion depth).
-     */
-    private static ensureNotShared;
-    /**
-     * Propagates size updates and updates max keys for nodes in (isSharedFrontierDepth, depthTo)
-     */
-    private static updateSizeAndMax;
-    /**
-     * Update a spine (frontier) from a specific depth down, inclusive.
-     * Extends the frontier array if it is not already as long as the frontier.
-     */
-    private static updateFrontier;
-    /**
-     * Find the first ancestor (starting at insertionDepth) with capacity.
-     */
-    private static findCascadeEndDepth;
-    /**
-     * Inserts the child without updating cached size counts.
-     */
-    private static insertNoCount;
-    private static getLeftmostIndex;
-    private static getRightmostIndex;
-    private static getRightInsertionIndex;
-    private static splitOffRightSide;
-    private static splitOffLeftSide;
-    private static updateRightMax;
-    private static noop;
-    /**
-     * Decomposes two trees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
-     * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
-     * The algorithm is a parallel tree walk using two cursors. The trailing cursor (behind in key space) is walked forward
-     * until it is at or after the leading cursor. As it does this, any whole nodes or subtrees it passes are guaranteed to
-     * be disjoint. This is true because the leading cursor was also previously walked in this way, and is thus pointing to
-     * the first key at or after the trailing cursor's previous position.
-     * The cursor walk is efficient, meaning it skips over disjoint subtrees entirely rather than visiting every leaf.
-     */
-    private static decompose;
-    private static alternatingCount;
-    private static alternatingGetFirst;
-    private static alternatingGetSecond;
-    private static alternatingPush;
-    /**
-     * Walks the cursor forward by one key.
-     * Should only be called to advance cursors that started equal.
-     * Returns true if end-of-tree was reached (cursor not structurally mutated).
-     */
-    private static moveForwardOne;
-    /**
-     * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
-     * Returns a boolean indicating if end-of-tree was reached (cursor not structurally mutated).
-     * Also returns a boolean indicating if the target key was landed on exactly.
-     */
-    private static moveTo;
-    /**
-     * Create a cursor pointing to the leftmost key of the supplied tree.
-     */
-    private static createCursor;
-    private static getKey;
-    /**
-     * Computes the differences between `this` and `other`.
-     * For efficiency, the diff is returned via invocations of supplied handlers.
-     * The computation is optimized for the case in which the two trees have large amounts
-     * of shared data (obtained by calling the `clone` or `with` APIs) and will avoid
-     * any iteration of shared state.
-     * The handlers can cause computation to early exit by returning {break: R}.
-     * Neither of the collections should be changed during the comparison process (in your callbacks), as this method assumes they will not be mutated.
-     * @param other The tree to compute a diff against.
-     * @param onlyThis Callback invoked for all keys only present in `this`.
-     * @param onlyOther Callback invoked for all keys only present in `other`.
-     * @param different Callback invoked for all keys with differing values.
-     */
-    diffAgainst<R>(other: BTree<K, V>, onlyThis?: (k: K, v: V) => {
-        break?: R;
-    } | void, onlyOther?: (k: K, v: V) => {
-        break?: R;
-    } | void, different?: (k: K, vThis: V, vOther: V) => {
-        break?: R;
-    } | void): R | undefined;
-    private static finishCursorWalk;
-    private static stepToEnd;
-    private static makeDiffCursor;
-    /**
-     * Advances the cursor to the next step in the walk of its tree.
-     * Cursors are walked backwards in sort order, as this allows them to leverage maxKey() in order to be compared in O(1).
-     * @param cursor The cursor to step
-     * @param stepToNode If true, the cursor will be advanced to the next node (skipping values)
-     * @returns true if the step was completed and false if the step would have caused the cursor to move beyond the end of the tree.
-     */
-    private static step;
-    /**
-     * Compares the two cursors. Returns a value indicating which cursor is ahead in a walk.
-     * Note that cursors are advanced in reverse sorting order.
-     */
-    private static compare;
     /** Returns a new iterator for iterating the keys of each pair in ascending order.
      *  @param firstKey: Minimum key to include in the output. */
     keys(firstKey?: K): IterableIterator<K>;
@@ -408,13 +270,13 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      *  nodes that are shared (or potentially shared) between the two
      *  copies are cloned so that the changes do not affect other copies.
      *  This is known as copy-on-write behavior, or "lazy copying". */
-    clone(): BTree<K, V>;
+    clone(): this;
     /** Performs a greedy clone, immediately duplicating any nodes that are
      *  not currently marked as shared, in order to avoid marking any
      *  additional nodes as shared.
      *  @param force Clone all nodes, even shared ones.
      */
-    greedyClone(force?: boolean): BTree<K, V>;
+    greedyClone(force?: boolean): this;
     /** Gets an array filled with the contents of the tree, sorted by key */
     toArray(maxLength?: number): [K, V][];
     /** Gets an array of all keys, sorted */
