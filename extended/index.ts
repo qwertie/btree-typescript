@@ -22,24 +22,6 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
     return result as this;
   }
 
-  with(key: K): BTreeEx<K, V | undefined>;
-  with<V2>(key: K, value: V2, overwrite?: boolean): BTreeEx<K, V | V2>;
-  with<V2>(key: K, value?: V2, overwrite?: boolean): BTreeEx<K, V | V2 | undefined> {
-    return super.with(key, value as V2, overwrite) as BTreeEx<K, V | V2 | undefined>;
-  }
-
-  withPairs<V2>(pairs: [K, V | V2][], overwrite: boolean): BTreeEx<K, V | V2> {
-    return super.withPairs(pairs, overwrite) as BTreeEx<K, V | V2>;
-  }
-
-  withKeys(keys: K[], returnThisIfUnchanged?: boolean): BTreeEx<K, V | undefined> {
-    return super.withKeys(keys, returnThisIfUnchanged) as BTreeEx<K, V | undefined>;
-  }
-
-  mapValues<R>(callback: (v: V, k: K, counter: number) => R): BTreeEx<K, R> {
-    return super.mapValues(callback) as BTreeEx<K, R>;
-  }
-
   diffAgainst<R>(
     other: BTree<K, V>,
     onlyThis?: (k: K, v: V) => { break?: R } | void,
@@ -48,6 +30,15 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
   ): R | undefined {
     return diffAgainstAlgorithm(this, other, onlyThis, onlyOther, different);
   }
+}
+
+export interface BTreeEx<K = any, V = any> {
+  with(key: K): BTreeEx<K, V | undefined>;
+  with<V2>(key: K, value: V2, overwrite?: boolean): BTreeEx<K, V | V2>;
+  with<V2>(key: K, value?: V2, overwrite?: boolean): BTreeEx<K, V | V2 | undefined>;
+  withPairs<V2>(pairs: [K, V | V2][], overwrite: boolean): BTreeEx<K, V | V2>;
+  withKeys(keys: K[], returnThisIfUnchanged?: boolean): BTreeEx<K, V | undefined>;
+  mapValues<R>(callback: (v: V, k: K, counter: number) => R): BTreeEx<K, R>;
 }
 
 export default BTreeEx;

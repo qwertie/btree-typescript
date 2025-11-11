@@ -43,18 +43,6 @@ var BTreeEx = /** @class */ (function (_super) {
         target._size = source._size;
         return result;
     };
-    BTreeEx.prototype.with = function (key, value, overwrite) {
-        return _super.prototype.with.call(this, key, value, overwrite);
-    };
-    BTreeEx.prototype.withPairs = function (pairs, overwrite) {
-        return _super.prototype.withPairs.call(this, pairs, overwrite);
-    };
-    BTreeEx.prototype.withKeys = function (keys, returnThisIfUnchanged) {
-        return _super.prototype.withKeys.call(this, keys, returnThisIfUnchanged);
-    };
-    BTreeEx.prototype.mapValues = function (callback) {
-        return _super.prototype.mapValues.call(this, callback);
-    };
     BTreeEx.prototype.diffAgainst = function (other, onlyThis, onlyOther, different) {
         return (0, diffAgainst_1.diffAgainst)(this, other, onlyThis, onlyOther, different);
     };
