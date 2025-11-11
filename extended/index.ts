@@ -1,5 +1,5 @@
 import BTree from '../b+tree';
-import type { ExtendedTreeInternals } from './treeInternals';
+import type { ExtendedTreeInternals } from './shared';
 import { diffAgainst as diffAgainstAlgorithm } from './diffAgainst';
 
 export class BTreeEx<K = any, V = any> extends BTree<K, V> {

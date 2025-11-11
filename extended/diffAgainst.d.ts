@@ -19,5 +19,5 @@ export declare function diffAgainst<K, V, R>(treeThis: BTree<K, V>, treeOther: B
 } | void, different?: (k: K, vThis: V, vOther: V) => {
     break?: R;
 } | void): R | undefined;
-export type { ExtendedTreeInternals } from './treeInternals';
+export type { ExtendedTreeInternals } from './shared';
 export default diffAgainst;
