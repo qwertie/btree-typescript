@@ -429,7 +429,7 @@ Benchmarks (in milliseconds for integer keys/values)
 Version history
 ---------------
 
-### v1.9.0 ###
+### v2.0.0 ###
 
 - Introduced the new `sorted-btree/extended` entry point that holds `BTreeEx`. The default `sorted-btree` export stays lean (tree-shakable) while the extended build keeps parity with the old API surface.
 - Added a dedicated `sorted-btree/extended/diffAgainst` entry so apps can import just the standalone diff helper without pulling in `BTreeEx`.
