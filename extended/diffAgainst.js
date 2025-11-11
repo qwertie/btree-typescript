@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.diffAgainst = void 0;
-var b_tree_1 = require("./b+tree");
+var b_tree_1 = require("../b+tree");
 var getInternals = function (tree) {
     return tree;
 };

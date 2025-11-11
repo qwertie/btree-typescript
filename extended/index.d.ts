@@ -1,4 +1,4 @@
-import BTree from './b+tree';
+import BTree from '../b+tree';
 export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
     clone(): this;
     greedyClone(force?: boolean): this;

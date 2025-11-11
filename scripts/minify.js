@@ -5,8 +5,8 @@ const UglifyJS = require('uglify-js');
 
 const targets = [
   { input: 'b+tree.js', output: 'b+tree.min.js' },
-  { input: 'extended.js', output: 'extended.min.js' },
-  { input: 'diffAgainst.js', output: 'diffAgainst.min.js' }
+  { input: path.join('extended', 'index.js'), output: path.join('extended', 'index.min.js') },
+  { input: path.join('extended', 'diffAgainst.js'), output: path.join('extended', 'diffAgainst.min.js') }
 ];
 
 for (const { input, output } of targets) {

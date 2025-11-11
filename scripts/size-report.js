@@ -6,8 +6,8 @@ const zlib = require('zlib');
 const rootDir = path.resolve(__dirname, '..');
 const entryPoints = [
   { name: 'btree', raw: 'b+tree.js', min: 'b+tree.min.js' },
-  { name: 'btreeex', raw: 'extended.js', min: 'extended.min.js' },
-  { name: 'diffAgainst', raw: 'diffAgainst.js', min: 'diffAgainst.min.js' }
+  { name: 'btreeex', raw: path.join('extended', 'index.js'), min: path.join('extended', 'index.min.js') },
+  { name: 'diffAgainst', raw: path.join('extended', 'diffAgainst.js'), min: path.join('extended', 'diffAgainst.min.js') }
 ];
 
 function fileSize(relativePath) {

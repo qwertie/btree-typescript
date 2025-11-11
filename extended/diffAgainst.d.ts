@@ -1,5 +1,5 @@
-import BTree from './b+tree';
-import { BNode } from './b+tree';
+import BTree from '../b+tree';
+import { BNode } from '../b+tree';
 export declare type ExtendedTreeInternals<K, V> = {
     _root: BNode<K, V>;
     _size: number;

@@ -1,9 +1,9 @@
-import BTree from './b+tree';
+import BTree from '../b+tree';
 import type { ExtendedTreeInternals } from './diffAgainst';
 import { diffAgainst as diffAgainstAlgorithm } from './diffAgainst';
 
 export class BTreeEx<K = any, V = any> extends BTree<K, V> {
-  clone(): this{
+  clone(): this {
     const source = this as unknown as ExtendedTreeInternals<K, V>;
     source._root.isShared = true;
     const result = new BTreeEx<K, V>(undefined, this._compare, this._maxNodeSize);

@@ -15,7 +15,7 @@ The default export gives you the core tree and functionality. When you need the 
 
 ```ts
 import BTreeEx from 'sorted-btree/extended';
-import { diffAgainst } from 'sorted-btree/diffAgainst';
+import { diffAgainst } from 'sorted-btree/extended/diffAgainst';
 ```
 
 `BTreeEx` is a drop-in subclass of `BTree` that keeps advanced helpers on the instance, while the standalone `diffAgainst` entry point lets bundlers include only that function when you don't need the rest of the extended surface.
@@ -110,7 +110,7 @@ Features
 - Get largest key/pair that is lower than `k`: `t.nextLowerKey(k)`, `t.nextLowerPair(k)`
 - Freeze to prevent modifications: `t.freeze()` (you can also `t.unfreeze()`)
 - Fast clone: `t.clone()`
-- Compute a diff between two trees (quickly skipping shared subtrees): `BTreeEx#diffAgainst(otherTree, ...)` or the standalone `diffAgainst(treeA, treeB, ...)` helper from `sorted-btree/diffAgainst` (breaking change in v1.9: the default `BTree` no longer includes `diffAgainst`)
+- Compute a diff between two trees (quickly skipping shared subtrees): `BTreeEx#diffAgainst(otherTree, ...)` or the standalone `diffAgainst(treeA, treeB, ...)` helper from `sorted-btree/extended/diffAgainst` (breaking change in v1.9: the default `BTree` no longer includes `diffAgainst`)
 - For more information, **see [full documentation](https://github.com/qwertie/btree-typescript/blob/master/b%2Btree.ts) in the source code.**
 
 **Note:** Confusingly, the ES6 `Map.forEach(c)` method calls `c(value,key)` instead of `c(key,value)`, in contrast to other methods such as `set()` and `entries()` which put the key first. I can only assume that they reversed the order on the hypothesis that users would usually want to examine values and ignore keys. BTree's `forEach()` therefore works the same way, but there is a second method `.forEachPair((key,value)=>{...})` which sends you the key first and the value second; this method is slightly faster because it is the "native" for-each method for this class.
@@ -432,7 +432,7 @@ Version history
 ### v1.9.0 ###
 
 - Introduced the new `sorted-btree/extended` entry point that holds `BTreeEx`. The default `sorted-btree` export stays lean (tree-shakable) while the extended build keeps parity with the old API surface.
-- Added a dedicated `sorted-btree/diffAgainst` entry so apps can import just the standalone diff helper without pulling in `BTreeEx`.
+- Added a dedicated `sorted-btree/extended/diffAgainst` entry so apps can import just the standalone diff helper without pulling in `BTreeEx`.
 - **Breaking change:** `diffAgainst` is no longer available on the default `BTree` export. Switch to `BTreeEx#diffAgainst` (imported from `sorted-btree/extended`) or the standalone `diffAgainst(treeA, treeB, ...)` helper to continue using the diff API.
 
 ### v1.8.0 ###

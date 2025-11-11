@@ -1,6 +1,6 @@
 import BTree, {IMap, defaultComparator, simpleComparator} from './b+tree';
 import BTreeEx from './extended';
-import diffAgainst from './diffAgainst';
+import diffAgainst from './extended/diffAgainst';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
 

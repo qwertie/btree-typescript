@@ -1,5 +1,5 @@
-import BTree from './b+tree';
-import { BNode, BNodeInternal, check } from './b+tree';
+import BTree from '../b+tree';
+import { BNode, BNodeInternal, check } from '../b+tree';
 
 /**
  * A walkable pointer into a BTree for computing efficient diffs between trees with shared data.
