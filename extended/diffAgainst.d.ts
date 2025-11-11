@@ -1,11 +1,4 @@
 import BTree from '../b+tree';
-import { BNode } from '../b+tree';
-export declare type ExtendedTreeInternals<K, V> = {
-    _root: BNode<K, V>;
-    _size: number;
-    _maxNodeSize: number;
-    _compare: (a: K, b: K) => number;
-};
 /**
  * Computes the differences between `treeThis` and `treeOther`.
  * For efficiency, the diff is returned via invocations of supplied handlers.
@@ -26,4 +19,5 @@ export declare function diffAgainst<K, V, R>(treeThis: BTree<K, V>, treeOther: B
 } | void, different?: (k: K, vThis: V, vOther: V) => {
     break?: R;
 } | void): R | undefined;
+export type { ExtendedTreeInternals } from './treeInternals';
 export default diffAgainst;

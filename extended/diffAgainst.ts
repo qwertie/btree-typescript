@@ -1,5 +1,6 @@
 import BTree from '../b+tree';
 import { BNode, BNodeInternal, check } from '../b+tree';
+import type { ExtendedTreeInternals } from './treeInternals';
 
 /**
  * A walkable pointer into a BTree for computing efficient diffs between trees with shared data.
@@ -20,13 +21,6 @@ type DiffCursor<K, V> = {
   levelIndices: number[];
   leaf: BNode<K, V> | undefined;
   currentKey: K;
-};
-
-export type ExtendedTreeInternals<K, V> = {
-  _root: BNode<K, V>;
-  _size: number;
-  _maxNodeSize: number;
-  _compare: (a: K, b: K) => number;
 };
 
 /**
@@ -300,4 +294,5 @@ const compareDiffCursors = <K, V>(
   return depthANormalized - depthBNormalized;
 };
 
+export type { ExtendedTreeInternals } from './treeInternals';
 export default diffAgainst;
