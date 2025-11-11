@@ -1,6 +1,6 @@
 import BTree from '../b+tree';
 import { BNode, BNodeInternal, check } from '../b+tree';
-import type { ExtendedTreeInternals } from './shared';
+import type { BTreeWithInternals } from './shared';
 
 /**
  * A walkable pointer into a BTree for computing efficient diffs between trees with shared data.
@@ -24,42 +24,42 @@ type DiffCursor<K, V> = {
 };
 
 /**
- * Computes the differences between `treeThis` and `treeOther`.
+ * Computes the differences between `treeA` and `treeB`.
  * For efficiency, the diff is returned via invocations of supplied handlers.
  * The computation is optimized for the case in which the two trees have large amounts of shared data
  * (obtained by calling the `clone` or `with` APIs) and will avoid any iteration of shared state.
  * The handlers can cause computation to early exit by returning `{ break: R }`.
  * Neither collection should be mutated during the comparison (inside your callbacks), as this method assumes they remain stable.
- * @param treeThis The tree whose differences will be reported via the callbacks.
- * @param treeOther The tree to compute a diff against.
- * @param onlyThis Callback invoked for all keys only present in `treeThis`.
- * @param onlyOther Callback invoked for all keys only present in `treeOther`.
+ * @param treeA The tree whose differences will be reported via the callbacks.
+ * @param treeB The tree to compute a diff against.
+ * @param onlyA Callback invoked for all keys only present in `treeA`.
+ * @param onlyB Callback invoked for all keys only present in `treeB`.
  * @param different Callback invoked for all keys with differing values.
  */
 export function diffAgainst<K, V, R>(
-  treeThis: BTree<K, V>,
-  treeOther: BTree<K, V>,
-  onlyThis?: (k: K, v: V) => { break?: R } | void,
-  onlyOther?: (k: K, v: V) => { break?: R } | void,
+  _treeA: BTree<K, V>,
+  _treeB: BTree<K, V>,
+  onlyA?: (k: K, v: V) => { break?: R } | void,
+  onlyB?: (k: K, v: V) => { break?: R } | void,
   different?: (k: K, vThis: V, vOther: V) => { break?: R } | void
 ): R | undefined {
-  const thisInternals = treeThis as unknown as ExtendedTreeInternals<K, V>;
-  const otherInternals = treeOther as unknown as ExtendedTreeInternals<K, V>;
-  if (otherInternals._compare !== thisInternals._compare) {
+  const treeA = _treeA as unknown as BTreeWithInternals<K, V>;
+  const treeB = _treeB as unknown as BTreeWithInternals<K, V>;
+  if (treeB._compare !== treeA._compare) {
     throw new Error('Tree comparators are not the same.');
   }
 
-  if (treeThis.isEmpty || treeOther.isEmpty) {
-    if (treeThis.isEmpty && treeOther.isEmpty)
+  if (treeA.isEmpty || treeB.isEmpty) {
+    if (_treeA.isEmpty && treeB.isEmpty)
       return undefined;
-    if (treeThis.isEmpty) {
-      return onlyOther === undefined
+    if (treeA.isEmpty) {
+      return onlyB === undefined
         ? undefined
-        : stepToEnd(makeDiffCursor(treeOther, otherInternals), onlyOther);
+        : stepToEnd(makeDiffCursor(treeB), onlyB);
     }
-    return onlyThis === undefined
+    return onlyA === undefined
       ? undefined
-      : stepToEnd(makeDiffCursor(treeThis, thisInternals), onlyThis);
+      : stepToEnd(makeDiffCursor(treeA), onlyA);
   }
 
   // Cursor-based diff algorithm is as follows:
@@ -69,20 +69,20 @@ export function diffAgainst<K, V, R>(
   //   - Any time a cursor is stepped, perform the following:
   //     - If either cursor points to a key/value pair:
   //       - If thisCursor === otherCursor and the values differ, it is a Different.
-  //       - If thisCursor > otherCursor and otherCursor is at a key/value pair, it is an OnlyOther.
-  //       - If thisCursor < otherCursor and thisCursor is at a key/value pair, it is an OnlyThis as long as the most recent
-  //         cursor step was *not* otherCursor advancing from a tie. The extra condition avoids erroneous OnlyOther calls
+  //       - If thisCursor > otherCursor and otherCursor is at a key/value pair, it is an OnlyB.
+  //       - If thisCursor < otherCursor and thisCursor is at a key/value pair, it is an OnlyA as long as the most recent
+  //         cursor step was *not* otherCursor advancing from a tie. The extra condition avoids erroneous OnlyB calls
   //         that would occur due to otherCursor being the "leader".
   //     - Otherwise, if both cursors point to nodes, compare them. If they are equal by reference (shared), skip
   //       both cursors to the next node in the walk.
   // - Once one cursor has finished stepping, any remaining steps (if any) are taken and key/value pairs are logged
-  //   as OnlyOther (if otherCursor is stepping) or OnlyThis (if thisCursor is stepping).
+  //   as OnlyB (if otherCursor is stepping) or OnlyA (if thisCursor is stepping).
   // This algorithm gives the critical guarantee that all locations (both nodes and key/value pairs) in both trees that
   // are identical by value (and possibly by reference) will be visited *at the same time* by the cursors.
   // This removes the possibility of emitting incorrect diffs, as well as allowing for skipping shared nodes.
-  const compareKeys = thisInternals._compare;
-  const thisCursor = makeDiffCursor(treeThis, thisInternals);
-  const otherCursor = makeDiffCursor(treeOther, otherInternals);
+  const compareKeys = treeA._compare;
+  const thisCursor = makeDiffCursor(treeA);
+  const otherCursor = makeDiffCursor(treeB);
   let thisSuccess = true;
   let otherSuccess = true;
   // It doesn't matter how thisSteppedLast is initialized.
@@ -111,16 +111,16 @@ export function diffAgainst<K, V, R>(
           // 1. otherCursor stepped last from a starting position that trailed thisCursor, and is still behind, or
           // 2. thisCursor stepped last and leapfrogged otherCursor
           // Either of these cases is an "only other"
-          if (otherLeaf && onlyOther) {
+          if (otherLeaf && onlyB) {
             const otherVal = otherLeaf.values[otherLevelIndices[otherLevelIndices.length - 1]];
-            const result = onlyOther(otherCursor.currentKey, otherVal);
+            const result = onlyB(otherCursor.currentKey, otherVal);
             if (result && result.break)
               return result.break;
           }
-        } else if (onlyThis) {
+        } else if (onlyA) {
           if (thisLeaf && prevCursorOrder !== 0) {
             const valThis = thisLeaf.values[thisLevelIndices[thisLevelIndices.length - 1]];
-            const result = onlyThis(thisCursor.currentKey, valThis);
+            const result = onlyA(thisCursor.currentKey, valThis);
             if (result && result.break)
               return result.break;
           }
@@ -146,10 +146,10 @@ export function diffAgainst<K, V, R>(
     }
   }
 
-  if (thisSuccess && onlyThis)
-    return finishCursorWalk(thisCursor, otherCursor, compareKeys, onlyThis);
-  if (otherSuccess && onlyOther)
-    return finishCursorWalk(otherCursor, thisCursor, compareKeys, onlyOther);
+  if (thisSuccess && onlyA)
+    return finishCursorWalk(thisCursor, otherCursor, compareKeys, onlyA);
+  if (otherSuccess && onlyB)
+    return finishCursorWalk(otherCursor, thisCursor, compareKeys, onlyB);
   return undefined;
 }
 
@@ -194,12 +194,11 @@ const stepToEnd = <K, V, R>(
 };
 
 const makeDiffCursor = <K, V>(
-  tree: BTree<K, V>,
-  internals: ExtendedTreeInternals<K, V>
+  internal: BTreeWithInternals<K, V>
 ): DiffCursor<K, V> => {
-  const root = internals._root;
+  const root = internal._root;
   return {
-    height: tree.height,
+    height: internal.height,
     internalSpine: [[root]],
     levelIndices: [0],
     leaf: undefined,
@@ -294,5 +293,4 @@ const compareDiffCursors = <K, V>(
   return depthANormalized - depthBNormalized;
 };
 
-export type { ExtendedTreeInternals } from './shared';
 export default diffAgainst;

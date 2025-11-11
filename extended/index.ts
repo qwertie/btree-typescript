@@ -1,22 +1,22 @@
 import BTree from '../b+tree';
-import type { ExtendedTreeInternals } from './shared';
+import type { BTreeWithInternals } from './shared';
 import { diffAgainst as diffAgainstAlgorithm } from './diffAgainst';
 
 export class BTreeEx<K = any, V = any> extends BTree<K, V> {
   clone(): this {
-    const source = this as unknown as ExtendedTreeInternals<K, V>;
+    const source = this as unknown as BTreeWithInternals<K, V>;
     source._root.isShared = true;
     const result = new BTreeEx<K, V>(undefined, this._compare, this._maxNodeSize);
-    const target = result as unknown as ExtendedTreeInternals<K, V>;
+    const target = result as unknown as BTreeWithInternals<K, V>;
     target._root = source._root;
     target._size = source._size;
     return result as this;
   }
 
   greedyClone(force?: boolean): this {
-    const source = this as unknown as ExtendedTreeInternals<K, V>;
+    const source = this as unknown as BTreeWithInternals<K, V>;
     const result = new BTreeEx<K, V>(undefined, this._compare, this._maxNodeSize);
-    const target = result as unknown as ExtendedTreeInternals<K, V>;
+    const target = result as unknown as BTreeWithInternals<K, V>;
     target._root = source._root.greedyClone(force);
     target._size = source._size;
     return result as this;
