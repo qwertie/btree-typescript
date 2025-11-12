@@ -16,7 +16,8 @@ export type DecomposeResult<K,V> = { disjoint: (number | BNode<K,V>)[], tallestI
 export function decompose<K,V>(
   left: BTreeWithInternals<K,V>,
   right: BTreeWithInternals<K,V>,
-  mergeValues: (key: K, leftValue: V, rightValue: V) => V | undefined
+  mergeValues: (key: K, leftValue: V, rightValue: V) => V | undefined,
+  ignoreRight: boolean = false
 ): DecomposeResult<K,V> {
   const cmp = left._compare;
   check(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
@@ -234,7 +235,14 @@ export function decompose<K,V>(
 
   // Initialize cursors at minimum keys.
   const curA = createCursor<K,V,MergeCursorPayload>(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
-  const curB = createCursor<K,V,MergeCursorPayload>(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+
+  let curB: typeof curA;
+  if (ignoreRight) {
+    const dummyPayload: MergeCursorPayload = { disqualified: true };
+    curB = createCursor<K,V,MergeCursorPayload>(right, () => dummyPayload, noop, noop, noop, noop, noop);
+  } else {
+    curB = createCursor<K,V,MergeCursorPayload>(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+  }
 
   // The guarantee that no overlapping interior nodes are accidentally reused relies on the careful
   // alternating hopping walk of the cursors: WLOG, cursorA always--with one exception--walks from a key just behind (in key space)

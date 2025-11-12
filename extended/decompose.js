@@ -12,7 +12,8 @@ var parallelWalk_1 = require("./parallelWalk");
  * the first key at or after the trailing cursor's previous position.
  * The cursor walk is efficient, meaning it skips over disjoint subtrees entirely rather than visiting every leaf.
  */
-function decompose(left, right, mergeValues) {
+function decompose(left, right, mergeValues, ignoreRight) {
+    if (ignoreRight === void 0) { ignoreRight = false; }
     var cmp = left._compare;
     (0, b_tree_1.check)(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
     // Holds the disjoint nodes that result from decomposition.
@@ -184,7 +185,14 @@ function decompose(left, right, mergeValues) {
     var maxKey = cmp(maxKeyLeft, maxKeyRight) >= 0 ? maxKeyLeft : maxKeyRight;
     // Initialize cursors at minimum keys.
     var curA = (0, parallelWalk_1.createCursor)(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
-    var curB = (0, parallelWalk_1.createCursor)(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+    var curB;
+    if (ignoreRight) {
+        var dummyPayload_1 = { disqualified: true };
+        curB = (0, parallelWalk_1.createCursor)(right, function () { return dummyPayload_1; }, parallelWalk_1.noop, parallelWalk_1.noop, parallelWalk_1.noop, parallelWalk_1.noop, parallelWalk_1.noop);
+    }
+    else {
+        curB = (0, parallelWalk_1.createCursor)(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+    }
     // The guarantee that no overlapping interior nodes are accidentally reused relies on the careful
     // alternating hopping walk of the cursors: WLOG, cursorA always--with one exception--walks from a key just behind (in key space)
     // the key of cursorB to the first key >= cursorB. Call this transition a "crossover point." All interior nodes that
