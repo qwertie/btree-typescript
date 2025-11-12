@@ -73,7 +73,10 @@ const header =
 console.log(header);
 console.log('-'.repeat(header.length));
 
-for (const entry of entryPoints) {
+const nonCoreTotals = { raw: 0, min: 0, gz: 0 };
+const nonCoreHasValue = { raw: false, min: false, gz: false };
+
+entryPoints.forEach((entry, index) => {
   const raw = fileSize(entry.raw);
   const min = fileSize(entry.min);
   const gz = gzipSize(entry.min);
@@ -82,6 +85,30 @@ for (const entry of entryPoints) {
     pad(formatBytes(raw), 13) +
     pad(formatBytes(min), 13) +
     formatBytes(gz);
+  console.log(line);
+  if (index > 0) {
+    if (typeof raw === 'number') {
+      nonCoreTotals.raw += raw;
+      nonCoreHasValue.raw = true;
+    }
+    if (typeof min === 'number') {
+      nonCoreTotals.min += min;
+      nonCoreHasValue.min = true;
+    }
+    if (typeof gz === 'number') {
+      nonCoreTotals.gz += gz;
+      nonCoreHasValue.gz = true;
+    }
+  }
+});
+
+if (entryPoints.length > 1) {
+  const line =
+    pad('Non-core total', nameColumnWidth) +
+    pad(nonCoreHasValue.raw ? formatBytes(nonCoreTotals.raw) : 'n/a', 13) +
+    pad(nonCoreHasValue.min ? formatBytes(nonCoreTotals.min) : 'n/a', 13) +
+    (nonCoreHasValue.gz ? formatBytes(nonCoreTotals.gz) : 'n/a');
+  console.log('-'.repeat(header.length));
   console.log(line);
 }
 
