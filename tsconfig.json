@@ -17,5 +17,5 @@
     "stripInternal": true
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "tests", "b+tree.test.ts"],
+  "exclude": ["node_modules", "tests", "test"],
 }
