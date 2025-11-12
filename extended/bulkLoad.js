@@ -5,16 +5,16 @@ var b_tree_1 = require("../b+tree");
 var decompose_1 = require("./decompose");
 function bulkLoad(entries, maxNodeSize) {
     var leaves = [];
-    flushToLeaves(entries, maxNodeSize, leaves);
-    var leafCount = (0, decompose_1.alternatingCount)(leaves);
+    flushToLeaves(entries, maxNodeSize, function (leaf) { return leaves.push(leaf); });
+    var leafCount = leaves.length;
     if (leafCount === 0)
         return undefined;
     if (leafCount === 1)
-        return (0, decompose_1.alternatingGetFirst)(leaves, 0);
+        return leaves[0];
     throw new Error("bulkLoad: multiple leaves not yet supported");
 }
 exports.bulkLoad = bulkLoad;
-function flushToLeaves(alternatingList, maxNodeSize, toFlushTo) {
+function flushToLeaves(alternatingList, maxNodeSize, onLeafCreation) {
     var totalPairs = (0, decompose_1.alternatingCount)(alternatingList);
     if (totalPairs === 0)
         return 0;
@@ -36,7 +36,7 @@ function flushToLeaves(alternatingList, maxNodeSize, toFlushTo) {
         remaining -= chunkSize;
         remainingLeaves--;
         var leaf = new b_tree_1.BNode(keys, vals);
-        (0, decompose_1.alternatingPush)(toFlushTo, 0, leaf);
+        onLeafCreation(leaf);
     }
     alternatingList.length = 0;
     return leafCount;

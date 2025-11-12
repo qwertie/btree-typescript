@@ -1,19 +1,22 @@
 import { BNode, BNodeInternal } from '../b+tree';
-import { alternatingCount, alternatingGetFirst, alternatingGetSecond, alternatingPush } from './decompose';
-import type { BTreeWithInternals } from './shared';
+import { alternatingCount, alternatingGetFirst, alternatingGetSecond } from './decompose';
 
 export function bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number): BNode<K, V> | undefined {
-  const leaves: (number | BNode<K, V>)[] = [];
-  flushToLeaves(entries, maxNodeSize, leaves);
-  const leafCount = alternatingCount(leaves);
+  const leaves: BNode<K, V>[] = [];
+  flushToLeaves<K, V>(entries, maxNodeSize, (leaf) => leaves.push(leaf));
+  const leafCount = leaves.length;
   if (leafCount === 0)
     return undefined;
   if (leafCount === 1)
-    return alternatingGetFirst<BNode<K, V>, number>(leaves, 0);
+    return leaves[0];
   throw new Error("bulkLoad: multiple leaves not yet supported");
 }
 
-export function flushToLeaves<K, V>(alternatingList: (K | V)[], maxNodeSize: number, toFlushTo: (number | BNode<K, V>)[]): number {
+export function flushToLeaves<K, V>(
+  alternatingList: (K | V)[],
+  maxNodeSize: number,
+  onLeafCreation: (node: BNode<K, V>) => void
+): number {
   const totalPairs = alternatingCount(alternatingList);
   if (totalPairs === 0)
     return 0;
@@ -36,7 +39,7 @@ export function flushToLeaves<K, V>(alternatingList: (K | V)[], maxNodeSize: num
     remaining -= chunkSize;
     remainingLeaves--;
     const leaf = new BNode<K, V>(keys, vals);
-    alternatingPush(toFlushTo, 0, leaf);
+    onLeafCreation(leaf);
   }
   alternatingList.length = 0;
   return leafCount;

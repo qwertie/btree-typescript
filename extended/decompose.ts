@@ -42,8 +42,12 @@ export function decompose<K, V>(
     // Have to do this as cast to convince TS it's ever assigned
     = undefined as { node: BNode<K, V>, height: number } | undefined;
 
+  const onLeafCreation = (leaf: BNode<K, V>) => {
+    alternatingPush(disjoint, 0, leaf);
+  }
+
   const flushPendingEntries = () => {
-    const createdLeaves = flushToLeaves(pending, left._maxNodeSize, disjoint);
+    const createdLeaves = flushToLeaves(pending, left._maxNodeSize, onLeafCreation);
     if (createdLeaves > 0) {
       tallestIndex = alternatingCount(disjoint) - 1;
       tallestHeight = 0;

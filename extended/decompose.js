@@ -33,8 +33,11 @@ function decompose(left, right, mergeValues, ignoreRight) {
     // This is done because we cannot know immediately whether we can add the node to the disjoint set
     // because its ancestor may also be disjoint and should be reused instead.
     var highestDisjoint = undefined;
+    var onLeafCreation = function (leaf) {
+        alternatingPush(disjoint, 0, leaf);
+    };
     var flushPendingEntries = function () {
-        var createdLeaves = (0, bulkLoad_1.flushToLeaves)(pending, left._maxNodeSize, disjoint);
+        var createdLeaves = (0, bulkLoad_1.flushToLeaves)(pending, left._maxNodeSize, onLeafCreation);
         if (createdLeaves > 0) {
             tallestIndex = alternatingCount(disjoint) - 1;
             tallestHeight = 0;
