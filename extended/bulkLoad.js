@@ -18,6 +18,7 @@ function bulkLoad(entries, maxNodeSize) {
             return new b_tree_1.BNodeInternal(currentLevel, (0, b_tree_1.sumChildSizes)(currentLevel));
         }
         var nextLevelCount = Math.ceil(nodeCount / maxNodeSize);
+        (0, b_tree_1.check)(nextLevelCount > 1);
         var nextLevel = new Array(nextLevelCount);
         var remainingNodes = nodeCount;
         var remainingParents = nextLevelCount;
@@ -34,6 +35,12 @@ function bulkLoad(entries, maxNodeSize) {
             remainingNodes -= chunkSize;
             remainingParents--;
             nextLevel[i] = new b_tree_1.BNodeInternal(children, size);
+        }
+        var minSize = Math.floor(maxNodeSize / 2);
+        var secondLastNode = nextLevel[nextLevelCount - 2];
+        var lastNode = nextLevel[nextLevelCount - 1];
+        while (lastNode.children.length < minSize) {
+            lastNode.takeFromLeft(secondLastNode);
         }
         currentLevel = nextLevel;
     }

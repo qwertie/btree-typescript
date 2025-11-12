@@ -1,4 +1,4 @@
-import { BNode, BNodeInternal, sumChildSizes } from '../b+tree';
+import { BNode, BNodeInternal, check, sumChildSizes } from '../b+tree';
 import { alternatingCount, alternatingGetFirst, alternatingGetSecond } from './decompose';
 
 export function bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number): BNode<K, V> | undefined {
@@ -19,7 +19,8 @@ export function bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number): BNode<K
     }
 
     const nextLevelCount = Math.ceil(nodeCount / maxNodeSize);
-    const nextLevel = new Array<BNode<K, V>>(nextLevelCount);
+    check(nextLevelCount > 1);
+    const nextLevel = new Array<BNodeInternal<K, V>>(nextLevelCount);
     let remainingNodes = nodeCount;
     let remainingParents = nextLevelCount;
     let childIndex = 0;
@@ -36,6 +37,13 @@ export function bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number): BNode<K
       remainingNodes -= chunkSize;
       remainingParents--;
       nextLevel[i] = new BNodeInternal<K, V>(children, size);
+    }
+
+    const minSize = Math.floor(maxNodeSize / 2);
+    const secondLastNode = nextLevel[nextLevelCount - 2];
+    const lastNode = nextLevel[nextLevelCount - 1];
+    while (lastNode.children.length < minSize) {
+      lastNode.takeFromLeft(secondLastNode);
     }
 
     currentLevel = nextLevel;
