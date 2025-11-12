@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildFromDecomposition = exports.decompose = void 0;
+exports.alternatingPush = exports.alternatingGetSecond = exports.alternatingGetFirst = exports.alternatingCount = exports.buildFromDecomposition = exports.decompose = void 0;
 var b_tree_1 = require("../b+tree");
 var parallelWalk_1 = require("./parallelWalk");
+var bulkLoad_1 = require("./bulkLoad");
 /**
  * Decomposes two trees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
  * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
@@ -33,34 +34,11 @@ function decompose(left, right, mergeValues, ignoreRight) {
     // because its ancestor may also be disjoint and should be reused instead.
     var highestDisjoint = undefined;
     var flushPendingEntries = function () {
-        var totalPairs = alternatingCount(pending);
-        if (totalPairs === 0)
-            return;
-        // This method creates as many evenly filled leaves as possible from
-        // the pending entries. All will be > 50% full if we are creating more than one leaf.
-        var max = left._maxNodeSize;
-        var leafCount = Math.ceil(totalPairs / max);
-        var remaining = totalPairs;
-        var pairIndex = 0;
-        while (leafCount > 0) {
-            var chunkSize = Math.ceil(remaining / leafCount);
-            var keys = new Array(chunkSize);
-            var vals = new Array(chunkSize);
-            for (var i = 0; i < chunkSize; i++) {
-                keys[i] = alternatingGetFirst(pending, pairIndex);
-                vals[i] = alternatingGetSecond(pending, pairIndex);
-                pairIndex++;
-            }
-            remaining -= chunkSize;
-            leafCount--;
-            var leaf = new b_tree_1.BNode(keys, vals);
-            alternatingPush(disjoint, 0, leaf);
-            if (tallestHeight < 0) {
-                tallestIndex = alternatingCount(disjoint) - 1;
-                tallestHeight = 0;
-            }
+        var createdLeaves = (0, bulkLoad_1.flushToLeaves)(pending, left._maxNodeSize, disjoint);
+        if (createdLeaves > 0) {
+            tallestIndex = alternatingCount(disjoint) - 1;
+            tallestHeight = 0;
         }
-        pending.length = 0;
     };
     var addSharedNodeToDisjointSet = function (node, height) {
         flushPendingEntries();
@@ -537,13 +515,17 @@ function updateRightMax(node, maxBelow) {
 function alternatingCount(list) {
     return list.length >> 1;
 }
+exports.alternatingCount = alternatingCount;
 function alternatingGetFirst(list, index) {
     return list[index << 1];
 }
+exports.alternatingGetFirst = alternatingGetFirst;
 function alternatingGetSecond(list, index) {
     return list[(index << 1) + 1];
 }
+exports.alternatingGetSecond = alternatingGetSecond;
 function alternatingPush(list, first, second) {
     // Micro benchmarks show this is the fastest way to do this
     list.push(first, second);
 }
+exports.alternatingPush = alternatingPush;

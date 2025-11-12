@@ -1,8 +1,9 @@
 import BTree, { areOverlapping, BNode, BNodeInternal, check } from '../b+tree';
 import type { BTreeWithInternals } from './shared';
 import { createCursor, getKey, MergeCursor, MergeCursorPayload, moveForwardOne, moveTo, noop } from "./parallelWalk";
+import { flushToLeaves } from './bulkLoad';
 
-export type DecomposeResult<K,V> = { disjoint: (number | BNode<K,V>)[], tallestIndex: number };
+export type DecomposeResult<K, V> = { disjoint: (number | BNode<K, V>)[], tallestIndex: number };
 
 /**
  * Decomposes two trees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
@@ -13,17 +14,17 @@ export type DecomposeResult<K,V> = { disjoint: (number | BNode<K,V>)[], tallestI
  * the first key at or after the trailing cursor's previous position.
  * The cursor walk is efficient, meaning it skips over disjoint subtrees entirely rather than visiting every leaf.
  */
-export function decompose<K,V>(
-  left: BTreeWithInternals<K,V>,
-  right: BTreeWithInternals<K,V>,
+export function decompose<K, V>(
+  left: BTreeWithInternals<K, V>,
+  right: BTreeWithInternals<K, V>,
   mergeValues: (key: K, leftValue: V, rightValue: V) => V | undefined,
   ignoreRight: boolean = false
-): DecomposeResult<K,V> {
+): DecomposeResult<K, V> {
   const cmp = left._compare;
   check(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
   // Holds the disjoint nodes that result from decomposition.
   // Alternating entries of (height, node) to avoid creating small tuples
-  const disjoint: (number | BNode<K,V>)[] = [];
+  const disjoint: (number | BNode<K, V>)[] = [];
   // During the decomposition, leaves that are not disjoint are decomposed into individual entries
   // that accumulate in this array in sorted order. They are flushed into leaf nodes whenever a reused
   // disjoint subtree is added to the disjoint set.
@@ -37,46 +38,22 @@ export function decompose<K,V>(
   // During the upward part of the cursor walk, this holds the highest disjoint node seen so far.
   // This is done because we cannot know immediately whether we can add the node to the disjoint set
   // because its ancestor may also be disjoint and should be reused instead.
-  let highestDisjoint: { node: BNode<K,V>, height: number } | undefined
+  let highestDisjoint: { node: BNode<K, V>, height: number } | undefined
     // Have to do this as cast to convince TS it's ever assigned
-    = undefined as { node: BNode<K,V>, height: number } | undefined;
+    = undefined as { node: BNode<K, V>, height: number } | undefined;
 
   const flushPendingEntries = () => {
-    const totalPairs = alternatingCount(pending);
-    if (totalPairs === 0)
-      return;
-
-    // This method creates as many evenly filled leaves as possible from
-    // the pending entries. All will be > 50% full if we are creating more than one leaf.
-    const max = left._maxNodeSize;
-    let leafCount = Math.ceil(totalPairs / max);
-    let remaining = totalPairs;
-    let pairIndex = 0;
-    while (leafCount > 0) {
-      const chunkSize = Math.ceil(remaining / leafCount);
-      const keys = new Array<K>(chunkSize);
-      const vals = new Array<V>(chunkSize);
-      for (let i = 0; i < chunkSize; i++) {
-        keys[i] = alternatingGetFirst<K,V>(pending, pairIndex);
-        vals[i] = alternatingGetSecond<K,V>(pending, pairIndex);
-        pairIndex++;
-      }
-      remaining -= chunkSize;
-      leafCount--;
-      const leaf = new BNode<K,V>(keys, vals);
-      alternatingPush<number, BNode<K,V>>(disjoint, 0, leaf);
-      if (tallestHeight < 0) {
-        tallestIndex = alternatingCount(disjoint) - 1;
-        tallestHeight = 0;
-      }
+    const createdLeaves = flushToLeaves(pending, left._maxNodeSize, disjoint);
+    if (createdLeaves > 0) {
+      tallestIndex = alternatingCount(disjoint) - 1;
+      tallestHeight = 0;
     }
-    pending.length = 0;
   };
 
-  const addSharedNodeToDisjointSet = (node: BNode<K,V>, height: number) => {
+  const addSharedNodeToDisjointSet = (node: BNode<K, V>, height: number) => {
     flushPendingEntries();
     node.isShared = true;
-    alternatingPush<number, BNode<K,V>>(disjoint, height, node);
+    alternatingPush<number, BNode<K, V>>(disjoint, height, node);
     if (height > tallestHeight) {
       tallestIndex = alternatingCount(disjoint) - 1;
       tallestHeight = height;
@@ -91,7 +68,7 @@ export function decompose<K,V>(
   };
 
   // Mark all nodes at or above depthFrom in the cursor spine as disqualified (non-disjoint)
-  const disqualifySpine = (cursor: MergeCursor<K,V,MergeCursorPayload>, depthFrom: number) => {
+  const disqualifySpine = (cursor: MergeCursor<K, V, MergeCursorPayload>, depthFrom: number) => {
     const spine = cursor.spine;
     for (let i = depthFrom; i >= 0; --i) {
       const payload = spine[i].payload;
@@ -107,15 +84,15 @@ export function decompose<K,V>(
   // Cursor payload factory
   const makePayload = (): MergeCursorPayload => ({ disqualified: false });
 
-  const pushLeafRange = (leaf: BNode<K,V>, from: number, toExclusive: number) => {
+  const pushLeafRange = (leaf: BNode<K, V>, from: number, toExclusive: number) => {
     const keys = leaf.keys;
     const values = leaf.values;
     for (let i = from; i < toExclusive; ++i)
-      alternatingPush<K,V>(pending, keys[i], values[i]);
+      alternatingPush<K, V>(pending, keys[i], values[i]);
   };
 
   const onMoveInLeaf = (
-    leaf: BNode<K,V>,
+    leaf: BNode<K, V>,
     payload: MergeCursorPayload,
     fromIndex: number,
     toIndex: number,
@@ -124,15 +101,15 @@ export function decompose<K,V>(
     check(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
     const start = startedEqual ? fromIndex + 1 : fromIndex;
     if (start < toIndex)
-    pushLeafRange(leaf, start, toIndex);
+      pushLeafRange(leaf, start, toIndex);
   };
 
   const onExitLeaf = (
-    leaf: BNode<K,V>,
+    leaf: BNode<K, V>,
     payload: MergeCursorPayload,
     startingIndex: number,
     startedEqual: boolean,
-    cursorThis: MergeCursor<K,V,MergeCursorPayload>,
+    cursorThis: MergeCursor<K, V, MergeCursorPayload>,
   ) => {
     highestDisjoint = undefined;
     if (!payload.disqualified) {
@@ -151,13 +128,13 @@ export function decompose<K,V>(
   };
 
   const onStepUp = (
-    parent: BNodeInternal<K,V>,
+    parent: BNodeInternal<K, V>,
     height: number,
     payload: MergeCursorPayload,
     fromIndex: number,
     spineIndex: number,
     stepDownIndex: number,
-    cursorThis: MergeCursor<K,V,MergeCursorPayload>
+    cursorThis: MergeCursor<K, V, MergeCursorPayload>
   ) => {
     const children = parent.children;
     const nextHeight = height - 1;
@@ -189,11 +166,11 @@ export function decompose<K,V>(
   };
 
   const onStepDown = (
-    node: BNodeInternal<K,V>,
+    node: BNodeInternal<K, V>,
     height: number,
     spineIndex: number,
     stepDownIndex: number,
-    cursorThis: MergeCursor<K,V,MergeCursorPayload>
+    cursorThis: MergeCursor<K, V, MergeCursorPayload>
   ) => {
     if (stepDownIndex > 0) {
       // When we step down into a node, we know that we have walked from a key that is less than our target.
@@ -211,10 +188,10 @@ export function decompose<K,V>(
   };
 
   const onEnterLeaf = (
-    leaf: BNode<K,V>,
+    leaf: BNode<K, V>,
     destIndex: number,
-    cursorThis: MergeCursor<K,V,MergeCursorPayload>,
-    cursorOther: MergeCursor<K,V,MergeCursorPayload>
+    cursorThis: MergeCursor<K, V, MergeCursorPayload>,
+    cursorOther: MergeCursor<K, V, MergeCursorPayload>
   ) => {
     if (destIndex > 0
       || areOverlapping(leaf.minKey()!, leaf.maxKey(), getKey(cursorOther), cursorOther.leaf.maxKey(), cmp)) {
@@ -234,14 +211,14 @@ export function decompose<K,V>(
   const maxKey = cmp(maxKeyLeft, maxKeyRight) >= 0 ? maxKeyLeft : maxKeyRight;
 
   // Initialize cursors at minimum keys.
-  const curA = createCursor<K,V,MergeCursorPayload>(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+  const curA = createCursor<K, V, MergeCursorPayload>(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
 
   let curB: typeof curA;
   if (ignoreRight) {
     const dummyPayload: MergeCursorPayload = { disqualified: true };
-    curB = createCursor<K,V,MergeCursorPayload>(right, () => dummyPayload, noop, noop, noop, noop, noop);
+    curB = createCursor<K, V, MergeCursorPayload>(right, () => dummyPayload, noop, noop, noop, noop, noop);
   } else {
-    curB = createCursor<K,V,MergeCursorPayload>(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+    curB = createCursor<K, V, MergeCursorPayload>(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
   }
 
   // The guarantee that no overlapping interior nodes are accidentally reused relies on the careful
@@ -254,7 +231,7 @@ export function decompose<K,V>(
   // The one issue then is detecting any overlaps that occur based on their very initial position (minimum key of each tree).
   // This is handled by the initial disqualification step below, which essentially emulates the step down disqualification for each spine.
   // Initialize disqualification w.r.t. opposite leaf.
-  const initDisqualify = (cur: MergeCursor<K,V,MergeCursorPayload>, other: MergeCursor<K,V,MergeCursorPayload>) => {
+  const initDisqualify = (cur: MergeCursor<K, V, MergeCursorPayload>, other: MergeCursor<K, V, MergeCursorPayload>) => {
     const minKey = getKey(cur);
     const otherMin = getKey(other);
     const otherMax = other.leaf.maxKey();
@@ -287,7 +264,7 @@ export function decompose<K,V>(
       // to pending because they respect the areEqual flag during their moves.
       const merged = mergeValues(key, vA, vB);
       if (merged !== undefined)
-        alternatingPush<K,V>(pending, key, merged);
+        alternatingPush<K, V>(pending, key, merged);
       const outTrailing = moveForwardOne(trailing, leading, key, cmp);
       const outLeading = moveForwardOne(leading, trailing, key, cmp);
       if (outTrailing || outLeading) {
@@ -327,10 +304,10 @@ export function decompose<K,V>(
   return { disjoint, tallestIndex };
 }
 
-export function buildFromDecomposition<TBTree extends BTree<K,V>, K,V>(
-  constructor: new (entries?: [K,V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) => TBTree,
+export function buildFromDecomposition<TBTree extends BTree<K, V>, K, V>(
+  constructor: new (entries?: [K, V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) => TBTree,
   branchingFactor: number,
-  decomposed: DecomposeResult<K,V>,
+  decomposed: DecomposeResult<K, V>,
   cmp: (a: K, b: K) => number,
   maxNodeSize: number
 ): TBTree {
@@ -345,8 +322,8 @@ export function buildFromDecomposition<TBTree extends BTree<K,V>, K,V>(
   // the leaf level on that side of the tree. Each appended subtree is appended to the node at the
   // same height as itself on the frontier. Each tree is guaranteed to be at most as tall as the
   // current frontier because we start from the tallest subtree and work outward.
-  const initialRoot = alternatingGetSecond<number, BNode<K,V>>(disjoint, tallestIndex);
-  const frontier: BNode<K,V>[] = [initialRoot];
+  const initialRoot = alternatingGetSecond<number, BNode<K, V>>(disjoint, tallestIndex);
+  const frontier: BNode<K, V>[] = [initialRoot];
 
   // Process all subtrees to the right of the tallest subtree
   if (tallestIndex + 1 <= disjointEntryCount - 1) {
@@ -383,7 +360,7 @@ export function buildFromDecomposition<TBTree extends BTree<K,V>, K,V>(
   }
 
   const merged = new constructor(undefined, cmp, maxNodeSize);
-  (merged as unknown as BTreeWithInternals<K,V>)._root = frontier[0];
+  (merged as unknown as BTreeWithInternals<K, V>)._root = frontier[0];
 
   // Return the resulting tree
   return merged;
@@ -393,17 +370,17 @@ export function buildFromDecomposition<TBTree extends BTree<K,V>, K,V>(
  * Processes one side (left or right) of the disjoint subtree set during a merge operation.
  * Merges each subtree in the disjoint set from start to end (exclusive) into the given spine.
  */
-function processSide<K,V>(
+function processSide<K, V>(
   branchingFactor: number,
-  disjoint: (number | BNode<K,V>)[],
-  spine: BNode<K,V>[],
+  disjoint: (number | BNode<K, V>)[],
+  spine: BNode<K, V>[],
   start: number,
   end: number,
   step: number,
-  sideIndex: (node: BNodeInternal<K,V>) => number,
-  sideInsertionIndex: (node: BNodeInternal<K,V>) => number,
-  splitOffSide: (node: BNodeInternal<K,V>) => BNodeInternal<K,V>,
-  updateMax: (node: BNodeInternal<K,V>, maxBelow: K) => void
+  sideIndex: (node: BNodeInternal<K, V>) => number,
+  sideInsertionIndex: (node: BNodeInternal<K, V>) => number,
+  splitOffSide: (node: BNodeInternal<K, V>) => BNodeInternal<K, V>,
+  updateMax: (node: BNodeInternal<K, V>, maxBelow: K) => void
 ): void {
   // Determine the depth of the first shared node on the frontier.
   // Appending subtrees to the frontier must respect the copy-on-write semantics by cloning
@@ -414,7 +391,7 @@ function processSide<K,V>(
   // Find the first shared node on the frontier
   while (!cur.isShared && isSharedFrontierDepth < spine.length - 1) {
     isSharedFrontierDepth++;
-    cur = (cur as BNodeInternal<K,V>).children[sideIndex(cur as BNodeInternal<K,V>)];
+    cur = (cur as BNodeInternal<K, V>).children[sideIndex(cur as BNodeInternal<K, V>)];
   }
 
   // This array holds the sum of sizes of nodes that have been inserted but not yet propagated upward.
@@ -427,8 +404,8 @@ function processSide<K,V>(
 
   for (let i = start; i != end; i += step) {
     const currentHeight = spine.length - 1; // height is number of internal levels; 0 means leaf
-    const subtree = alternatingGetSecond<number, BNode<K,V>>(disjoint, i);
-    const subtreeHeight = alternatingGetFirst<number, BNode<K,V>>(disjoint, i);
+    const subtree = alternatingGetSecond<number, BNode<K, V>>(disjoint, i);
+    const subtreeHeight = alternatingGetFirst<number, BNode<K, V>>(disjoint, i);
     const insertionDepth = currentHeight - (subtreeHeight + 1); // node at this depth has children of height 'subtreeHeight'
 
     // Ensure path is unshared before mutation
@@ -472,15 +449,15 @@ function processSide<K,V>(
  * This method guarantees that the size of the inserted subtree will not propagate upward beyond the insertion point.
  * Returns a new root if the root was split, otherwise undefined.
  */
-function appendAndCascade<K,V>(
-  spine: BNode<K,V>[],
+function appendAndCascade<K, V>(
+  spine: BNode<K, V>[],
   insertionDepth: number,
   branchingFactor: number,
-  subtree: BNode<K,V>,
-  sideIndex: (node: BNodeInternal<K,V>) => number,
-  sideInsertionIndex: (node: BNodeInternal<K,V>) => number,
-  splitOffSide: (node: BNodeInternal<K,V>) => BNodeInternal<K,V>
-): BNodeInternal<K,V> | undefined {
+  subtree: BNode<K, V>,
+  sideIndex: (node: BNodeInternal<K, V>) => number,
+  sideInsertionIndex: (node: BNodeInternal<K, V>) => number,
+  splitOffSide: (node: BNodeInternal<K, V>) => BNodeInternal<K, V>
+): BNodeInternal<K, V> | undefined {
   // We must take care to avoid accidental propagation upward of the size of the inserted su
   // To do this, we first split nodes upward from the insertion point until we find a node with capacity
   // or create a new root. Since all un-propagated sizes have already been applied to the spine up to this point,
@@ -488,16 +465,16 @@ function appendAndCascade<K,V>(
 
   // Depth is -1 if the subtree is the same height as the current tree
   if (insertionDepth >= 0) {
-    let carry: BNode<K,V> | undefined = undefined;
+    let carry: BNode<K, V> | undefined = undefined;
     // Determine initially where to insert after any splits
-    let insertTarget: BNodeInternal<K,V> = spine[insertionDepth] as BNodeInternal<K,V>;
+    let insertTarget: BNodeInternal<K, V> = spine[insertionDepth] as BNodeInternal<K, V>;
     if (insertTarget.keys.length >= branchingFactor) {
       insertTarget = carry = splitOffSide(insertTarget);
     }
 
     let d = insertionDepth - 1;
     while (carry && d >= 0) {
-      const parent = spine[d] as BNodeInternal<K,V>;
+      const parent = spine[d] as BNodeInternal<K, V>;
       const idx = sideIndex(parent);
       // Refresh last key since child was split
       parent.keys[idx] = parent.children[idx].maxKey();
@@ -518,11 +495,11 @@ function appendAndCascade<K,V>(
       d--;
     }
 
-    let newRoot: BNodeInternal<K,V> | undefined = undefined;
+    let newRoot: BNodeInternal<K, V> | undefined = undefined;
     if (carry !== undefined) {
       // Expansion reached the root, need a new root to hold carry
-      const oldRoot = spine[0] as BNodeInternal<K,V>;
-      newRoot = new BNodeInternal<K,V>([oldRoot], oldRoot.size() + carry.size());
+      const oldRoot = spine[0] as BNodeInternal<K, V>;
+      newRoot = new BNodeInternal<K, V>([oldRoot], oldRoot.size() + carry.size());
       insertNoCount(newRoot, sideInsertionIndex(newRoot), carry);
     }
 
@@ -531,8 +508,8 @@ function appendAndCascade<K,V>(
     return newRoot;
   } else {
     // Insertion of subtree with equal height to current tree
-    const oldRoot = spine[0] as BNodeInternal<K,V>;
-    const newRoot = new BNodeInternal<K,V>([oldRoot], oldRoot.size());
+    const oldRoot = spine[0] as BNodeInternal<K, V>;
+    const newRoot = new BNodeInternal<K, V>([oldRoot], oldRoot.size());
     insertNoCount(newRoot, sideInsertionIndex(newRoot), subtree);
     return newRoot;
   }
@@ -542,39 +519,39 @@ function appendAndCascade<K,V>(
  * Clone along the spine from [isSharedFrontierDepth to depthTo] inclusive so path is safe to mutate.
  * Short-circuits if first shared node is deeper than depthTo (the insertion depth).
  */
-function ensureNotShared<K,V>(
-  spine: BNode<K,V>[],
+function ensureNotShared<K, V>(
+  spine: BNode<K, V>[],
   isSharedFrontierDepth: number,
   depthToInclusive: number,
-  sideIndex: (node: BNodeInternal<K,V>) => number) {
+  sideIndex: (node: BNodeInternal<K, V>) => number) {
   if (spine.length === 1 /* only a leaf */ || depthToInclusive < 0 /* new root case */)
     return; // nothing to clone when root is a leaf; equal-height case will handle this
 
   // Clone root if needed first (depth 0)
   if (isSharedFrontierDepth === 0) {
     const root = spine[0];
-    spine[0] = root.clone() as BNodeInternal<K,V>;
+    spine[0] = root.clone() as BNodeInternal<K, V>;
   }
 
   // Clone downward along the frontier to 'depthToInclusive'
   for (let depth = Math.max(isSharedFrontierDepth, 1); depth <= depthToInclusive; depth++) {
-    const parent = spine[depth - 1] as BNodeInternal<K,V>;
+    const parent = spine[depth - 1] as BNodeInternal<K, V>;
     const childIndex = sideIndex(parent);
     const clone = parent.children[childIndex].clone();
     parent.children[childIndex] = clone;
-    spine[depth] = clone as BNodeInternal<K,V>;
+    spine[depth] = clone as BNodeInternal<K, V>;
   }
 };
 
 /**
  * Propagates size updates and updates max keys for nodes in (isSharedFrontierDepth, depthTo)
  */
-function updateSizeAndMax<K,V>(
-  spine: BNode<K,V>[],
+function updateSizeAndMax<K, V>(
+  spine: BNode<K, V>[],
   unflushedSizes: number[],
   isSharedFrontierDepth: number,
   depthUpToInclusive: number,
-  updateMax: (node: BNodeInternal<K,V>, maxBelow: K) => void) {
+  updateMax: (node: BNodeInternal<K, V>, maxBelow: K) => void) {
   // If isSharedFrontierDepth is <= depthUpToInclusive there is nothing to update because
   // the insertion point is inside a shared node which will always have correct sizes
   const maxKey = spine[isSharedFrontierDepth].maxKey();
@@ -587,7 +564,7 @@ function updateSizeAndMax<K,V>(
       // at the end of processing the entire side
       unflushedSizes[depth - 1] += sizeAtLevel;
     }
-    const node = spine[depth] as BNodeInternal<K,V>;
+    const node = spine[depth] as BNodeInternal<K, V>;
     node._size += sizeAtLevel;
     // No-op if left side, as max keys in parents are unchanged by appending to the beginning of a node
     updateMax(node, maxKey);
@@ -598,16 +575,16 @@ function updateSizeAndMax<K,V>(
  * Update a spine (frontier) from a specific depth down, inclusive.
  * Extends the frontier array if it is not already as long as the frontier.
  */
-function updateFrontier<K, V>(frontier: BNode<K,V>[], depthLastValid: number, sideIndex: (node: BNodeInternal<K,V>) => number): void {
+function updateFrontier<K, V>(frontier: BNode<K, V>[], depthLastValid: number, sideIndex: (node: BNodeInternal<K, V>) => number): void {
   check(frontier.length > depthLastValid, "updateFrontier: depthLastValid exceeds frontier height");
   const startingAncestor = frontier[depthLastValid];
   if (startingAncestor.isLeaf)
     return;
-  const internal = startingAncestor as BNodeInternal<K,V>;
-  let cur: BNode<K,V> = internal.children[sideIndex(internal)];
+  const internal = startingAncestor as BNodeInternal<K, V>;
+  let cur: BNode<K, V> = internal.children[sideIndex(internal)];
   let depth = depthLastValid + 1;
   while (!cur.isLeaf) {
-    const ni = cur as BNodeInternal<K,V>;
+    const ni = cur as BNodeInternal<K, V>;
     frontier[depth] = ni;
     cur = ni.children[sideIndex(ni)];
     depth++;
@@ -618,7 +595,7 @@ function updateFrontier<K, V>(frontier: BNode<K,V>[], depthLastValid: number, si
 /**
  * Find the first ancestor (starting at insertionDepth) with capacity.
  */
-function findCascadeEndDepth<K,V>(spine: BNode<K,V>[], insertionDepth: number, branchingFactor: number): number {
+function findCascadeEndDepth<K, V>(spine: BNode<K, V>[], insertionDepth: number, branchingFactor: number): number {
   for (let depth = insertionDepth; depth >= 0; depth--) {
     if (spine[depth].keys.length < branchingFactor)
       return depth;
@@ -629,10 +606,10 @@ function findCascadeEndDepth<K,V>(spine: BNode<K,V>[], insertionDepth: number, b
 /**
  * Inserts the child without updating cached size counts.
  */
-function insertNoCount<K,V>(
-  parent: BNodeInternal<K,V>,
+function insertNoCount<K, V>(
+  parent: BNodeInternal<K, V>,
   index: number,
-  child: BNode<K,V>
+  child: BNode<K, V>
 ): void {
   parent.children.splice(index, 0, child);
   parent.keys.splice(index, 0, child.maxKey());
@@ -640,27 +617,27 @@ function insertNoCount<K,V>(
 
 // ---- Side-specific delegates for merging subtrees into a frontier ----
 
-function getLeftmostIndex<K,V>(): number {
+function getLeftmostIndex<K, V>(): number {
   return 0;
 }
 
-function getRightmostIndex<K,V>(node: BNodeInternal<K,V>): number {
+function getRightmostIndex<K, V>(node: BNodeInternal<K, V>): number {
   return node.children.length - 1;
 }
 
-function getRightInsertionIndex<K,V>(node: BNodeInternal<K,V>): number {
+function getRightInsertionIndex<K, V>(node: BNodeInternal<K, V>): number {
   return node.children.length;
 }
 
-function splitOffRightSide<K,V>(node: BNodeInternal<K,V>): BNodeInternal<K,V> {
+function splitOffRightSide<K, V>(node: BNodeInternal<K, V>): BNodeInternal<K, V> {
   return node.splitOffRightSide();
 }
 
-function splitOffLeftSide<K,V>(node: BNodeInternal<K,V>): BNodeInternal<K,V> {
+function splitOffLeftSide<K, V>(node: BNodeInternal<K, V>): BNodeInternal<K, V> {
   return node.splitOffLeftSide();
 }
 
-function updateRightMax<K,V>(node: BNodeInternal<K,V>, maxBelow: K): void {
+function updateRightMax<K, V>(node: BNodeInternal<K, V>, maxBelow: K): void {
   node.keys[node.keys.length - 1] = maxBelow;
 }
 
@@ -669,19 +646,19 @@ function updateRightMax<K,V>(node: BNodeInternal<K,V>, maxBelow: K): void {
 // Storing data this way avoids small tuple allocations and shows major improvements
 // in GC time in benchmarks.
 
-function alternatingCount(list: unknown[]): number {
+export function alternatingCount(list: unknown[]): number {
   return list.length >> 1;
 }
 
-function alternatingGetFirst<TFirst, TSecond>(list: Array<TFirst | TSecond>, index: number): TFirst {
+export function alternatingGetFirst<TFirst, TSecond>(list: Array<TFirst | TSecond>, index: number): TFirst {
   return list[index << 1] as TFirst;
 }
 
-function alternatingGetSecond<TFirst, TSecond>(list: Array<TFirst | TSecond>, index: number): TSecond {
+export function alternatingGetSecond<TFirst, TSecond>(list: Array<TFirst | TSecond>, index: number): TSecond {
   return list[(index << 1) + 1] as TSecond;
 }
 
-function alternatingPush<TFirst, TSecond>(list: Array<TFirst | TSecond>, first: TFirst, second: TSecond): void {
+export function alternatingPush<TFirst, TSecond>(list: Array<TFirst | TSecond>, first: TFirst, second: TSecond): void {
   // Micro benchmarks show this is the fastest way to do this
   list.push(first, second);
 }
