@@ -13,4 +13,4 @@ import BTree from '../b+tree';
  * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than calling `toArray`
  * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
  */
-export declare function intersect<K, V>(treeA: BTree<K, V>, treeB: BTree<K, V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void;
+export default function intersect<K, V>(treeA: BTree<K, V>, treeB: BTree<K, V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void;

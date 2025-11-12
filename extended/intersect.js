@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.intersect = void 0;
 var parallelWalk_1 = require("./parallelWalk");
 /**
  * Intersects the two trees, calling the supplied `intersection` callback for each intersecting key/value pair.
@@ -66,4 +65,4 @@ function intersect(treeA, treeB, intersection) {
         }
     }
 }
-exports.intersect = intersect;
+exports.default = intersect;

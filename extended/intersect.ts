@@ -1,5 +1,4 @@
 import BTree from '../b+tree';
-import { BNode, BNodeInternal, check } from '../b+tree';
 import type { BTreeWithInternals } from './shared';
 import { createCursor, moveForwardOne, moveTo, getKey, noop, checkCanDoSetOperation } from "./parallelWalk"
 
@@ -17,7 +16,7 @@ import { createCursor, moveForwardOne, moveTo, getKey, noop, checkCanDoSetOperat
  * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than calling `toArray`
  * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
  */
-export function intersect<K,V>(treeA: BTree<K,V>, treeB: BTree<K,V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void {
+export default function intersect<K,V>(treeA: BTree<K,V>, treeB: BTree<K,V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void {
   const _treeA = treeA as unknown as BTreeWithInternals<K,V>;
   const _treeB = treeB as unknown as BTreeWithInternals<K,V>;
   checkCanDoSetOperation(_treeA, _treeB);

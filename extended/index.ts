@@ -1,7 +1,7 @@
 import BTree from '../b+tree';
 import type { BTreeWithInternals } from './shared';
 import { diffAgainst as diffAgainstAlgorithm } from './diffAgainst';
-import { intersect } from './intersect';
+import intersect from './intersect';
 import union from './union';
 
 export class BTreeEx<K = any, V = any> extends BTree<K, V> {

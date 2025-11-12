@@ -21,7 +21,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BTreeEx = void 0;
 var b_tree_1 = __importDefault(require("../b+tree"));
 var diffAgainst_1 = require("./diffAgainst");
-var intersect_1 = require("./intersect");
+var intersect_1 = __importDefault(require("./intersect"));
 var union_1 = __importDefault(require("./union"));
 var BTreeEx = /** @class */ (function (_super) {
     __extends(BTreeEx, _super);
@@ -74,7 +74,7 @@ var BTreeEx = /** @class */ (function (_super) {
      * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
      */
     BTreeEx.prototype.intersect = function (other, intersection) {
-        (0, intersect_1.intersect)(this, other, intersection);
+        (0, intersect_1.default)(this, other, intersection);
     };
     /**
      * Efficiently unions this tree with `other`, reusing subtrees wherever possible.
