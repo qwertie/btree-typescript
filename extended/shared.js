@@ -2,6 +2,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.alternatingPush = exports.alternatingGetSecond = exports.alternatingGetFirst = exports.alternatingCount = exports.flushToLeaves = void 0;
 var b_tree_1 = require("../b+tree");
+/**
+ * Flushes entries from an alternating list into leaf nodes.
+ * The leaf nodes are packed as tightly as possible while ensuring all
+ * nodes are at least 50% full (if more than one leaf is created).
+ * @internal
+ */
 function flushToLeaves(alternatingList, maxNodeSize, onLeafCreation) {
     var totalPairs = alternatingCount(alternatingList);
     if (totalPairs === 0)

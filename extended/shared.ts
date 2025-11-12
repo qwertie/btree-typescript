@@ -1,6 +1,10 @@
 import { BNode } from '../b+tree';
 import BTree from '../b+tree';
 
+/**
+ * BTree with access to internal properties.
+ * @internal
+ */
 export type BTreeWithInternals<K, V> = {
   _root: BNode<K, V>;
   _size: number;
@@ -8,6 +12,12 @@ export type BTreeWithInternals<K, V> = {
   _compare: (a: K, b: K) => number;
 } & Omit<BTree<K, V>, '_root' | '_size' | '_maxNodeSize' | '_compare'>;
 
+/**
+ * Flushes entries from an alternating list into leaf nodes.
+ * The leaf nodes are packed as tightly as possible while ensuring all
+ * nodes are at least 50% full (if more than one leaf is created).
+ * @internal
+ */
 export function flushToLeaves<K, V>(
   alternatingList: (K | V)[],
   maxNodeSize: number,
