@@ -1,5 +1,5 @@
 import { BNode, BNodeInternal, check, defaultComparator, sumChildSizes } from '../b+tree';
-import { alternatingCount, alternatingGetFirst, alternatingGetSecond } from './decompose';
+import { alternatingCount, alternatingGetFirst, alternatingGetSecond } from './shared';
 
 export function bulkLoad<K, V>(
   entries: (K | V)[],

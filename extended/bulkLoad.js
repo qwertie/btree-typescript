@@ -2,14 +2,14 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.flushToLeaves = exports.bulkLoad = void 0;
 var b_tree_1 = require("../b+tree");
-var decompose_1 = require("./decompose");
+var shared_1 = require("./shared");
 function bulkLoad(entries, maxNodeSize, compare) {
-    var totalPairs = (0, decompose_1.alternatingCount)(entries);
+    var totalPairs = (0, shared_1.alternatingCount)(entries);
     if (totalPairs > 1) {
         var cmp = compare !== null && compare !== void 0 ? compare : b_tree_1.defaultComparator;
-        var previousKey = (0, decompose_1.alternatingGetFirst)(entries, 0);
+        var previousKey = (0, shared_1.alternatingGetFirst)(entries, 0);
         for (var i = 1; i < totalPairs; i++) {
-            var key = (0, decompose_1.alternatingGetFirst)(entries, i);
+            var key = (0, shared_1.alternatingGetFirst)(entries, i);
             if (cmp(previousKey, key) >= 0)
                 throw new Error("bulkLoad: entries must be sorted by key in strictly ascending order");
             previousKey = key;
@@ -58,7 +58,7 @@ function bulkLoad(entries, maxNodeSize, compare) {
 }
 exports.bulkLoad = bulkLoad;
 function flushToLeaves(alternatingList, maxNodeSize, onLeafCreation) {
-    var totalPairs = (0, decompose_1.alternatingCount)(alternatingList);
+    var totalPairs = (0, shared_1.alternatingCount)(alternatingList);
     if (totalPairs === 0)
         return 0;
     // This method creates as many evenly filled leaves as possible from
@@ -72,8 +72,8 @@ function flushToLeaves(alternatingList, maxNodeSize, onLeafCreation) {
         var keys = new Array(chunkSize);
         var vals = new Array(chunkSize);
         for (var i = 0; i < chunkSize; i++) {
-            keys[i] = (0, decompose_1.alternatingGetFirst)(alternatingList, pairIndex);
-            vals[i] = (0, decompose_1.alternatingGetSecond)(alternatingList, pairIndex);
+            keys[i] = (0, shared_1.alternatingGetFirst)(alternatingList, pairIndex);
+            vals[i] = (0, shared_1.alternatingGetSecond)(alternatingList, pairIndex);
             pairIndex++;
         }
         remaining -= chunkSize;

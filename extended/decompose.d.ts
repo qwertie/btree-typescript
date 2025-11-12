@@ -1,5 +1,5 @@
 import BTree, { BNode } from '../b+tree';
-import type { BTreeWithInternals } from './shared';
+import { type BTreeWithInternals } from './shared';
 export declare type DecomposeResult<K, V> = {
     disjoint: (number | BNode<K, V>)[];
     tallestIndex: number;
@@ -15,7 +15,3 @@ export declare type DecomposeResult<K, V> = {
  */
 export declare function decompose<K, V>(left: BTreeWithInternals<K, V>, right: BTreeWithInternals<K, V>, mergeValues: (key: K, leftValue: V, rightValue: V) => V | undefined, ignoreRight?: boolean): DecomposeResult<K, V>;
 export declare function buildFromDecomposition<TBTree extends BTree<K, V>, K, V>(constructor: new (entries?: [K, V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) => TBTree, branchingFactor: number, decomposed: DecomposeResult<K, V>, cmp: (a: K, b: K) => number, maxNodeSize: number): TBTree;
-export declare function alternatingCount(list: unknown[]): number;
-export declare function alternatingGetFirst<TFirst, TSecond>(list: Array<TFirst | TSecond>, index: number): TFirst;
-export declare function alternatingGetSecond<TFirst, TSecond>(list: Array<TFirst | TSecond>, index: number): TSecond;
-export declare function alternatingPush<TFirst, TSecond>(list: Array<TFirst | TSecond>, first: TFirst, second: TSecond): void;

@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+var shared_1 = require("./shared");
 var parallelWalk_1 = require("./parallelWalk");
 var decompose_1 = require("./decompose");
 var forEachKeyInBoth_1 = __importDefault(require("./forEachKeyInBoth"));
@@ -32,7 +33,7 @@ function intersect(treeA, treeB, combineFn) {
     var intersected = [];
     (0, forEachKeyInBoth_1.default)(treeA, treeB, function (key, leftValue, rightValue) {
         var mergedValue = combineFn(key, leftValue, rightValue);
-        (0, decompose_1.alternatingPush)(intersected, key, mergedValue);
+        (0, shared_1.alternatingPush)(intersected, key, mergedValue);
     });
     // Decompose both trees into disjoint subtrees leaves.
     // As many of these as possible will be reused from the original trees, and the remaining

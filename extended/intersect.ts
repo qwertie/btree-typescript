@@ -1,7 +1,7 @@
 import BTree from '../b+tree';
-import type { BTreeWithInternals } from './shared';
+import { alternatingPush, type BTreeWithInternals } from './shared';
 import { checkCanDoSetOperation } from "./parallelWalk"
-import { alternatingPush, buildFromDecomposition, decompose } from './decompose';
+import { buildFromDecomposition, decompose } from './decompose';
 import forEachKeyInBoth from './forEachKeyInBoth';
 
 /**

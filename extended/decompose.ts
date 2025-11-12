@@ -1,5 +1,5 @@
 import BTree, { areOverlapping, BNode, BNodeInternal, check } from '../b+tree';
-import type { BTreeWithInternals } from './shared';
+import { alternatingCount, alternatingGetFirst, alternatingGetSecond, alternatingPush, type BTreeWithInternals } from './shared';
 import { createCursor, getKey, MergeCursor, MergeCursorPayload, moveForwardOne, moveTo, noop } from "./parallelWalk";
 import { flushToLeaves } from './bulkLoad';
 
@@ -643,26 +643,4 @@ function splitOffLeftSide<K, V>(node: BNodeInternal<K, V>): BNodeInternal<K, V> 
 
 function updateRightMax<K, V>(node: BNodeInternal<K, V>, maxBelow: K): void {
   node.keys[node.keys.length - 1] = maxBelow;
-}
-
-// ------- Alternating list helpers -------
-// These helpers manage a list that alternates between two types of entries.
-// Storing data this way avoids small tuple allocations and shows major improvements
-// in GC time in benchmarks.
-
-export function alternatingCount(list: unknown[]): number {
-  return list.length >> 1;
-}
-
-export function alternatingGetFirst<TFirst, TSecond>(list: Array<TFirst | TSecond>, index: number): TFirst {
-  return list[index << 1] as TFirst;
-}
-
-export function alternatingGetSecond<TFirst, TSecond>(list: Array<TFirst | TSecond>, index: number): TSecond {
-  return list[(index << 1) + 1] as TSecond;
-}
-
-export function alternatingPush<TFirst, TSecond>(list: Array<TFirst | TSecond>, first: TFirst, second: TSecond): void {
-  // Micro benchmarks show this is the fastest way to do this
-  list.push(first, second);
 }

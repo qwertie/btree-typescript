@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.alternatingPush = exports.alternatingGetSecond = exports.alternatingGetFirst = exports.alternatingCount = exports.buildFromDecomposition = exports.decompose = void 0;
+exports.buildFromDecomposition = exports.decompose = void 0;
 var b_tree_1 = require("../b+tree");
+var shared_1 = require("./shared");
 var parallelWalk_1 = require("./parallelWalk");
 var bulkLoad_1 = require("./bulkLoad");
 /**
@@ -34,21 +35,21 @@ function decompose(left, right, mergeValues, ignoreRight) {
     // because its ancestor may also be disjoint and should be reused instead.
     var highestDisjoint = undefined;
     var onLeafCreation = function (leaf) {
-        alternatingPush(disjoint, 0, leaf);
+        (0, shared_1.alternatingPush)(disjoint, 0, leaf);
     };
     var flushPendingEntries = function () {
         var createdLeaves = (0, bulkLoad_1.flushToLeaves)(pending, left._maxNodeSize, onLeafCreation);
         if (createdLeaves > 0) {
-            tallestIndex = alternatingCount(disjoint) - 1;
+            tallestIndex = (0, shared_1.alternatingCount)(disjoint) - 1;
             tallestHeight = 0;
         }
     };
     var addSharedNodeToDisjointSet = function (node, height) {
         flushPendingEntries();
         node.isShared = true;
-        alternatingPush(disjoint, height, node);
+        (0, shared_1.alternatingPush)(disjoint, height, node);
         if (height > tallestHeight) {
-            tallestIndex = alternatingCount(disjoint) - 1;
+            tallestIndex = (0, shared_1.alternatingCount)(disjoint) - 1;
             tallestHeight = height;
         }
     };
@@ -77,7 +78,7 @@ function decompose(left, right, mergeValues, ignoreRight) {
         var keys = leaf.keys;
         var values = leaf.values;
         for (var i = from; i < toExclusive; ++i)
-            alternatingPush(pending, keys[i], values[i]);
+            (0, shared_1.alternatingPush)(pending, keys[i], values[i]);
     };
     var onMoveInLeaf = function (leaf, payload, fromIndex, toIndex, startedEqual) {
         (0, b_tree_1.check)(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
@@ -213,7 +214,7 @@ function decompose(left, right, mergeValues, ignoreRight) {
             // to pending because they respect the areEqual flag during their moves.
             var merged = mergeValues(key, vA, vB);
             if (merged !== undefined)
-                alternatingPush(pending, key, merged);
+                (0, shared_1.alternatingPush)(pending, key, merged);
             var outTrailing = (0, parallelWalk_1.moveForwardOne)(trailing, leading, key, cmp);
             var outLeading = (0, parallelWalk_1.moveForwardOne)(leading, trailing, key, cmp);
             if (outTrailing || outLeading) {
@@ -258,7 +259,7 @@ function decompose(left, right, mergeValues, ignoreRight) {
 exports.decompose = decompose;
 function buildFromDecomposition(constructor, branchingFactor, decomposed, cmp, maxNodeSize) {
     var disjoint = decomposed.disjoint, tallestIndex = decomposed.tallestIndex;
-    var disjointEntryCount = alternatingCount(disjoint);
+    var disjointEntryCount = (0, shared_1.alternatingCount)(disjoint);
     // Now we have a set of disjoint subtrees and we need to merge them into a single tree.
     // To do this, we start with the tallest subtree from the disjoint set and, for all subtrees
     // to the "right" and "left" of it in sorted order, we append them onto the appropriate side
@@ -267,7 +268,7 @@ function buildFromDecomposition(constructor, branchingFactor, decomposed, cmp, m
     // the leaf level on that side of the tree. Each appended subtree is appended to the node at the
     // same height as itself on the frontier. Each tree is guaranteed to be at most as tall as the
     // current frontier because we start from the tallest subtree and work outward.
-    var initialRoot = alternatingGetSecond(disjoint, tallestIndex);
+    var initialRoot = (0, shared_1.alternatingGetSecond)(disjoint, tallestIndex);
     var frontier = [initialRoot];
     // Process all subtrees to the right of the tallest subtree
     if (tallestIndex + 1 <= disjointEntryCount - 1) {
@@ -312,8 +313,8 @@ function processSide(branchingFactor, disjoint, spine, start, end, step, sideInd
     var unflushedSizes = new Array(spine.length).fill(0); // pre-fill to avoid "holey" array
     for (var i = start; i != end; i += step) {
         var currentHeight = spine.length - 1; // height is number of internal levels; 0 means leaf
-        var subtree = alternatingGetSecond(disjoint, i);
-        var subtreeHeight = alternatingGetFirst(disjoint, i);
+        var subtree = (0, shared_1.alternatingGetSecond)(disjoint, i);
+        var subtreeHeight = (0, shared_1.alternatingGetFirst)(disjoint, i);
         var insertionDepth = currentHeight - (subtreeHeight + 1); // node at this depth has children of height 'subtreeHeight'
         // Ensure path is unshared before mutation
         ensureNotShared(spine, isSharedFrontierDepth, insertionDepth, sideIndex);
@@ -511,24 +512,3 @@ function splitOffLeftSide(node) {
 function updateRightMax(node, maxBelow) {
     node.keys[node.keys.length - 1] = maxBelow;
 }
-// ------- Alternating list helpers -------
-// These helpers manage a list that alternates between two types of entries.
-// Storing data this way avoids small tuple allocations and shows major improvements
-// in GC time in benchmarks.
-function alternatingCount(list) {
-    return list.length >> 1;
-}
-exports.alternatingCount = alternatingCount;
-function alternatingGetFirst(list, index) {
-    return list[index << 1];
-}
-exports.alternatingGetFirst = alternatingGetFirst;
-function alternatingGetSecond(list, index) {
-    return list[(index << 1) + 1];
-}
-exports.alternatingGetSecond = alternatingGetSecond;
-function alternatingPush(list, first, second) {
-    // Micro benchmarks show this is the fastest way to do this
-    list.push(first, second);
-}
-exports.alternatingPush = alternatingPush;
