@@ -2,8 +2,15 @@ import { BNode, BNodeInternal } from '../b+tree';
 import { alternatingCount, alternatingGetFirst, alternatingGetSecond, alternatingPush } from './decompose';
 import type { BTreeWithInternals } from './shared';
 
-export function bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number): BNode<K, V> {
-  throw new Error('Not implemented');
+export function bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number): BNode<K, V> | undefined {
+  const leaves: (number | BNode<K, V>)[] = [];
+  flushToLeaves(entries, maxNodeSize, leaves);
+  const leafCount = alternatingCount(leaves);
+  if (leafCount === 0)
+    return undefined;
+  if (leafCount === 1)
+    return alternatingGetFirst<BNode<K, V>, number>(leaves, 0);
+  throw new Error("bulkLoad: multiple leaves not yet supported");
 }
 
 export function flushToLeaves<K, V>(alternatingList: (K | V)[], maxNodeSize: number, toFlushTo: (number | BNode<K, V>)[]): number {

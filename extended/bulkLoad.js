@@ -4,7 +4,14 @@ exports.flushToLeaves = exports.bulkLoad = void 0;
 var b_tree_1 = require("../b+tree");
 var decompose_1 = require("./decompose");
 function bulkLoad(entries, maxNodeSize) {
-    throw new Error('Not implemented');
+    var leaves = [];
+    flushToLeaves(entries, maxNodeSize, leaves);
+    var leafCount = (0, decompose_1.alternatingCount)(leaves);
+    if (leafCount === 0)
+        return undefined;
+    if (leafCount === 1)
+        return (0, decompose_1.alternatingGetFirst)(leaves, 0);
+    throw new Error("bulkLoad: multiple leaves not yet supported");
 }
 exports.bulkLoad = bulkLoad;
 function flushToLeaves(alternatingList, maxNodeSize, toFlushTo) {
