@@ -36,12 +36,12 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      */
     intersect(other: BTree<K, V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void;
     /**
-     * Efficiently merges this tree with `other`, reusing subtrees wherever possible.
+     * Efficiently unions this tree with `other`, reusing subtrees wherever possible.
      * Neither input tree is modified.
-     * @param other The other tree to merge into this one.
-     * @param merge Called for keys that appear in both trees. Return the desired value, or
+     * @param other The other tree to union with this one.
+     * @param combineFn Called for keys that appear in both trees. Return the desired value, or
      *        `undefined` to omit the key from the result.
-     * @returns A new BTree that contains the merged key/value pairs.
+     * @returns A new BTree that contains the unioned key/value pairs.
      * @description Complexity is bounded O(N + M) for both time and allocations.
      * However, it is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
      * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
@@ -50,7 +50,7 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than cloning `this`
      * and inserting the contents of `other` into the clone.
      */
-    merge(other: BTreeEx<K, V>, mergeFn: (key: K, leftValue: V, rightValue: V) => V | undefined): BTreeEx<K, V>;
+    union(other: BTreeEx<K, V>, combineFn: (key: K, leftValue: V, rightValue: V) => V | undefined): BTreeEx<K, V>;
 }
 export interface BTreeEx<K = any, V = any> {
     with(key: K): BTreeEx<K, V | undefined>;

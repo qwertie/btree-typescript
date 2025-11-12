@@ -1,7 +1,7 @@
 import BTree, { IMap, defaultComparator, simpleComparator } from './b+tree';
 import BTreeEx from './extended';
 import diffAgainst from './extended/diffAgainst';
-import merge from './extended/merge';
+import union from './extended/union';
 import { branchingFactorErrorMsg, comparatorErrorMsg } from './extended/parallelWalk';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
@@ -1362,13 +1362,13 @@ describe('BTree intersect fuzz tests', () => {
   }
 });
 
-describe('BTree merge tests with fanout 32', testMerge.bind(null, 32));
-describe('BTree merge tests with fanout 10', testMerge.bind(null, 10));
-describe('BTree merge tests with fanout 4',  testMerge.bind(null, 4));
+describe('BTree union tests with fanout 32', testUnion.bind(null, 32));
+describe('BTree union tests with fanout 10', testUnion.bind(null, 10));
+describe('BTree union tests with fanout 4',  testUnion.bind(null, 4));
 
-type MergeFn = (key: number, leftValue: number, rightValue: number) => number | undefined;
+type UnionFn = (key: number, leftValue: number, rightValue: number) => number | undefined;
 
-function testMerge(maxNodeSize: number) {
+function testUnion(maxNodeSize: number) {
   const compare = (a: number, b: number) => a - b;
   const sharesNode = (root: any, targetNode: any): boolean => {
     if (root === targetNode)
@@ -1403,20 +1403,20 @@ function testMerge(maxNodeSize: number) {
     return result;
   };
 
-  type MergeExpectationOptions = {
-    expectedMergeFn?: MergeFn;
+  type UnionExpectationOptions = {
+    expectedUnionFn?: UnionFn;
   };
 
-  const naiveMerge = (
+  const naiveUnion = (
     left: BTreeEx<number, number>,
     right: BTreeEx<number, number>,
-    mergeFn: MergeFn
+    unionFn: UnionFn
   ) => {
     const expected = left.clone();
     right.forEachPair((key, rightValue) => {
       if (expected.has(key)) {
         const leftValue = expected.get(key)!;
-        const mergedValue = mergeFn(key, leftValue, rightValue);
+        const mergedValue = unionFn(key, leftValue, rightValue);
         if (mergedValue === undefined) {
           expected.delete(key);
         } else {
@@ -1429,16 +1429,16 @@ function testMerge(maxNodeSize: number) {
     return expected;
   };
 
-  const expectMergeMatchesBaseline = (
+  const expectUnionMatchesBaseline = (
     left: BTreeEx<number, number>,
     right: BTreeEx<number, number>,
-    mergeFn: MergeFn,
+    unionFn: UnionFn,
     after?: (ctx: { result: BTreeEx<number, number>, expected: BTreeEx<number, number> }) => void,
-    options: MergeExpectationOptions = {}
+    options: UnionExpectationOptions = {}
   ) => {
-    const expectedMergeFn = options.expectedMergeFn ?? mergeFn;
-    const expected = naiveMerge(left, right, expectedMergeFn);
-    const result = left.merge(right, mergeFn);
+    const expectedUnionFn = options.expectedUnionFn ?? unionFn;
+    const expected = naiveUnion(left, right, expectedUnionFn);
+    const result = left.union(right, unionFn);
     expect(result.toArray()).toEqual(expected.toArray());
     result.checkValid();
     expected.checkValid();
@@ -1446,7 +1446,7 @@ function testMerge(maxNodeSize: number) {
     return { result, expected };
   };
 
-  test('Merge disjoint roots reuses appended subtree', () => {
+  test('Union disjoint roots reuses appended subtree', () => {
     const size = maxNodeSize * 3;
     const tree1 = buildTree(range(0, size), 1, 0);
     const offset = size * 5;
@@ -1455,22 +1455,22 @@ function testMerge(maxNodeSize: number) {
     expectRootLeafState(tree1, false);
     expectRootLeafState(tree2, false);
 
-    let mergeCalls = 0;
-    const mergeFn: MergeFn = () => {
-      mergeCalls++;
+    let unionCalls = 0;
+    const unionFn: UnionFn = () => {
+      unionCalls++;
       return 0;
     };
 
-    expectMergeMatchesBaseline(tree1, tree2, mergeFn, ({ result }) => {
+    expectUnionMatchesBaseline(tree1, tree2, unionFn, ({ result }) => {
       const resultRoot = result['_root'] as any;
       expect(sharesNode(resultRoot, tree1['_root'] as any)).toBe(true);
       expect(sharesNode(resultRoot, tree2['_root'] as any)).toBe(true);
     });
 
-    expect(mergeCalls).toBe(0);
+    expect(unionCalls).toBe(0);
   });
 
-  test('Merge leaf roots with intersecting keys uses merge callback', () => {
+  test('Union leaf roots with intersecting keys uses union callback', () => {
     const tree1 = buildTree([1, 2, 4], 10, 0);
     const tree2 = buildTree([2, 3, 5], 100, 0);
 
@@ -1478,34 +1478,34 @@ function testMerge(maxNodeSize: number) {
     expectRootLeafState(tree2, true);
 
     const calls: Array<{ key: number, leftValue: number, rightValue: number }> = [];
-    const mergeFn: MergeFn = (key, leftValue, rightValue) => {
+    const unionFn: UnionFn = (key, leftValue, rightValue) => {
       calls.push({ key, leftValue, rightValue });
       return leftValue + rightValue;
     };
 
-    expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, leftValue, rightValue) => leftValue + rightValue
+    expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, leftValue, rightValue) => leftValue + rightValue
     });
     expect(calls).toEqual([{ key: 2, leftValue: 20, rightValue: 200 }]);
   });
 
-  test('Merge leaf roots with disjoint keys', () => {
+  test('Union leaf roots with disjoint keys', () => {
     const tree1 = buildTree([1, 3, 5], 1, 0);
     const tree2 = buildTree([2, 4, 6], 1, 1000);
 
     expectRootLeafState(tree1, true);
     expectRootLeafState(tree2, true);
 
-    let mergeCalls = 0;
-    const mergeFn: MergeFn = () => {
-      mergeCalls++;
+    let unionCalls = 0;
+    const unionFn: UnionFn = () => {
+      unionCalls++;
       return 0;
     };
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, leftValue, rightValue) => leftValue + rightValue
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, leftValue, rightValue) => leftValue + rightValue
     });
-    expect(mergeCalls).toBe(0);
+    expect(unionCalls).toBe(0);
     expect(result.toArray()).toEqual([
       [1, 1],
       [2, 1002],
@@ -1516,7 +1516,7 @@ function testMerge(maxNodeSize: number) {
     ]);
   });
 
-  test('Merge trees disjoint except for shared maximum key', () => {
+  test('Union trees disjoint except for shared maximum key', () => {
     const size = maxNodeSize * 2;
     const tree1 = buildTree(range(0, size), 1, 0);
     const tree2 = buildTree(range(size - 1, size - 1 + size), 3, 0);
@@ -1524,21 +1524,21 @@ function testMerge(maxNodeSize: number) {
     expectRootLeafState(tree1, false);
     expectRootLeafState(tree2, false);
 
-    let mergeCalls = 0;
-    const mergeFn: MergeFn = (_key, leftValue, rightValue) => {
-      mergeCalls++;
+    let unionCalls = 0;
+    const unionFn: UnionFn = (_key, leftValue, rightValue) => {
+      unionCalls++;
       return leftValue + rightValue;
     };
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, leftValue, rightValue) => leftValue + rightValue
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, leftValue, rightValue) => leftValue + rightValue
     });
-    expect(mergeCalls).toBe(1);
+    expect(unionCalls).toBe(1);
     expect(result.get(size - 1)).toBe((size - 1) + (size - 1) * 3);
     expect(result.size).toBe(tree1.size + tree2.size - 1);
   });
 
-  test('Merge trees where all leaves are disjoint and one tree straddles the other', () => {
+  test('Union trees where all leaves are disjoint and one tree straddles the other', () => {
     const straddleLength = 3 * 2 * maxNodeSize; // creates multiple leaves on both trees
     const tree1 = buildTree(
       range(0, straddleLength / 3).concat(range((straddleLength / 3) * 2, straddleLength)),
@@ -1549,18 +1549,18 @@ function testMerge(maxNodeSize: number) {
     expectRootLeafState(tree1, false);
     expectRootLeafState(tree2, false);
 
-    let mergeCalls = 0;
-    const mergeFn: MergeFn = (_key, leftValue, rightValue) => {
-      mergeCalls++;
+    let unionCalls = 0;
+    const unionFn: UnionFn = (_key, leftValue, rightValue) => {
+      unionCalls++;
       return leftValue + rightValue;
     };
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn);
-    expect(mergeCalls).toBe(0);
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn);
+    expect(unionCalls).toBe(0);
     expect(result.size).toBe(tree1.size + tree2.size);
   });
 
-  test('Merge where two-leaf tree intersects leaf-root tree across both leaves', () => {
+  test('Union where two-leaf tree intersects leaf-root tree across both leaves', () => {
     const size = maxNodeSize + Math.max(3, Math.floor(maxNodeSize / 2));
     const tree1 = buildTree(range(0, size), 2, 0);
     const tree2 = buildTree([1, Math.floor(size / 2), size - 1], 5, 0);
@@ -1569,18 +1569,18 @@ function testMerge(maxNodeSize: number) {
     expectRootLeafState(tree2, true);
 
     const seenKeys: number[] = [];
-    const mergeFn: MergeFn = (key, _leftValue, rightValue) => {
+    const unionFn: UnionFn = (key, _leftValue, rightValue) => {
       seenKeys.push(key);
       return rightValue;
     };
 
-    expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, _leftValue, rightValue) => rightValue
+    expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, _leftValue, rightValue) => rightValue
     });
     expect(seenKeys.sort((a, b) => a - b)).toEqual([1, Math.floor(size / 2), size - 1]);
   });
 
-  test('Merge where max key equals min key of other tree', () => {
+  test('Union where max key equals min key of other tree', () => {
     const size = maxNodeSize * 2;
     const tree1 = buildTree(range(0, size), 1, 0);
     const tree2 = buildTree(range(size - 1, size - 1 + size), 10, 0);
@@ -1588,21 +1588,21 @@ function testMerge(maxNodeSize: number) {
     expectRootLeafState(tree1, false);
     expectRootLeafState(tree2, false);
 
-    let mergeCalls = 0;
-    const mergeFn: MergeFn = (_key, _leftValue, rightValue) => {
-      mergeCalls++;
+    let unionCalls = 0;
+    const unionFn: UnionFn = (_key, _leftValue, rightValue) => {
+      unionCalls++;
       return rightValue;
     };
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, _leftValue, rightValue) => rightValue
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, _leftValue, rightValue) => rightValue
     });
-    expect(mergeCalls).toBe(1);
+    expect(unionCalls).toBe(1);
     expect(result.get(size - 1)).toBe((size - 1) * 10);
     expect(result.size).toBe(tree1.size + tree2.size - 1);
   });
 
-  test('Merge odd and even keyed trees', () => {
+  test('Union odd and even keyed trees', () => {
     const limit = maxNodeSize * 3;
     const treeOdd = buildTree(range(1, limit * 2, 2), 1, 0);
     const treeEven = buildTree(range(0, limit * 2, 2), 1, 100);
@@ -1610,18 +1610,18 @@ function testMerge(maxNodeSize: number) {
     expectRootLeafState(treeOdd, false);
     expectRootLeafState(treeEven, false);
 
-    let mergeCalls = 0;
-    const mergeFn: MergeFn = () => {
-      mergeCalls++;
+    let unionCalls = 0;
+    const unionFn: UnionFn = () => {
+      unionCalls++;
       return 0;
     };
 
-    const { result } = expectMergeMatchesBaseline(treeOdd, treeEven, mergeFn);
-    expect(mergeCalls).toBe(0);
+    const { result } = expectUnionMatchesBaseline(treeOdd, treeEven, unionFn);
+    expect(unionCalls).toBe(0);
     expect(result.size).toBe(treeOdd.size + treeEven.size);
   });
 
-  test('Merge with single boundary overlap prefers right value', () => {
+  test('Union with single boundary overlap prefers right value', () => {
     const size = maxNodeSize * 2;
     const tree1 = buildTree(range(0, size), 1, 0);
     const tree2 = buildTree(range(size - 1, size - 1 + size), 10, 0);
@@ -1629,19 +1629,19 @@ function testMerge(maxNodeSize: number) {
     expectRootLeafState(tree1, false);
     expectRootLeafState(tree2, false);
 
-    let mergeCalls = 0;
-    const mergeFn: MergeFn = (_key, _leftValue, rightValue) => {
-      mergeCalls++;
+    let unionCalls = 0;
+    const unionFn: UnionFn = (_key, _leftValue, rightValue) => {
+      unionCalls++;
       return rightValue;
     };
 
-    expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, _leftValue, rightValue) => rightValue
+    expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, _leftValue, rightValue) => rightValue
     });
-    expect(mergeCalls).toBe(1);
+    expect(unionCalls).toBe(1);
   });
 
-  test('Merge overlapping prefix equal to branching factor', () => {
+  test('Union overlapping prefix equal to branching factor', () => {
     const shared = maxNodeSize;
     const tree1Keys = [
       ...range(0, shared),
@@ -1659,145 +1659,145 @@ function testMerge(maxNodeSize: number) {
     expectRootLeafState(tree2, false);
 
     const mergedKeys: number[] = [];
-    const mergeFn: MergeFn = (key, leftValue, rightValue) => {
+    const unionFn: UnionFn = (key, leftValue, rightValue) => {
       mergedKeys.push(key);
       return leftValue + rightValue;
     };
 
-    expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, leftValue, rightValue) => leftValue + rightValue
+    expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, leftValue, rightValue) => leftValue + rightValue
     });
     expect(mergedKeys.sort((a, b) => a - b)).toEqual(range(0, shared));
   });
 
-  test('Merge two empty trees', () => {
+  test('Union two empty trees', () => {
     const tree1 = new BTreeEx<number, number>([], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([], compare, maxNodeSize);
-    const mergeFn: MergeFn = (_k, v1, v2) => v1 + v2;
+    const unionFn: UnionFn = (_k, v1, v2) => v1 + v2;
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, v1, v2) => v1 + v2
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, v1, v2) => v1 + v2
     });
     expect(result.size).toBe(0);
   });
 
-  test('Merge empty tree with non-empty tree', () => {
+  test('Union empty tree with non-empty tree', () => {
     const tree1 = new BTreeEx<number, number>([], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[1, 10], [2, 20], [3, 30]], compare, maxNodeSize);
-    const mergeFn: MergeFn = (_k, v1, v2) => v1 + v2;
+    const unionFn: UnionFn = (_k, v1, v2) => v1 + v2;
 
-    const { result: leftMerge } = expectMergeMatchesBaseline(tree1, tree2, mergeFn);
-    expect(leftMerge.toArray()).toEqual(tree2.toArray());
+    const { result: leftUnion } = expectUnionMatchesBaseline(tree1, tree2, unionFn);
+    expect(leftUnion.toArray()).toEqual(tree2.toArray());
 
-    const { result: rightMerge } = expectMergeMatchesBaseline(tree2, tree1, mergeFn);
-    expect(rightMerge.toArray()).toEqual(tree2.toArray());
+    const { result: rightUnion } = expectUnionMatchesBaseline(tree2, tree1, unionFn);
+    expect(rightUnion.toArray()).toEqual(tree2.toArray());
     expect(tree1.toArray()).toEqual([]);
     expect(tree2.toArray()).toEqual([[1, 10], [2, 20], [3, 30]]);
     tree1.checkValid();
     tree2.checkValid();
   });
 
-  test('Merge with no overlapping keys', () => {
+  test('Union with no overlapping keys', () => {
     const tree1 = new BTreeEx<number, number>([[1, 10], [3, 30], [5, 50]], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[2, 20], [4, 40], [6, 60]], compare, maxNodeSize);
-    const mergeFn: MergeFn = () => {
+    const unionFn: UnionFn = () => {
       throw new Error('Should not be called for non-overlapping keys');
     };
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: mergeFn
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: unionFn
     });
 
     expect(result.size).toBe(6);
     expect(result.toArray()).toEqual([[1, 10], [2, 20], [3, 30], [4, 40], [5, 50], [6, 60]]);
   });
 
-  test('Merge with completely overlapping keys - sum values', () => {
+  test('Union with completely overlapping keys - sum values', () => {
     const tree1 = new BTreeEx<number, number>([[1, 10], [2, 20], [3, 30]], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[1, 5], [2, 15], [3, 25]], compare, maxNodeSize);
-    const mergeFn: MergeFn = (_k, v1, v2) => v1 + v2;
+    const unionFn: UnionFn = (_k, v1, v2) => v1 + v2;
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, v1, v2) => v1 + v2
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, v1, v2) => v1 + v2
     });
     expect(result.size).toBe(tree1.size);
   });
 
-  test('Merge with completely overlapping keys - prefer left', () => {
+  test('Union with completely overlapping keys - prefer left', () => {
     const tree1 = new BTreeEx<number, number>([[1, 10], [2, 20], [3, 30]], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[1, 100], [2, 200], [3, 300]], compare, maxNodeSize);
-    const mergeFn: MergeFn = (_k, v1, _v2) => v1;
+    const unionFn: UnionFn = (_k, v1, _v2) => v1;
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, v1, _v2) => v1
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, v1, _v2) => v1
     });
     expect(result.toArray()).toEqual(tree1.toArray());
   });
 
-  test('Merge with completely overlapping keys - prefer right', () => {
+  test('Union with completely overlapping keys - prefer right', () => {
     const tree1 = new BTreeEx<number, number>([[1, 10], [2, 20], [3, 30]], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[1, 100], [2, 200], [3, 300]], compare, maxNodeSize);
-    const mergeFn: MergeFn = (_k, _v1, v2) => v2;
+    const unionFn: UnionFn = (_k, _v1, v2) => v2;
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn);
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn);
     expect(result.toArray()).toEqual(tree2.toArray());
   });
 
-  test('Merge with partially overlapping keys', () => {
+  test('Union with partially overlapping keys', () => {
     const tree1 = new BTreeEx<number, number>([[1, 10], [2, 20], [3, 30], [4, 40]], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[3, 300], [4, 400], [5, 500], [6, 600]], compare, maxNodeSize);
 
     const mergedKeys: number[] = [];
-    const mergeFn: MergeFn = (key, v1, v2) => {
+    const unionFn: UnionFn = (key, v1, v2) => {
       mergedKeys.push(key);
       return v1 + v2;
     };
 
-    expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, v1, v2) => v1 + v2
+    expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, v1, v2) => v1 + v2
     });
     expect(mergedKeys.sort((a, b) => a - b)).toEqual([3, 4]);
   });
 
-  test('Merge with overlapping keys can delete entries', () => {
+  test('Union with overlapping keys can delete entries', () => {
     const tree1 = new BTreeEx<number, number>([[1, 10], [2, 20], [3, 30], [4, 40]], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[2, 200], [3, 300], [4, 400], [5, 500]], compare, maxNodeSize);
-    const mergeFn: MergeFn = (k, v1, v2) => {
+    const unionFn: UnionFn = (k, v1, v2) => {
       if (k === 3) return undefined;
       return v1 + v2;
     };
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn);
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn);
     expect(result.has(3)).toBe(false);
   });
 
-  test('Merge is called even when values are equal', () => {
+  test('Union is called even when values are equal', () => {
     const tree1 = new BTreeEx<number, number>([[1, 10], [2, 20]], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[2, 20], [3, 30]], compare, maxNodeSize);
 
-    const mergeCallLog: Array<{k: number, v1: number, v2: number}> = [];
-    const mergeFn: MergeFn = (k, v1, v2) => {
-      mergeCallLog.push({k, v1, v2});
+    const unionCallLog: Array<{k: number, v1: number, v2: number}> = [];
+    const unionFn: UnionFn = (k, v1, v2) => {
+      unionCallLog.push({k, v1, v2});
       return v1;
     };
 
-    expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, v1, v2) => v1
+    expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, v1, v2) => v1
     });
-    expect(mergeCallLog).toEqual([{k: 2, v1: 20, v2: 20}]);
+    expect(unionCallLog).toEqual([{k: 2, v1: 20, v2: 20}]);
   });
 
-  test('Merge does not mutate input trees', () => {
+  test('Union does not mutate input trees', () => {
     const entries1: [number, number][] = [[1, 10], [2, 20], [3, 30]];
     const entries2: [number, number][] = [[2, 200], [3, 300], [4, 400]];
     const tree1 = new BTreeEx<number, number>(entries1, compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>(entries2, compare, maxNodeSize);
-    const mergeFn: MergeFn = (_k, v1, v2) => v1 + v2;
+    const unionFn: UnionFn = (_k, v1, v2) => v1 + v2;
 
     const snapshot1 = tree1.toArray();
     const snapshot2 = tree2.toArray();
 
-    expectMergeMatchesBaseline(tree1, tree2, mergeFn);
+    expectUnionMatchesBaseline(tree1, tree2, unionFn);
 
     expect(tree1.toArray()).toEqual(snapshot1);
     expect(tree2.toArray()).toEqual(snapshot2);
@@ -1805,7 +1805,7 @@ function testMerge(maxNodeSize: number) {
     tree2.checkValid();
   });
 
-  test('Merge large trees with some overlaps', () => {
+  test('Union large trees with some overlaps', () => {
     const entries1: [number, number][] = [];
     for (let i = 0; i < 1000; i++) entries1.push([i, i]);
 
@@ -1815,19 +1815,19 @@ function testMerge(maxNodeSize: number) {
     const tree1 = new BTreeEx<number, number>(entries1, compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>(entries2, compare, maxNodeSize);
 
-    let mergeCount = 0;
-    const mergeFn: MergeFn = (k, v1, v2) => {
-      mergeCount++;
+    let unionCount = 0;
+    const unionFn: UnionFn = (k, v1, v2) => {
+      unionCount++;
       return v1 + v2;
     };
 
-    expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, v1, v2) => v1 + v2
+    expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, v1, v2) => v1 + v2
     });
-    expect(mergeCount).toBe(500);
+    expect(unionCount).toBe(500);
   });
 
-  test('Merge with overlaps at boundaries', () => {
+  test('Union with overlaps at boundaries', () => {
     const tree1 = new BTreeEx<number, number>([], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([], compare, maxNodeSize);
 
@@ -1840,25 +1840,25 @@ function testMerge(maxNodeSize: number) {
     }
 
     const mergedKeys: number[] = [];
-    const mergeFn: MergeFn = (key, v1, v2) => {
+    const unionFn: UnionFn = (key, v1, v2) => {
       mergedKeys.push(key);
       return v1 + v2;
     };
 
-    expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: (_k, v1, v2) => v1 + v2
+    expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: (_k, v1, v2) => v1 + v2
     });
 
     const expectedMergedKeys = range(50, 150).filter(k => k % 2 === 0);
     expect(mergedKeys.sort((a, b) => a - b)).toEqual(expectedMergedKeys);
   });
 
-  test('Merge result can be modified without affecting inputs', () => {
+  test('Union result can be modified without affecting inputs', () => {
     const tree1 = new BTreeEx<number, number>([[1, 10], [2, 20]], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[3, 30], [4, 40]], compare, maxNodeSize);
-    const mergeFn: MergeFn = (_k, v1, v2) => v1 + v2;
+    const unionFn: UnionFn = (_k, v1, v2) => v1 + v2;
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn);
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn);
 
     result.set(1, 100);
     result.set(5, 50);
@@ -1874,7 +1874,7 @@ function testMerge(maxNodeSize: number) {
     result.checkValid();
   });
 
-  test('Merge with disjoint ranges', () => {
+  test('Union with disjoint ranges', () => {
     const entries1: [number, number][] = [];
     for (let i = 1; i <= 100; i++) entries1.push([i, i]);
     for (let i = 201; i <= 300; i++) entries1.push([i, i]);
@@ -1884,12 +1884,12 @@ function testMerge(maxNodeSize: number) {
 
     const tree1 = new BTreeEx<number, number>(entries1, compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>(entries2, compare, maxNodeSize);
-    const mergeFn: MergeFn = () => {
+    const unionFn: UnionFn = () => {
       throw new Error('Should not be called - no overlaps');
     };
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: mergeFn
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: unionFn
     });
 
     expect(result.size).toBe(300);
@@ -1901,16 +1901,16 @@ function testMerge(maxNodeSize: number) {
     expect(result.get(300)).toBe(300);
   });
 
-  test('Merge with single element trees', () => {
+  test('Union with single element trees', () => {
     const tree1 = new BTreeEx<number, number>([[5, 50]], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[5, 500]], compare, maxNodeSize);
-    const mergeFn: MergeFn = (_k, v1, v2) => Math.max(v1, v2);
+    const unionFn: UnionFn = (_k, v1, v2) => Math.max(v1, v2);
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn);
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn);
     expect(result.toArray()).toEqual([[5, 500]]);
   });
 
-  test('Merge interleaved keys', () => {
+  test('Union interleaved keys', () => {
     const tree1 = new BTreeEx<number, number>([], compare, maxNodeSize);
     for (let i = 1; i <= 100; i += 2)
       tree1.set(i, i);
@@ -1919,28 +1919,28 @@ function testMerge(maxNodeSize: number) {
     for (let i = 2; i <= 100; i += 2)
       tree2.set(i, i);
 
-    const mergeFn: MergeFn = () => {
+    const unionFn: UnionFn = () => {
       throw new Error('Should not be called - no overlapping keys');
     };
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: mergeFn
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: unionFn
     });
     expect(result.size).toBe(100);
     for (let i = 1; i <= 100; i++)
       expect(result.get(i)).toBe(i);
   });
 
-  test('Merge excluding all overlapping keys', () => {
+  test('Union excluding all overlapping keys', () => {
     const tree1 = new BTreeEx<number, number>([[1, 10], [2, 20], [3, 30]], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[2, 200], [3, 300], [4, 400]], compare, maxNodeSize);
-    const mergeFn: MergeFn = () => undefined;
+    const unionFn: UnionFn = () => undefined;
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn);
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn);
     expect(result.toArray()).toEqual([[1, 10], [4, 400]]);
   });
 
-  test('Merge reuses appended subtree with minimum fanout', () => {
+  test('Union reuses appended subtree with minimum fanout', () => {
     const tree1 = new BTreeEx<number, number>([], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([], compare, maxNodeSize);
 
@@ -1951,18 +1951,18 @@ function testMerge(maxNodeSize: number) {
       tree2.set(i, i * 2);
     }
 
-    const mergeFn: MergeFn = () => {
+    const unionFn: UnionFn = () => {
       throw new Error('Should not be called for disjoint ranges');
     };
 
-    expectMergeMatchesBaseline(tree1, tree2, mergeFn, ({ result }) => {
+    expectUnionMatchesBaseline(tree1, tree2, unionFn, ({ result }) => {
       const resultRoot = result['_root'] as any;
       const tree2Root = tree2['_root'] as any;
       expect(sharesNode(resultRoot, tree2Root)).toBe(true);
     });
   });
 
-  test('Merge with large disjoint ranges', () => {
+  test('Union with large disjoint ranges', () => {
     const tree1 = new BTreeEx<number, number>([], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([], compare, maxNodeSize);
 
@@ -1971,23 +1971,23 @@ function testMerge(maxNodeSize: number) {
     for (let i = 10001; i <= 20000; i++)
       tree2.set(i, i);
 
-    let mergeCalls = 0;
-    const mergeFn: MergeFn = (_k, v1, v2) => {
-      mergeCalls++;
+    let unionCalls = 0;
+    const unionFn: UnionFn = (_k, v1, v2) => {
+      unionCalls++;
       return v1 + v2;
     };
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, mergeFn, undefined, {
-      expectedMergeFn: mergeFn
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, unionFn, undefined, {
+      expectedUnionFn: unionFn
     });
 
-    expect(mergeCalls).toBe(0);
+    expect(unionCalls).toBe(0);
     expect(result.size).toBe(tree1.size + tree2.size);
     expect(result.get(0)).toBe(0);
     expect(result.get(20000)).toBe(20000);
   });
 
-  test('Merge trees with random overlap', () => {
+  test('Union trees with random overlap', () => {
     const size = 10000;
     const keys1 = makeArray(size, true);
     const keys2 = makeArray(size, true);
@@ -2000,13 +2000,13 @@ function testMerge(maxNodeSize: number) {
     for (let k of keys2)
       tree2.set(k, k * 10);
 
-    const preferLeft: MergeFn = (_key, leftValue) => leftValue;
-    expectMergeMatchesBaseline(tree1, tree2, preferLeft, undefined, {
-      expectedMergeFn: preferLeft
+    const preferLeft: UnionFn = (_key, leftValue) => leftValue;
+    expectUnionMatchesBaseline(tree1, tree2, preferLeft, undefined, {
+      expectedUnionFn: preferLeft
     });
   });
 
-  test('Merge trees with ~10% overlap', () => {
+  test('Union trees with ~10% overlap', () => {
     const size = 200;
     const offset = Math.floor(size * 0.9);
     const overlap = size - offset;
@@ -2022,10 +2022,10 @@ function testMerge(maxNodeSize: number) {
       tree2.set(key, key * 10);
     }
 
-    const preferLeft: MergeFn = (_key, leftValue) => leftValue;
+    const preferLeft: UnionFn = (_key, leftValue) => leftValue;
 
-    const { result } = expectMergeMatchesBaseline(tree1, tree2, preferLeft, undefined, {
-      expectedMergeFn: preferLeft
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, preferLeft, undefined, {
+      expectedUnionFn: preferLeft
     });
 
     expect(result.size).toBe(size + size - overlap);
@@ -2039,28 +2039,28 @@ function testMerge(maxNodeSize: number) {
   });
 }
 
-describe('BTree merge input/output validation', () => {
-    test('Merge throws error when comparators differ', () => {
+describe('BTree union input/output validation', () => {
+    test('Union throws error when comparators differ', () => {
     const tree1 = new BTreeEx<number, number>([[1, 10]], (a, b) => b + a);
     const tree2 = new BTreeEx<number, number>([[2, 20]], (a, b) => b - a);
-    const mergeFn: MergeFn = (_k, v1, v2) => v1 + v2;
+    const unionFn: UnionFn = (_k, v1, v2) => v1 + v2;
 
-    expect(() => tree1.merge(tree2, mergeFn)).toThrow(comparatorErrorMsg);
+    expect(() => tree1.union(tree2, unionFn)).toThrow(comparatorErrorMsg);
   });
 
-  test('Merge throws error when max node sizes differ', () => {
+  test('Union throws error when max node sizes differ', () => {
     const compare = (a: number, b: number) => b - a;
     const tree1 = new BTreeEx<number, number>([[1, 10]], compare, 32);
     const tree2 = new BTreeEx<number, number>([[2, 20]], compare, 33);
-    const mergeFn: MergeFn = (_k, v1, v2) => v1 + v2;
+    const unionFn: UnionFn = (_k, v1, v2) => v1 + v2;
 
-    expect(() => tree1.merge(tree2, mergeFn)).toThrow(branchingFactorErrorMsg);
+    expect(() => tree1.union(tree2, unionFn)).toThrow(branchingFactorErrorMsg);
   });
 
-  test('Merging trees returns a tree of the same class', () => {
-    expect(merge(new BTreeEx(), new BTreeEx(), (_k, v1, v2) => v1)).toBeInstanceOf(BTreeEx);
-    expect(merge(new BTree(), new BTree(), (_k, v1, v2) => v1)).toBeInstanceOf(BTree);
-    expect(merge(new BTree(), new BTree(), (_k, v1, v2) => v1) instanceof BTreeEx).toBeFalsy();
+  test('Union returns a tree of the same class', () => {
+    expect(union(new BTreeEx(), new BTreeEx(), (_k, v1, v2) => v1)).toBeInstanceOf(BTreeEx);
+    expect(union(new BTree(), new BTree(), (_k, v1, v2) => v1)).toBeInstanceOf(BTree);
+    expect(union(new BTree(), new BTree(), (_k, v1, v2) => v1) instanceof BTreeEx).toBeFalsy();
   });
 });
 
@@ -2105,9 +2105,9 @@ function makeArray(size: number, randomOrder: boolean, spacing = 10, collisionCh
 
 const randomInt = (rng: MersenneTwister, maxExclusive: number) => Math.floor(rng.random() * maxExclusive);
 
-describe('BTree merge fuzz tests', () => {
+describe('BTree union fuzz tests', () => {
   const compare = (a: number, b: number) => a - b;
-  const mergeFn = (_k: number, left: number, _right: number) => left;
+  const unionFn = (_k: number, left: number, _right: number) => left;
   const FUZZ_SETTINGS = {
     branchingFactors: [4, 5, 32],
     ooms: [0, 1, 2], // [0, 1, 2, 3],
@@ -2157,12 +2157,12 @@ describe('BTree merge fuzz tests', () => {
               const aArray = treeA.toArray();
               const bArray = treeB.toArray();
 
-              const merged = treeA.merge(treeB, mergeFn);
+              const merged = treeA.union(treeB, unionFn);
               merged.checkValid();
 
               expect(merged.toArray()).toEqual(sorted.map(k => [k, k]));
 
-              // Merge should not have mutated inputs
+              // Union should not have mutated inputs
               expect(treeA.toArray()).toEqual(aArray);
               expect(treeB.toArray()).toEqual(bArray);
 

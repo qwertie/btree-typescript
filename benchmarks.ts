@@ -426,21 +426,21 @@ console.log("### Merge between B+ trees");
     console.log(`\tShared nodes (baseline): ${baselineStats.shared}/${baselineStats.total}`);
   };
 
-  const preferLeftMerge = (_k: number, leftValue: any, _rightValue: any) => leftValue;
+  const preferLeftUnion = (_k: number, leftValue: any, _rightValue: any) => leftValue;
 
-  const timeMergeVsBaseline = (
+  const timeUnionVsBaseline = (
     baseTitle: string,
     tree1: BTreeEx<number, number>,
     tree2: BTreeEx<number, number>,
-    prefer = preferLeftMerge,
-    mergeLabel = 'merge()',
+    prefer = preferLeftUnion,
+    unionLabel = 'union()',
     baselineLabel = 'clone+set loop (baseline)'
   ) => {
-    const mergeResult = measure(() => `${baseTitle} using ${mergeLabel}`, () => {
-      return tree1.merge(tree2, prefer);
+    const unionResult = measure(() => `${baseTitle} using ${unionLabel}`, () => {
+      return tree1.union(tree2, prefer);
     });
-    const mergeStats = countTreeNodeStats(mergeResult);
-    console.log(`\tShared nodes (merge): ${mergeStats.shared}/${mergeStats.total}`);
+    const unionStats = countTreeNodeStats(unionResult);
+    console.log(`\tShared nodes (union): ${unionStats.shared}/${unionStats.total}`);
 
     timeBaselineMerge(`${baseTitle} using ${baselineLabel}`, tree1, tree2);
   };
@@ -457,8 +457,8 @@ console.log("### Merge between B+ trees");
       tree2.set(offset + i, offset + i);  // Keys well beyond tree1's range
     }
 
-    const baseTitle = `Merge ${size}+${size} non-overlapping trees`;
-    timeMergeVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `Union ${size}+${size} non-overlapping trees`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
   });
 
   console.log();
@@ -473,8 +473,8 @@ console.log("### Merge between B+ trees");
       tree2.set(i + size, i + size);
     }
 
-    const baseTitle = `Merge ${size}+${size} adjacent range trees`;
-    timeMergeVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `Union ${size}+${size} adjacent range trees`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
   });
 
   console.log();
@@ -491,8 +491,8 @@ console.log("### Merge between B+ trees");
       tree2.set(i + size, i + size);
     }
 
-    const baseTitle = `Merge ${size * 2}+${size} interleaved range trees`;
-    timeMergeVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `Union ${size * 2}+${size} interleaved range trees`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
   });
 
   console.log();
@@ -506,8 +506,8 @@ console.log("### Merge between B+ trees");
       tree2.set(i, i * 10);
     }
 
-    const baseTitle = `Merge ${size}+${size} completely overlapping trees (prefer left)`;
-    timeMergeVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `Union ${size}+${size} completely overlapping trees (prefer left)`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
   });
 
   console.log();
@@ -528,12 +528,12 @@ console.log("### Merge between B+ trees");
       tree2.set(key, key * 10);
     }
 
-    const baseTitle = `Merge trees with 10% overlap (${size}+${size} keys)`;
-    timeMergeVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `Union trees with 10% overlap (${size}+${size} keys)`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
   });
 
   console.log();
-  console.log("# Merge random overlaps");
+  console.log("# Union random overlaps");
   sizes.forEach((size) => {
     const keys1 = makeArray(size, true);
     const keys2 = makeArray(size, true);
@@ -548,12 +548,12 @@ console.log("### Merge between B+ trees");
       tree2.set(k, k * 10);
     }
 
-    const baseTitle = `Merge ${tree1.size}+${tree2.size} trees with random keys`;
-    timeMergeVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `Union ${tree1.size}+${tree2.size} trees with random keys`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
   });
 
   console.log();
-  console.log("# Merge with empty tree");
+  console.log("# Union with empty tree");
   sizes.forEach((size) => {
     const tree1 = new BTreeEx<number, number>();
     const tree2 = new BTreeEx<number, number>();
@@ -562,12 +562,12 @@ console.log("### Merge between B+ trees");
       tree1.set(i, i);
     }
 
-    const baseTitle = `Merge ${size}-key tree with empty tree`;
-    timeMergeVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `Union ${size}-key tree with empty tree`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
   });
 
   console.log();
-  console.log("# Compare merge vs manual iteration for complete overlap");
+  console.log("# Compare union vs manual iteration for complete overlap");
   sizes.forEach((size) => {
     const tree1 = new BTreeEx<number, number>();
     const tree2 = new BTreeEx<number, number>();
@@ -577,8 +577,8 @@ console.log("### Merge between B+ trees");
       tree2.set(i, i * 10);
     }
 
-    const baseTitle = `Merge ${size}+${size} overlapping trees`;
-    timeMergeVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `Union ${size}+${size} overlapping trees`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
   });
 
   console.log();
@@ -602,8 +602,8 @@ console.log("### Merge between B+ trees");
       }
     }
 
-    const baseTitle = `Merge ${tree1.size}+${tree2.size} sparse-overlap trees`;
-    timeMergeVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `Union ${tree1.size}+${tree2.size} sparse-overlap trees`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
   }
 }
 

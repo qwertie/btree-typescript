@@ -2,7 +2,7 @@ import BTree from '../b+tree';
 import type { BTreeWithInternals } from './shared';
 import { diffAgainst as diffAgainstAlgorithm } from './diffAgainst';
 import { intersect } from './intersect';
-import merge from './merge';
+import union from './union';
 
 export class BTreeEx<K = any, V = any> extends BTree<K, V> {
   clone(): this {
@@ -63,12 +63,12 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
   }
 
   /**
-   * Efficiently merges this tree with `other`, reusing subtrees wherever possible.
+   * Efficiently unions this tree with `other`, reusing subtrees wherever possible.
    * Neither input tree is modified.
-   * @param other The other tree to merge into this one.
-   * @param merge Called for keys that appear in both trees. Return the desired value, or
+   * @param other The other tree to union with this one.
+   * @param combineFn Called for keys that appear in both trees. Return the desired value, or
    *        `undefined` to omit the key from the result.
-   * @returns A new BTree that contains the merged key/value pairs.
+   * @returns A new BTree that contains the unioned key/value pairs.
    * @description Complexity is bounded O(N + M) for both time and allocations.
    * However, it is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
    * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
@@ -77,8 +77,8 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
    * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than cloning `this`
    * and inserting the contents of `other` into the clone.
    */
-  merge(other: BTreeEx<K,V>, mergeFn: (key: K, leftValue: V, rightValue: V) => V | undefined): BTreeEx<K,V> {
-    return merge<BTreeEx<K,V>, K, V>(this, other, mergeFn);
+  union(other: BTreeEx<K,V>, combineFn: (key: K, leftValue: V, rightValue: V) => V | undefined): BTreeEx<K,V> {
+    return union<BTreeEx<K,V>, K, V>(this, other, combineFn);
   }
 }
 
