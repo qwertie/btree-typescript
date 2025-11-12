@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkCanDoSetOperation = exports.noop = exports.moveTo = exports.getKey = exports.createCursor = exports.moveForwardOne = void 0;
+exports.checkCanDoSetOperation = exports.branchingFactorErrorMsg = exports.comparatorErrorMsg = exports.noop = exports.moveTo = exports.getKey = exports.createCursor = exports.moveForwardOne = void 0;
 /**
  * Walks the cursor forward by one key.
  * Should only be called to advance cursors that started equal.
@@ -174,12 +174,14 @@ function moveTo(cur, other, targetKey, isInclusive, startedEqual, cmp) {
 exports.moveTo = moveTo;
 function noop() { }
 exports.noop = noop;
+exports.comparatorErrorMsg = "Cannot perform set operations on BTrees with different comparators.";
+exports.branchingFactorErrorMsg = "Cannot perform set operations on BTrees with different max node sizes.";
 function checkCanDoSetOperation(treeA, treeB) {
     if (treeA._compare !== treeB._compare)
-        throw new Error("Cannot merge BTrees with different comparators.");
+        throw new Error(exports.comparatorErrorMsg);
     var branchingFactor = treeA._maxNodeSize;
     if (branchingFactor !== treeB._maxNodeSize)
-        throw new Error("Cannot merge BTrees with different max node sizes.");
+        throw new Error(exports.branchingFactorErrorMsg);
     return branchingFactor;
 }
 exports.checkCanDoSetOperation = checkCanDoSetOperation;

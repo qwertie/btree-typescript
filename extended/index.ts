@@ -59,7 +59,7 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
    * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
    */
   intersect(other: BTree<K,V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void {
-
+    intersect(this, other, intersection);
   }
 
   /**

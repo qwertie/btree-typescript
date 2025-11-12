@@ -209,12 +209,16 @@ export function moveTo<K,V,TP>(
 
 export function noop(): void {}
 
+export const comparatorErrorMsg = "Cannot perform set operations on BTrees with different comparators.";
+
+export const branchingFactorErrorMsg = "Cannot perform set operations on BTrees with different max node sizes.";
+
 export function checkCanDoSetOperation<K,V>(treeA: BTreeWithInternals<K,V>, treeB: BTreeWithInternals<K,V>): number {
       if (treeA._compare !== treeB._compare)
-    throw new Error("Cannot merge BTrees with different comparators.");
+    throw new Error(comparatorErrorMsg);
 
   const branchingFactor = treeA._maxNodeSize;
   if (branchingFactor !== treeB._maxNodeSize)
-    throw new Error("Cannot merge BTrees with different max node sizes.");
+    throw new Error(branchingFactorErrorMsg);
   return branchingFactor;
 }

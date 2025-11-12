@@ -1,6 +1,7 @@
 import BTree, { IMap, defaultComparator, simpleComparator } from './b+tree';
 import BTreeEx from './extended';
 import diffAgainst from './extended/diffAgainst';
+import { branchingFactorErrorMsg, comparatorErrorMsg } from './extended/parallelWalk';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
 
@@ -1258,13 +1259,13 @@ function testIntersect(maxNodeSize: number) {
     const compareB = (a: number, b: number) => a - b;
     const tree1 = new BTreeEx<number, number>([[1, 1]], compareA, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[1, 1]], compareB, maxNodeSize);
-    expect(() => tree1.intersect(tree2, () => {})).toThrow("Cannot intersect BTrees with different comparators.");
+    expect(() => tree1.intersect(tree2, () => {})).toThrow(comparatorErrorMsg);
   });
 
   test('Intersect throws for max node size mismatch', () => {
     const tree1 = new BTreeEx<number, number>([[1, 1]], compare, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([[1, 1]], compare, maxNodeSize + 1);
-    expect(() => tree1.intersect(tree2, () => {})).toThrow("Cannot intersect BTrees with different max node sizes.");
+    expect(() => tree1.intersect(tree2, () => {})).toThrow(branchingFactorErrorMsg);
   });
 }
 
@@ -2039,7 +2040,7 @@ function testMerge(maxNodeSize: number) {
     const tree2 = new BTreeEx<number, number>([[2, 20]], (a, b) => b - a, maxNodeSize);
     const mergeFn: MergeFn = (_k, v1, v2) => v1 + v2;
 
-    expect(() => tree1.merge(tree2, mergeFn)).toThrow();
+    expect(() => tree1.merge(tree2, mergeFn)).toThrow(comparatorErrorMsg);
   });
 
   test('Merge throws error when max node sizes differ', () => {
@@ -2048,7 +2049,7 @@ function testMerge(maxNodeSize: number) {
     const tree2 = new BTreeEx<number, number>([[2, 20]], compare, otherFanout);
     const mergeFn: MergeFn = (_k, v1, v2) => v1 + v2;
 
-    expect(() => tree1.merge(tree2, mergeFn)).toThrow();
+    expect(() => tree1.merge(tree2, mergeFn)).toThrow(branchingFactorErrorMsg);
   });
 
 }

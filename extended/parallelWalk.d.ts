@@ -38,4 +38,6 @@ export declare function getKey<K, V, TP>(c: MergeCursor<K, V, TP>): K;
  */
 export declare function moveTo<K, V, TP>(cur: MergeCursor<K, V, TP>, other: MergeCursor<K, V, TP>, targetKey: K, isInclusive: boolean, startedEqual: boolean, cmp: (a: K, b: K) => number): [outOfTree: boolean, targetExactlyReached: boolean];
 export declare function noop(): void;
+export declare const comparatorErrorMsg = "Cannot perform set operations on BTrees with different comparators.";
+export declare const branchingFactorErrorMsg = "Cannot perform set operations on BTrees with different max node sizes.";
 export declare function checkCanDoSetOperation<K, V>(treeA: BTreeWithInternals<K, V>, treeB: BTreeWithInternals<K, V>): number;
