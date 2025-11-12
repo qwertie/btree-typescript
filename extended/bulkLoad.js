@@ -32,7 +32,8 @@ var shared_1 = require("./shared");
  * @returns A new BTree containing the given entries.
  */
 function bulkLoad(entries, maxNodeSize, compare) {
-    var root = bulkLoadRoot(entries, maxNodeSize, compare);
+    var alternatingEntries = entries;
+    var root = bulkLoadRoot(alternatingEntries, maxNodeSize, compare);
     var tree = new b_tree_1.default(undefined, compare, maxNodeSize);
     var target = tree;
     target._root = root;

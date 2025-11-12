@@ -1,5 +1,5 @@
 import BTree, { BNode, BNodeInternal, check, sumChildSizes } from '../b+tree';
-import { alternatingCount, alternatingGetFirst, flushToLeaves, type BTreeWithInternals } from './shared';
+import { alternatingCount, alternatingGetFirst, flushToLeaves, type AlternatingList, type BTreeWithInternals } from './shared';
 
 /**
  * Loads a B-Tree from a sorted list of entries in bulk. This is faster than inserting
@@ -15,7 +15,8 @@ export function bulkLoad<K, V>(
   maxNodeSize: number,
   compare: (a: K, b: K) => number
 ): BTree<K, V> {
-  const root = bulkLoadRoot<K, V>(entries, maxNodeSize, compare);
+  const alternatingEntries = entries as AlternatingList<K, V>;
+  const root = bulkLoadRoot<K, V>(alternatingEntries, maxNodeSize, compare);
   const tree = new BTree<K, V>(undefined, compare, maxNodeSize);
   const target = tree as unknown as BTreeWithInternals<K, V>;
   target._root = root;
@@ -28,15 +29,15 @@ export function bulkLoad<K, V>(
  * @internal
  */
 export function bulkLoadRoot<K, V>(
-  entries: (K | V)[],
+  entries: AlternatingList<K, V>,
   maxNodeSize: number,
   compare: (a: K, b: K) => number
 ): BNode<K, V> {
   const totalPairs = alternatingCount(entries);
   if (totalPairs > 1) {
-    let previousKey = alternatingGetFirst<K, V>(entries, 0);
+    let previousKey = alternatingGetFirst(entries, 0);
     for (let i = 1; i < totalPairs; i++) {
-      const key = alternatingGetFirst<K, V>(entries, i);
+      const key = alternatingGetFirst(entries, i);
       if (compare(previousKey, key) >= 0)
         throw new Error("bulkLoad: entries must be sorted by key in strictly ascending order");
       previousKey = key;
@@ -44,7 +45,7 @@ export function bulkLoadRoot<K, V>(
   }
 
   const leaves: BNode<K, V>[] = [];
-  flushToLeaves<K, V>(entries, maxNodeSize, (leaf) => leaves.push(leaf));
+  flushToLeaves(entries, maxNodeSize, (leaf) => leaves.push(leaf));
   if (leaves.length === 0)
     return new BNode<K, V>();
 

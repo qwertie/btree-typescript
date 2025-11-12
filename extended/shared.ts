@@ -13,13 +13,19 @@ export type BTreeWithInternals<K, V> = {
 } & Omit<BTree<K, V>, '_root' | '_size' | '_maxNodeSize' | '_compare'>;
 
 /**
+ * Alternating list storing entries as `[A0, B0, A1, B1, ...]`.
+ * @internal
+ */
+export type AlternatingList<A, B> = Array<A | B>;
+
+/**
  * Flushes entries from an alternating list into leaf nodes.
  * The leaf nodes are packed as tightly as possible while ensuring all
  * nodes are at least 50% full (if more than one leaf is created).
  * @internal
  */
 export function flushToLeaves<K, V>(
-  alternatingList: (K | V)[],
+  alternatingList: AlternatingList<K, V>,
   maxNodeSize: number,
   onLeafCreation: (node: BNode<K, V>) => void
 ): number {
@@ -38,8 +44,8 @@ export function flushToLeaves<K, V>(
     const keys = new Array<K>(chunkSize);
     const vals = new Array<V>(chunkSize);
     for (let i = 0; i < chunkSize; i++) {
-      keys[i] = alternatingGetFirst<K, V>(alternatingList, pairIndex);
-      vals[i] = alternatingGetSecond<K, V>(alternatingList, pairIndex);
+      keys[i] = alternatingGetFirst(alternatingList, pairIndex);
+      vals[i] = alternatingGetSecond(alternatingList, pairIndex);
       pairIndex++;
     }
     remaining -= chunkSize;
@@ -56,19 +62,43 @@ export function flushToLeaves<K, V>(
 // Storing data this way avoids small tuple allocations and shows major improvements
 // in GC time in benchmarks.
 
-export function alternatingCount(list: unknown[]): number {
+/**
+ * Creates an empty alternating list with the specified element types.
+ * @internal
+ */
+export function createAlternatingList<A, B>(): AlternatingList<A, B> {
+  return [] as AlternatingList<A, B>;
+}
+
+/**
+ * Counts the number of `[A, B]` pairs stored in the alternating list.
+ * @internal
+ */
+export function alternatingCount<A, B>(list: AlternatingList<A, B>): number {
   return list.length >> 1;
 }
 
-export function alternatingGetFirst<TFirst, TSecond>(list: Array<TFirst | TSecond>, index: number): TFirst {
-  return list[index << 1] as TFirst;
+/**
+ * Reads the first entry of the pair at the given index.
+ * @internal
+ */
+export function alternatingGetFirst<A, B>(list: AlternatingList<A, B>, index: number): A {
+  return list[index << 1] as A;
 }
 
-export function alternatingGetSecond<TFirst, TSecond>(list: Array<TFirst | TSecond>, index: number): TSecond {
-  return list[(index << 1) + 1] as TSecond;
+/**
+ * Reads the second entry of the pair at the given index.
+ * @internal
+ */
+export function alternatingGetSecond<A, B>(list: AlternatingList<A, B>, index: number): B {
+  return list[(index << 1) + 1] as B;
 }
 
-export function alternatingPush<TFirst, TSecond>(list: Array<TFirst | TSecond>, first: TFirst, second: TSecond): void {
+/**
+ * Appends a pair to the alternating list.
+ * @internal
+ */
+export function alternatingPush<A, B>(list: AlternatingList<A, B>, first: A, second: B): void {
   // Micro benchmarks show this is the fastest way to do this
   list.push(first, second);
 }

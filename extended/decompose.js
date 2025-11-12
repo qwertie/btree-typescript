@@ -20,7 +20,7 @@ function decompose(left, right, combineFn, ignoreRight) {
     (0, b_tree_1.check)(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
     // Holds the disjoint nodes that result from decomposition.
     // Alternating entries of (height, node) to avoid creating small tuples
-    var disjoint = [];
+    var disjoint = (0, shared_1.createAlternatingList)();
     // During the decomposition, leaves that are not disjoint are decomposed into individual entries
     // that accumulate in this array in sorted order. They are flushed into leaf nodes whenever a reused
     // disjoint subtree is added to the disjoint set.
@@ -28,7 +28,7 @@ function decompose(left, right, combineFn, ignoreRight) {
     // An example of this would be a leaf in one tree that contained keys [0, 100, 101, 102].
     // In the other tree, there is a leaf that contains [2, 3, 4, 5]. This leaf can be reused entirely,
     // but the first tree's leaf must be decomposed into [0] and [100, 101, 102]
-    var pending = [];
+    var pending = (0, shared_1.createAlternatingList)();
     var tallestIndex = -1, tallestHeight = -1;
     // During the upward part of the cursor walk, this holds the highest disjoint node seen so far.
     // This is done because we cannot know immediately whether we can add the node to the disjoint set

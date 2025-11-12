@@ -1,12 +1,12 @@
 import BTree, { areOverlapping, BNode, BNodeInternal, check } from '../b+tree';
-import { alternatingCount, alternatingGetFirst, alternatingGetSecond, alternatingPush, flushToLeaves, type BTreeWithInternals } from './shared';
+import { alternatingCount, alternatingGetFirst, alternatingGetSecond, alternatingPush, createAlternatingList, flushToLeaves, type AlternatingList, type BTreeWithInternals } from './shared';
 import { createCursor, getKey, Cursor, moveForwardOne, moveTo, noop } from "./parallelWalk";
 
 /**
  * A set of disjoint nodes, their heights, and the index of the tallest node.
  * @internal
  */
-export type DecomposeResult<K, V> = { disjoint: (number | BNode<K, V>)[], tallestIndex: number };
+export type DecomposeResult<K, V> = { disjoint: AlternatingList<number, BNode<K, V>>, tallestIndex: number };
 
 /**
  * Payload type used by decomposition cursors.
@@ -33,7 +33,7 @@ export function decompose<K, V>(
   check(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
   // Holds the disjoint nodes that result from decomposition.
   // Alternating entries of (height, node) to avoid creating small tuples
-  const disjoint: (number | BNode<K, V>)[] = [];
+  const disjoint = createAlternatingList<number, BNode<K, V>>();
   // During the decomposition, leaves that are not disjoint are decomposed into individual entries
   // that accumulate in this array in sorted order. They are flushed into leaf nodes whenever a reused
   // disjoint subtree is added to the disjoint set.
@@ -41,7 +41,7 @@ export function decompose<K, V>(
   // An example of this would be a leaf in one tree that contained keys [0, 100, 101, 102].
   // In the other tree, there is a leaf that contains [2, 3, 4, 5]. This leaf can be reused entirely,
   // but the first tree's leaf must be decomposed into [0] and [100, 101, 102]
-  const pending: (K | V)[] = [];
+  const pending = createAlternatingList<K, V>();
   let tallestIndex = -1, tallestHeight = -1;
 
   // During the upward part of the cursor walk, this holds the highest disjoint node seen so far.
@@ -66,7 +66,7 @@ export function decompose<K, V>(
   const addSharedNodeToDisjointSet = (node: BNode<K, V>, height: number) => {
     flushPendingEntries();
     node.isShared = true;
-    alternatingPush<number, BNode<K, V>>(disjoint, height, node);
+    alternatingPush(disjoint, height, node);
     if (height > tallestHeight) {
       tallestIndex = alternatingCount(disjoint) - 1;
       tallestHeight = height;
@@ -101,7 +101,7 @@ export function decompose<K, V>(
     const keys = leaf.keys;
     const values = leaf.values;
     for (let i = from; i < toExclusive; ++i)
-      alternatingPush<K, V>(pending, keys[i], values[i]);
+      alternatingPush(pending, keys[i], values[i]);
   };
 
   const onMoveInLeaf = (
@@ -277,7 +277,7 @@ export function decompose<K, V>(
       // to pending because they respect the areEqual flag during their moves.
       const combined = combineFn(key, vA, vB);
       if (combined !== undefined)
-        alternatingPush<K, V>(pending, key, combined);
+        alternatingPush(pending, key, combined);
       const outTrailing = moveForwardOne(trailing, leading, key, cmp);
       const outLeading = moveForwardOne(leading, trailing, key, cmp);
       if (outTrailing || outLeading) {
@@ -339,7 +339,7 @@ export function buildFromDecomposition<TBTree extends BTree<K, V>, K, V>(
   // the leaf level on that side of the tree. Each appended subtree is appended to the node at the
   // same height as itself on the frontier. Each tree is guaranteed to be at most as tall as the
   // current frontier because we start from the tallest subtree and work outward.
-  const initialRoot = alternatingGetSecond<number, BNode<K, V>>(disjoint, tallestIndex);
+  const initialRoot = alternatingGetSecond(disjoint, tallestIndex);
   const frontier: BNode<K, V>[] = [initialRoot];
 
   // Process all subtrees to the right of the tallest subtree
@@ -390,7 +390,7 @@ export function buildFromDecomposition<TBTree extends BTree<K, V>, K, V>(
  */
 function processSide<K, V>(
   branchingFactor: number,
-  disjoint: (number | BNode<K, V>)[],
+  disjoint: AlternatingList<number, BNode<K, V>>,
   spine: BNode<K, V>[],
   start: number,
   end: number,
@@ -422,8 +422,8 @@ function processSide<K, V>(
 
   for (let i = start; i != end; i += step) {
     const currentHeight = spine.length - 1; // height is number of internal levels; 0 means leaf
-    const subtree = alternatingGetSecond<number, BNode<K, V>>(disjoint, i);
-    const subtreeHeight = alternatingGetFirst<number, BNode<K, V>>(disjoint, i);
+    const subtree = alternatingGetSecond(disjoint, i);
+    const subtreeHeight = alternatingGetFirst(disjoint, i);
     const insertionDepth = currentHeight - (subtreeHeight + 1); // node at this depth has children of height 'subtreeHeight'
 
     // Ensure path is unshared before mutation

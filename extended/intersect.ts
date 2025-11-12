@@ -1,5 +1,5 @@
 import BTree from '../b+tree';
-import { alternatingPush, type BTreeWithInternals } from './shared';
+import { alternatingPush, createAlternatingList, type BTreeWithInternals } from './shared';
 import { checkCanDoSetOperation } from "./parallelWalk"
 import { buildFromDecomposition, decompose } from './decompose';
 import forEachKeyInBoth from './forEachKeyInBoth';
@@ -32,7 +32,7 @@ export default function intersect<TBTree extends BTree<K, V>, K, V>(
   if (_treeB._root.size() === 0)
     return treeA.clone();
 
-  const intersected: (K | V)[] = [];
+  const intersected = createAlternatingList<K, V>();
   forEachKeyInBoth(treeA, treeB, (key, leftValue, rightValue) => {
     const mergedValue = combineFn(key, leftValue, rightValue);
     alternatingPush(intersected, key, mergedValue);

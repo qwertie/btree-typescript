@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.alternatingPush = exports.alternatingGetSecond = exports.alternatingGetFirst = exports.alternatingCount = exports.flushToLeaves = void 0;
+exports.alternatingPush = exports.alternatingGetSecond = exports.alternatingGetFirst = exports.alternatingCount = exports.createAlternatingList = exports.flushToLeaves = void 0;
 var b_tree_1 = require("../b+tree");
 /**
  * Flushes entries from an alternating list into leaf nodes.
@@ -41,18 +41,42 @@ exports.flushToLeaves = flushToLeaves;
 // These helpers manage a list that alternates between two types of entries.
 // Storing data this way avoids small tuple allocations and shows major improvements
 // in GC time in benchmarks.
+/**
+ * Creates an empty alternating list with the specified element types.
+ * @internal
+ */
+function createAlternatingList() {
+    return [];
+}
+exports.createAlternatingList = createAlternatingList;
+/**
+ * Counts the number of `[A, B]` pairs stored in the alternating list.
+ * @internal
+ */
 function alternatingCount(list) {
     return list.length >> 1;
 }
 exports.alternatingCount = alternatingCount;
+/**
+ * Reads the first entry of the pair at the given index.
+ * @internal
+ */
 function alternatingGetFirst(list, index) {
     return list[index << 1];
 }
 exports.alternatingGetFirst = alternatingGetFirst;
+/**
+ * Reads the second entry of the pair at the given index.
+ * @internal
+ */
 function alternatingGetSecond(list, index) {
     return list[(index << 1) + 1];
 }
 exports.alternatingGetSecond = alternatingGetSecond;
+/**
+ * Appends a pair to the alternating list.
+ * @internal
+ */
 function alternatingPush(list, first, second) {
     // Micro benchmarks show this is the fastest way to do this
     list.push(first, second);

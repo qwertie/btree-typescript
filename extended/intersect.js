@@ -30,7 +30,7 @@ function intersect(treeA, treeB, combineFn) {
         return treeB.clone();
     if (_treeB._root.size() === 0)
         return treeA.clone();
-    var intersected = [];
+    var intersected = (0, shared_1.createAlternatingList)();
     (0, forEachKeyInBoth_1.default)(treeA, treeB, function (key, leftValue, rightValue) {
         var mergedValue = combineFn(key, leftValue, rightValue);
         (0, shared_1.alternatingPush)(intersected, key, mergedValue);
