@@ -11,8 +11,8 @@ export interface MergeCursor<K, V, TPayload> {
   leafPayload: TPayload;
   makePayload: () => TPayload;
   onMoveInLeaf: (leaf: BNode<K, V>, payload: TPayload, fromIndex: number, toIndex: number, isInclusive: boolean) => void;
-  onExitLeaf: (leaf: BNode<K, V>, payload: TPayload, startingIndex: number, isInclusive: boolean, cursorThis: MergeCursor<K,V,TPayload>) => void;
-  onStepUp: (parent: BNodeInternal<K, V>, height: number, payload: TPayload, fromIndex: number, spineIndex: number, stepDownIndex: number, cursorThis: MergeCursor<K,V,TPayload>) => void;
+  onExitLeaf: (leaf: BNode<K, V>, payload: TPayload, startingIndex: number, isInclusive: boolean, cursorThis: MergeCursor<K, V, TPayload>) => void;
+  onStepUp: (parent: BNodeInternal<K, V>, height: number, payload: TPayload, fromIndex: number, spineIndex: number, stepDownIndex: number, cursorThis: MergeCursor<K, V, TPayload>) => void;
   onStepDown: (node: BNodeInternal<K, V>, height: number, spineIndex: number, stepDownIndex: number, cursorThis: MergeCursor<K, V, TPayload>) => void;
   onEnterLeaf: (leaf: BNode<K, V>, destIndex: number, cursorThis: MergeCursor<K, V, TPayload>, cursorOther: MergeCursor<K, V, TPayload>) => void;
 }
@@ -22,11 +22,11 @@ export interface MergeCursor<K, V, TPayload> {
  * Should only be called to advance cursors that started equal.
  * Returns true if end-of-tree was reached (cursor not structurally mutated).
  */
-export function moveForwardOne<K,V,TP>(
-  cur: MergeCursor<K,V,TP>,
-  other: MergeCursor<K,V,TP>,
+export function moveForwardOne<K, V, TP>(
+  cur: MergeCursor<K, V, TP>,
+  other: MergeCursor<K, V, TP>,
   currentKey: K,
-  cmp: (a:K,b:K)=>number
+  cmp: (a: K, b: K) => number
 ): boolean {
   const leaf = cur.leaf;
   const nextIndex = cur.leafIndex + 1;
@@ -45,32 +45,32 @@ export function moveForwardOne<K,V,TP>(
 /**
  * Create a cursor pointing to the leftmost key of the supplied tree.
  */
-export function createCursor<K,V,TP>(
-  tree: BTreeWithInternals<K,V>,
-  makePayload: MergeCursor<K,V,TP>["makePayload"],
-  onEnterLeaf: MergeCursor<K,V,TP>["onEnterLeaf"],
-  onMoveInLeaf: MergeCursor<K,V,TP>["onMoveInLeaf"],
-  onExitLeaf: MergeCursor<K,V,TP>["onExitLeaf"],
-  onStepUp: MergeCursor<K,V,TP>["onStepUp"],
-  onStepDown: MergeCursor<K,V,TP>["onStepDown"],
-): MergeCursor<K,V,TP> {
-  const spine: Array<{ node: BNodeInternal<K,V>, childIndex: number, payload: TP }> = [];
-  let n: BNode<K,V> = tree._root;
+export function createCursor<K, V, TP>(
+  tree: BTreeWithInternals<K, V>,
+  makePayload: MergeCursor<K, V, TP>["makePayload"],
+  onEnterLeaf: MergeCursor<K, V, TP>["onEnterLeaf"],
+  onMoveInLeaf: MergeCursor<K, V, TP>["onMoveInLeaf"],
+  onExitLeaf: MergeCursor<K, V, TP>["onExitLeaf"],
+  onStepUp: MergeCursor<K, V, TP>["onStepUp"],
+  onStepDown: MergeCursor<K, V, TP>["onStepDown"],
+): MergeCursor<K, V, TP> {
+  const spine: Array<{ node: BNodeInternal<K, V>, childIndex: number, payload: TP }> = [];
+  let n: BNode<K, V> = tree._root;
   while (!n.isLeaf) {
-    const ni = n as BNodeInternal<K,V>;
+    const ni = n as BNodeInternal<K, V>;
     const payload = makePayload();
     spine.push({ node: ni, childIndex: 0, payload });
     n = ni.children[0];
   }
   const leafPayload = makePayload();
-  const cur: MergeCursor<K,V,TP> = {
+  const cur: MergeCursor<K, V, TP> = {
     tree, leaf: n, leafIndex: 0, spine, leafPayload, makePayload: makePayload,
     onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown
   };
   return cur;
 }
 
-export function getKey<K,V,TP>(c: MergeCursor<K,V,TP>): K {
+export function getKey<K, V, TP>(c: MergeCursor<K, V, TP>): K {
   return c.leaf.keys[c.leafIndex];
 }
 
@@ -79,13 +79,13 @@ export function getKey<K,V,TP>(c: MergeCursor<K,V,TP>): K {
  * Returns a boolean indicating if end-of-tree was reached (cursor not structurally mutated).
  * Also returns a boolean indicating if the target key was landed on exactly.
  */
-export function moveTo<K,V,TP>(
-  cur: MergeCursor<K,V,TP>,
-  other: MergeCursor<K,V,TP>,
+export function moveTo<K, V, TP>(
+  cur: MergeCursor<K, V, TP>,
+  other: MergeCursor<K, V, TP>,
   targetKey: K,
   isInclusive: boolean,
   startedEqual: boolean,
-  cmp: (a:K,b:K)=>number
+  cmp: (a: K, b: K) => number
 ): [outOfTree: boolean, targetExactlyReached: boolean] {
   // Cache callbacks for perf
   const onMoveInLeaf = cur.onMoveInLeaf;
@@ -169,10 +169,10 @@ export function moveTo<K,V,TP>(
   // Descend, invoking onStepDown and creating payloads
   let height = initialSpineLength - descentLevel - 1; // calculate height before changing length
   spine.length = descentLevel + 1;
-  let node: BNode<K,V> = spine[descentLevel].node.children[descentIndex];
+  let node: BNode<K, V> = spine[descentLevel].node.children[descentIndex];
 
   while (!node.isLeaf) {
-    const ni = node as BNodeInternal<K,V>;
+    const ni = node as BNodeInternal<K, V>;
     const keys = ni.keys;
     let stepDownIndex = ni.indexOf(targetKey, 0, cmp);
     if (!isInclusive && stepDownIndex < keys.length && cmp(keys[stepDownIndex], targetKey) === 0)
@@ -207,14 +207,14 @@ export function moveTo<K,V,TP>(
   return [false, targetExactlyReached];
 }
 
-export function noop(): void {}
+export function noop(): void { }
 
 export const comparatorErrorMsg = "Cannot perform set operations on BTrees with different comparators.";
 
 export const branchingFactorErrorMsg = "Cannot perform set operations on BTrees with different max node sizes.";
 
-export function checkCanDoSetOperation<K,V>(treeA: BTreeWithInternals<K,V>, treeB: BTreeWithInternals<K,V>): number {
-      if (treeA._compare !== treeB._compare)
+export function checkCanDoSetOperation<K, V>(treeA: BTreeWithInternals<K, V>, treeB: BTreeWithInternals<K, V>): number {
+  if (treeA._compare !== treeB._compare)
     throw new Error(comparatorErrorMsg);
 
   const branchingFactor = treeA._maxNodeSize;

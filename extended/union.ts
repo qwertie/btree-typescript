@@ -19,13 +19,13 @@ import { checkCanDoSetOperation } from "./parallelWalk";
  * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than cloning `this`
  * and inserting the contents of `other` into the clone.
  */
-export default function union<TBTree extends BTree<K,V>, K,V>(
+export default function union<TBTree extends BTree<K, V>, K, V>(
   treeA: TBTree,
   treeB: TBTree,
   combineFn: (key: K, leftValue: V, rightValue: V) => V | undefined
 ): TBTree {
-  const _treeA = treeA as unknown as BTreeWithInternals<K,V>;
-  const _treeB = treeB as unknown as BTreeWithInternals<K,V>;
+  const _treeA = treeA as unknown as BTreeWithInternals<K, V>;
+  const _treeB = treeB as unknown as BTreeWithInternals<K, V>;
   const branchingFactor = checkCanDoSetOperation(_treeA, _treeB);
   if (_treeA._root.size() === 0)
     return treeB.clone();
@@ -36,6 +36,6 @@ export default function union<TBTree extends BTree<K,V>, K,V>(
   // As many of these as possible will be reused from the original trees, and the remaining
   // will be leaves that are the result of merging intersecting leaves.
   const decomposed = decompose(_treeA, _treeB, combineFn);
-  const constructor = treeA.constructor as new (entries?: [K,V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) => TBTree;
+  const constructor = treeA.constructor as new (entries?: [K, V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) => TBTree;
   return buildFromDecomposition(constructor, branchingFactor, decomposed, _treeA._compare, _treeA._maxNodeSize);
 }

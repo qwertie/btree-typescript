@@ -58,7 +58,7 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
    * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than calling `toArray`
    * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
    */
-  forEachKeyInBoth(other: BTree<K,V>, callback: (key: K, leftValue: V, rightValue: V) => void): void {
+  forEachKeyInBoth(other: BTree<K, V>, callback: (key: K, leftValue: V, rightValue: V) => void): void {
     forEachKeyInBoth(this, other, callback);
   }
 
@@ -77,8 +77,8 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
    * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than cloning `this`
    * and inserting the contents of `other` into the clone.
    */
-  union(other: BTreeEx<K,V>, combineFn: (key: K, leftValue: V, rightValue: V) => V | undefined): BTreeEx<K,V> {
-    return union<BTreeEx<K,V>, K, V>(this, other, combineFn);
+  union(other: BTreeEx<K, V>, combineFn: (key: K, leftValue: V, rightValue: V) => V | undefined): BTreeEx<K, V> {
+    return union<BTreeEx<K, V>, K, V>(this, other, combineFn);
   }
 }
 

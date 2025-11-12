@@ -2,6 +2,10 @@ import { BNode, BNodeInternal } from '../b+tree';
 import { alternatingCount, alternatingGetFirst, alternatingGetSecond, alternatingPush } from './decompose';
 import type { BTreeWithInternals } from './shared';
 
+export function bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number): BNode<K, V> {
+  throw new Error('Not implemented');
+}
+
 export function flushToLeaves<K, V>(alternatingList: (K | V)[], maxNodeSize: number, toFlushTo: (number | BNode<K, V>)[]): number {
   const totalPairs = alternatingCount(alternatingList);
   if (totalPairs === 0)

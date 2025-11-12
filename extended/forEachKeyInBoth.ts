@@ -16,21 +16,21 @@ import { createCursor, moveForwardOne, moveTo, getKey, noop, checkCanDoSetOperat
  * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than calling `toArray`
  * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
  */
-export default function forEachKeyInBoth<K,V>(treeA: BTree<K,V>, treeB: BTree<K,V>, callback: (key: K, leftValue: V, rightValue: V) => void): void {
-  const _treeA = treeA as unknown as BTreeWithInternals<K,V>;
-  const _treeB = treeB as unknown as BTreeWithInternals<K,V>;
+export default function forEachKeyInBoth<K, V>(treeA: BTree<K, V>, treeB: BTree<K, V>, callback: (key: K, leftValue: V, rightValue: V) => void): void {
+  const _treeA = treeA as unknown as BTreeWithInternals<K, V>;
+  const _treeB = treeB as unknown as BTreeWithInternals<K, V>;
   checkCanDoSetOperation(_treeA, _treeB);
   if (treeB.size === 0 || treeA.size === 0)
     return;
 
   const cmp = treeA._compare;
   const makePayload = (): undefined => undefined;
-  let cursorA = createCursor<K,V,undefined>(_treeA, makePayload, noop, noop, noop, noop, noop);
-  let cursorB = createCursor<K,V,undefined>(_treeB, makePayload, noop, noop, noop, noop, noop);
+  let cursorA = createCursor<K, V, undefined>(_treeA, makePayload, noop, noop, noop, noop, noop);
+  let cursorB = createCursor<K, V, undefined>(_treeB, makePayload, noop, noop, noop, noop, noop);
   let leading = cursorA;
   let trailing = cursorB;
   let order = cmp(getKey(leading), getKey(trailing));
-  
+
   // This walk is somewhat similar to a merge walk in that it does an alternating hop walk with cursors.
   // However, the only thing we care about is when the two cursors are equal (equality is intersection).
   // When they are not equal we just advance the trailing cursor.

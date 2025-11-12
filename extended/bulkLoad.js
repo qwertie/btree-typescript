@@ -1,8 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.flushToLeaves = void 0;
+exports.flushToLeaves = exports.bulkLoad = void 0;
 var b_tree_1 = require("../b+tree");
 var decompose_1 = require("./decompose");
+function bulkLoad(entries, maxNodeSize) {
+    throw new Error('Not implemented');
+}
+exports.bulkLoad = bulkLoad;
 function flushToLeaves(alternatingList, maxNodeSize, toFlushTo) {
     var totalPairs = (0, decompose_1.alternatingCount)(alternatingList);
     if (totalPairs === 0)
