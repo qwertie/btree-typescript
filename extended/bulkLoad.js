@@ -3,7 +3,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.flushToLeaves = exports.bulkLoad = void 0;
 var b_tree_1 = require("../b+tree");
 var decompose_1 = require("./decompose");
-function bulkLoad(entries, maxNodeSize) {
+function bulkLoad(entries, maxNodeSize, compare) {
+    var totalPairs = (0, decompose_1.alternatingCount)(entries);
+    if (totalPairs > 1) {
+        var cmp = compare !== null && compare !== void 0 ? compare : b_tree_1.defaultComparator;
+        var previousKey = (0, decompose_1.alternatingGetFirst)(entries, 0);
+        for (var i = 1; i < totalPairs; i++) {
+            var key = (0, decompose_1.alternatingGetFirst)(entries, i);
+            if (cmp(previousKey, key) >= 0)
+                throw new Error("bulkLoad: entries must be sorted by key in strictly ascending order");
+            previousKey = key;
+        }
+    }
     var leaves = [];
     flushToLeaves(entries, maxNodeSize, function (leaf) { return leaves.push(leaf); });
     var leafCount = leaves.length;

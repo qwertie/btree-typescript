@@ -1,7 +1,23 @@
-import { BNode, BNodeInternal, check, sumChildSizes } from '../b+tree';
+import { BNode, BNodeInternal, check, defaultComparator, sumChildSizes } from '../b+tree';
 import { alternatingCount, alternatingGetFirst, alternatingGetSecond } from './decompose';
 
-export function bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number): BNode<K, V> | undefined {
+export function bulkLoad<K, V>(
+  entries: (K | V)[],
+  maxNodeSize: number,
+  compare?: (a: K, b: K) => number
+): BNode<K, V> | undefined {
+  const totalPairs = alternatingCount(entries);
+  if (totalPairs > 1) {
+    const cmp = compare ?? (defaultComparator as unknown as (a: K, b: K) => number);
+    let previousKey = alternatingGetFirst<K, V>(entries, 0);
+    for (let i = 1; i < totalPairs; i++) {
+      const key = alternatingGetFirst<K, V>(entries, i);
+      if (cmp(previousKey, key) >= 0)
+        throw new Error("bulkLoad: entries must be sorted by key in strictly ascending order");
+      previousKey = key;
+    }
+  }
+
   const leaves: BNode<K, V>[] = [];
   flushToLeaves<K, V>(entries, maxNodeSize, (leaf) => leaves.push(leaf));
   const leafCount = leaves.length;
