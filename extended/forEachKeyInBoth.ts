@@ -4,10 +4,11 @@ import { createCursor, moveForwardOne, moveTo, getKey, noop, checkCanDoSetOperat
 
 /**
  * Calls the supplied `callback` for each key/value pair shared by both trees.
+ * The callback will be called in sorted key order.
  * Neither tree is modified.
  * @param treeA First tree to compare.
  * @param treeB Second tree to compare.
- * @param callback Invoked for keys that appear in both trees.
+ * @param callback Invoked for keys that appear in both trees. It can cause iteration to early exit by returning `{ break: R }`.
  * @description Complexity is bounded by O(N + M) for time.
  * However, time is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
  * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
@@ -16,7 +17,11 @@ import { createCursor, moveForwardOne, moveTo, getKey, noop, checkCanDoSetOperat
  * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than calling `toArray`
  * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
  */
-export default function forEachKeyInBoth<K, V>(treeA: BTree<K, V>, treeB: BTree<K, V>, callback: (key: K, leftValue: V, rightValue: V) => void): void {
+export default function forEachKeyInBoth<K, V, R = void>(
+  treeA: BTree<K, V>,
+  treeB: BTree<K, V>,
+  callback: (key: K, leftValue: V, rightValue: V) => { break?: R } | void
+): R | undefined {
   const _treeA = treeA as unknown as BTreeWithInternals<K, V>;
   const _treeB = treeB as unknown as BTreeWithInternals<K, V>;
   checkCanDoSetOperation(_treeA, _treeB);
@@ -40,7 +45,10 @@ export default function forEachKeyInBoth<K, V>(treeA: BTree<K, V>, treeB: BTree<
       const key = getKey(leading);
       const vA = cursorA.leaf.values[cursorA.leafIndex];
       const vB = cursorB.leaf.values[cursorB.leafIndex];
-      callback(key, vA, vB);
+      const result = callback(key, vA, vB);
+      if (result && result.break) {
+        return result.break;
+      }
       const outT = moveForwardOne(trailing, leading, key, cmp);
       const outL = moveForwardOne(leading, trailing, key, cmp);
       if (outT && outL)

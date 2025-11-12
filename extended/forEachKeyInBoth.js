@@ -3,10 +3,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var parallelWalk_1 = require("./parallelWalk");
 /**
  * Calls the supplied `callback` for each key/value pair shared by both trees.
+ * The callback will be called in sorted key order.
  * Neither tree is modified.
  * @param treeA First tree to compare.
  * @param treeB Second tree to compare.
- * @param callback Invoked for keys that appear in both trees.
+ * @param callback Invoked for keys that appear in both trees. It can cause iteration to early exit by returning `{ break: R }`.
  * @description Complexity is bounded by O(N + M) for time.
  * However, time is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
  * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
@@ -37,7 +38,10 @@ function forEachKeyInBoth(treeA, treeB, callback) {
             var key = (0, parallelWalk_1.getKey)(leading);
             var vA = cursorA.leaf.values[cursorA.leafIndex];
             var vB = cursorB.leaf.values[cursorB.leafIndex];
-            callback(key, vA, vB);
+            var result = callback(key, vA, vB);
+            if (result && result.break) {
+                return result.break;
+            }
             var outT = (0, parallelWalk_1.moveForwardOne)(trailing, leading, key, cmp);
             var outL = (0, parallelWalk_1.moveForwardOne)(leading, trailing, key, cmp);
             if (outT && outL)

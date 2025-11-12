@@ -124,6 +124,43 @@ function testForEachKeyInBoth(maxNodeSize: number) {
       { key: 4, leftValue: 40, rightValue: 400 },
     ]);
   });
+
+  test('forEachKeyInBoth returns undefined when callback returns void', () => {
+    const tree1 = buildTree(tuples([1, 10], [2, 20], [3, 30]));
+    const tree2 = buildTree(tuples([0, 100], [2, 200], [3, 300], [4, 400]));
+    const visited: number[] = [];
+    const result = tree1.forEachKeyInBoth(tree2, key => {
+      visited.push(key);
+    });
+    expect(result).toBeUndefined();
+    expect(visited).toEqual([2, 3]);
+  });
+
+  test('forEachKeyInBoth ignores undefined break values and completes traversal', () => {
+    const tree1 = buildTree(tuples([1, 10], [2, 20], [3, 30]));
+    const tree2 = buildTree(tuples([2, 200], [3, 300], [5, 500]));
+    const visited: number[] = [];
+    const result = tree1.forEachKeyInBoth(tree2, key => {
+      visited.push(key);
+      return { break: undefined };
+    });
+    expect(result).toBeUndefined();
+    expect(visited).toEqual([2, 3]);
+  });
+
+  test('forEachKeyInBoth breaks early when callback returns a value', () => {
+    const tree1 = buildTree(tuples([1, 10], [2, 20], [3, 30], [4, 40]));
+    const tree2 = buildTree(tuples([2, 200], [3, 300], [4, 400], [5, 500]));
+    const visited: number[] = [];
+    const breakResult = tree1.forEachKeyInBoth(tree2, (key, leftValue, rightValue) => {
+      visited.push(key);
+      if (key === 3) {
+        return { break: { key, sum: leftValue + rightValue } };
+      }
+    });
+    expect(breakResult).toEqual({ key: 3, sum: 330 });
+    expect(visited).toEqual([2, 3]);
+  });
 }
 
 describe('BTree forEachKeyInBoth input/output validation', () => {

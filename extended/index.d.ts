@@ -31,9 +31,10 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
     } | void): R | undefined;
     /**
      * Calls the supplied `callback` for each key/value pair shared by this tree and `other`.
+     * The callback will be called in sorted key order.
      * Neither tree is modified.
      * @param other The other tree to compare with this one.
-     * @param callback Called for keys that appear in both trees.
+     * @param callback Called for keys that appear in both trees. It can cause iteration to early exit by returning `{ break: R }`.
      * @description Complexity is bounded by O(N + M) time.
      * However, time is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
      * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
@@ -42,7 +43,9 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than calling `toArray`
      * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
      */
-    forEachKeyInBoth(other: BTree<K, V>, callback: (key: K, leftValue: V, rightValue: V) => void): void;
+    forEachKeyInBoth<R = void>(other: BTree<K, V>, callback: (key: K, leftValue: V, rightValue: V) => {
+        break?: R;
+    } | void): R | undefined;
     /**
      * Efficiently unions this tree with `other`, reusing subtrees wherever possible.
      * Neither input tree is modified.
