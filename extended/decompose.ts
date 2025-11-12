@@ -1,7 +1,6 @@
 import BTree, { areOverlapping, BNode, BNodeInternal, check } from '../b+tree';
-import { alternatingCount, alternatingGetFirst, alternatingGetSecond, alternatingPush, type BTreeWithInternals } from './shared';
+import { alternatingCount, alternatingGetFirst, alternatingGetSecond, alternatingPush, flushToLeaves, type BTreeWithInternals } from './shared';
 import { createCursor, getKey, MergeCursor, MergeCursorPayload, moveForwardOne, moveTo, noop } from "./parallelWalk";
-import { flushToLeaves } from './bulkLoad';
 
 export type DecomposeResult<K, V> = { disjoint: (number | BNode<K, V>)[], tallestIndex: number };
 

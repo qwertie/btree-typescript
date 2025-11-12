@@ -1,14 +1,14 @@
-import { BNode, BNodeInternal, check, defaultComparator, sumChildSizes } from '../b+tree';
-import { alternatingCount, alternatingGetFirst, alternatingGetSecond } from './shared';
+import BTree, { BNode, BNodeInternal, check, defaultComparator, sumChildSizes } from '../b+tree';
+import { alternatingCount, alternatingGetFirst, alternatingGetSecond, flushToLeaves, type BTreeWithInternals } from './shared';
 
 export function bulkLoad<K, V>(
   entries: (K | V)[],
   maxNodeSize: number,
   compare?: (a: K, b: K) => number
-): BNode<K, V> | undefined {
+): BTree<K, V> {
   const totalPairs = alternatingCount(entries);
+  const cmp = compare ?? (defaultComparator as unknown as (a: K, b: K) => number);
   if (totalPairs > 1) {
-    const cmp = compare ?? (defaultComparator as unknown as (a: K, b: K) => number);
     let previousKey = alternatingGetFirst<K, V>(entries, 0);
     for (let i = 1; i < totalPairs; i++) {
       const key = alternatingGetFirst<K, V>(entries, i);
@@ -18,20 +18,19 @@ export function bulkLoad<K, V>(
     }
   }
 
+  const tree = new BTree<K, V>(undefined, cmp, maxNodeSize);
   const leaves: BNode<K, V>[] = [];
   flushToLeaves<K, V>(entries, maxNodeSize, (leaf) => leaves.push(leaf));
   const leafCount = leaves.length;
   if (leafCount === 0)
-    return undefined;
+    return tree;
 
   let currentLevel: BNode<K, V>[] = leaves;
-  while (true) {
+  while (currentLevel.length > 1) {
     const nodeCount = currentLevel.length;
-    if (nodeCount === 1)
-      return currentLevel[0];
-
     if (nodeCount <= maxNodeSize) {
-      return new BNodeInternal<K, V>(currentLevel, sumChildSizes(currentLevel));
+      currentLevel = [new BNodeInternal<K, V>(currentLevel, sumChildSizes(currentLevel))];
+      break;
     }
 
     const nextLevelCount = Math.ceil(nodeCount / maxNodeSize);
@@ -64,37 +63,10 @@ export function bulkLoad<K, V>(
 
     currentLevel = nextLevel;
   }
+
+  const target = tree as unknown as BTreeWithInternals<K, V>;
+  target._root = currentLevel[0];
+  target._size = totalPairs;
+  return tree;
 }
 
-export function flushToLeaves<K, V>(
-  alternatingList: (K | V)[],
-  maxNodeSize: number,
-  onLeafCreation: (node: BNode<K, V>) => void
-): number {
-  const totalPairs = alternatingCount(alternatingList);
-  if (totalPairs === 0)
-    return 0;
-
-  // This method creates as many evenly filled leaves as possible from
-  // the pending entries. All will be > 50% full if we are creating more than one leaf.
-  const leafCount = Math.ceil(totalPairs / maxNodeSize);
-  let remainingLeaves = leafCount;
-  let remaining = totalPairs;
-  let pairIndex = 0;
-  while (remainingLeaves > 0) {
-    const chunkSize = Math.ceil(remaining / remainingLeaves);
-    const keys = new Array<K>(chunkSize);
-    const vals = new Array<V>(chunkSize);
-    for (let i = 0; i < chunkSize; i++) {
-      keys[i] = alternatingGetFirst<K, V>(alternatingList, pairIndex);
-      vals[i] = alternatingGetSecond<K, V>(alternatingList, pairIndex);
-      pairIndex++;
-    }
-    remaining -= chunkSize;
-    remainingLeaves--;
-    const leaf = new BNode<K, V>(keys, vals);
-    onLeafCreation(leaf);
-  }
-  alternatingList.length = 0;
-  return leafCount;
-};

@@ -1,12 +1,31 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.flushToLeaves = exports.bulkLoad = void 0;
-var b_tree_1 = require("../b+tree");
+exports.bulkLoad = void 0;
+var b_tree_1 = __importStar(require("../b+tree"));
 var shared_1 = require("./shared");
 function bulkLoad(entries, maxNodeSize, compare) {
     var totalPairs = (0, shared_1.alternatingCount)(entries);
+    var cmp = compare !== null && compare !== void 0 ? compare : b_tree_1.defaultComparator;
     if (totalPairs > 1) {
-        var cmp = compare !== null && compare !== void 0 ? compare : b_tree_1.defaultComparator;
         var previousKey = (0, shared_1.alternatingGetFirst)(entries, 0);
         for (var i = 1; i < totalPairs; i++) {
             var key = (0, shared_1.alternatingGetFirst)(entries, i);
@@ -15,18 +34,18 @@ function bulkLoad(entries, maxNodeSize, compare) {
             previousKey = key;
         }
     }
+    var tree = new b_tree_1.default(undefined, cmp, maxNodeSize);
     var leaves = [];
-    flushToLeaves(entries, maxNodeSize, function (leaf) { return leaves.push(leaf); });
+    (0, shared_1.flushToLeaves)(entries, maxNodeSize, function (leaf) { return leaves.push(leaf); });
     var leafCount = leaves.length;
     if (leafCount === 0)
-        return undefined;
+        return tree;
     var currentLevel = leaves;
-    while (true) {
+    while (currentLevel.length > 1) {
         var nodeCount = currentLevel.length;
-        if (nodeCount === 1)
-            return currentLevel[0];
         if (nodeCount <= maxNodeSize) {
-            return new b_tree_1.BNodeInternal(currentLevel, (0, b_tree_1.sumChildSizes)(currentLevel));
+            currentLevel = [new b_tree_1.BNodeInternal(currentLevel, (0, b_tree_1.sumChildSizes)(currentLevel))];
+            break;
         }
         var nextLevelCount = Math.ceil(nodeCount / maxNodeSize);
         (0, b_tree_1.check)(nextLevelCount > 1);
@@ -55,34 +74,9 @@ function bulkLoad(entries, maxNodeSize, compare) {
         }
         currentLevel = nextLevel;
     }
+    var target = tree;
+    target._root = currentLevel[0];
+    target._size = totalPairs;
+    return tree;
 }
 exports.bulkLoad = bulkLoad;
-function flushToLeaves(alternatingList, maxNodeSize, onLeafCreation) {
-    var totalPairs = (0, shared_1.alternatingCount)(alternatingList);
-    if (totalPairs === 0)
-        return 0;
-    // This method creates as many evenly filled leaves as possible from
-    // the pending entries. All will be > 50% full if we are creating more than one leaf.
-    var leafCount = Math.ceil(totalPairs / maxNodeSize);
-    var remainingLeaves = leafCount;
-    var remaining = totalPairs;
-    var pairIndex = 0;
-    while (remainingLeaves > 0) {
-        var chunkSize = Math.ceil(remaining / remainingLeaves);
-        var keys = new Array(chunkSize);
-        var vals = new Array(chunkSize);
-        for (var i = 0; i < chunkSize; i++) {
-            keys[i] = (0, shared_1.alternatingGetFirst)(alternatingList, pairIndex);
-            vals[i] = (0, shared_1.alternatingGetSecond)(alternatingList, pairIndex);
-            pairIndex++;
-        }
-        remaining -= chunkSize;
-        remainingLeaves--;
-        var leaf = new b_tree_1.BNode(keys, vals);
-        onLeafCreation(leaf);
-    }
-    alternatingList.length = 0;
-    return leafCount;
-}
-exports.flushToLeaves = flushToLeaves;
-;

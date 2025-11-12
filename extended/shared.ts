@@ -1,4 +1,4 @@
-import type { BNode } from '../b+tree';
+import { BNode } from '../b+tree';
 import BTree from '../b+tree';
 
 export type BTreeWithInternals<K, V> = {
@@ -7,6 +7,39 @@ export type BTreeWithInternals<K, V> = {
   _maxNodeSize: number;
   _compare: (a: K, b: K) => number;
 } & Omit<BTree<K, V>, '_root' | '_size' | '_maxNodeSize' | '_compare'>;
+
+export function flushToLeaves<K, V>(
+  alternatingList: (K | V)[],
+  maxNodeSize: number,
+  onLeafCreation: (node: BNode<K, V>) => void
+): number {
+  const totalPairs = alternatingCount(alternatingList);
+  if (totalPairs === 0)
+    return 0;
+
+  // This method creates as many evenly filled leaves as possible from
+  // the pending entries. All will be > 50% full if we are creating more than one leaf.
+  const leafCount = Math.ceil(totalPairs / maxNodeSize);
+  let remainingLeaves = leafCount;
+  let remaining = totalPairs;
+  let pairIndex = 0;
+  while (remainingLeaves > 0) {
+    const chunkSize = Math.ceil(remaining / remainingLeaves);
+    const keys = new Array<K>(chunkSize);
+    const vals = new Array<V>(chunkSize);
+    for (let i = 0; i < chunkSize; i++) {
+      keys[i] = alternatingGetFirst<K, V>(alternatingList, pairIndex);
+      vals[i] = alternatingGetSecond<K, V>(alternatingList, pairIndex);
+      pairIndex++;
+    }
+    remaining -= chunkSize;
+    remainingLeaves--;
+    const leaf = new BNode<K, V>(keys, vals);
+    onLeafCreation(leaf);
+  }
+  alternatingList.length = 0;
+  return leafCount;
+};
 
 // ------- Alternating list helpers -------
 // These helpers manage a list that alternates between two types of entries.

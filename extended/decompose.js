@@ -4,7 +4,6 @@ exports.buildFromDecomposition = exports.decompose = void 0;
 var b_tree_1 = require("../b+tree");
 var shared_1 = require("./shared");
 var parallelWalk_1 = require("./parallelWalk");
-var bulkLoad_1 = require("./bulkLoad");
 /**
  * Decomposes two trees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
  * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
@@ -38,7 +37,7 @@ function decompose(left, right, mergeValues, ignoreRight) {
         (0, shared_1.alternatingPush)(disjoint, 0, leaf);
     };
     var flushPendingEntries = function () {
-        var createdLeaves = (0, bulkLoad_1.flushToLeaves)(pending, left._maxNodeSize, onLeafCreation);
+        var createdLeaves = (0, shared_1.flushToLeaves)(pending, left._maxNodeSize, onLeafCreation);
         if (createdLeaves > 0) {
             tallestIndex = (0, shared_1.alternatingCount)(disjoint) - 1;
             tallestHeight = 0;

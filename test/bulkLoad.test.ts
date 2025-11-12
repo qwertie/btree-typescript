@@ -25,11 +25,8 @@ function buildTreeFromPairs(maxNodeSize: number, pairs: Pair[]) {
   for (const [key, value] of pairs) {
     alternating.push(key, value);
   }
-  const root = bulkLoad<number, number>(alternating, maxNodeSize, compareNumbers);
-  const tree = new BTree<number, number>(undefined, compareNumbers, maxNodeSize);
-  if (root !== undefined) {
-    (tree as any)._root = root;
-  }
+  const tree = bulkLoad<number, number>(alternating, maxNodeSize, compareNumbers);
+  const root = tree['_root'] as BNode<number, number>;
   return { tree, root };
 }
 
@@ -72,7 +69,8 @@ describe.each(branchingFactors)('bulkLoad fanout %i', (maxNodeSize) => {
 
   test('empty input produces empty tree', () => {
     const { tree, root } = buildTreeFromPairs(maxNodeSize, []);
-    expect(root).toBeUndefined();
+    expect(root?.isLeaf).toBe(true);
+    expect(root?.keys.length ?? 0).toBe(0);
     expectTreeMatches(tree, []);
   });
 
