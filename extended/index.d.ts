@@ -1,4 +1,11 @@
 import BTree from '../b+tree';
+/**
+ * An extended version of the `BTree` class that includes additional functionality
+ * such as bulk loading, set operations, and diffing.
+ * It is separated to keep the core BTree class small from a bundle size perspective.
+ * Note: each additional functionality piece is available as a standalone function from the extended folder.
+ * @extends BTree
+ */
 export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
     static bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number, compare?: (a: K, b: K) => number): BTreeEx<K, V>;
     clone(): this;

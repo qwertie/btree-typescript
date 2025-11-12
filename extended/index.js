@@ -43,6 +43,13 @@ var diffAgainst_1 = __importDefault(require("./diffAgainst"));
 var forEachKeyInBoth_1 = __importDefault(require("./forEachKeyInBoth"));
 var union_1 = __importDefault(require("./union"));
 var bulkLoad_1 = require("./bulkLoad");
+/**
+ * An extended version of the `BTree` class that includes additional functionality
+ * such as bulk loading, set operations, and diffing.
+ * It is separated to keep the core BTree class small from a bundle size perspective.
+ * Note: each additional functionality piece is available as a standalone function from the extended folder.
+ * @extends BTree
+ */
 var BTreeEx = /** @class */ (function (_super) {
     __extends(BTreeEx, _super);
     function BTreeEx() {

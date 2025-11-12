@@ -1,9 +1,11 @@
 import { BNode, BNodeInternal } from '../b+tree';
 import type { BTreeWithInternals } from './shared';
 
-export type MergeCursorPayload = { disqualified: boolean };
-
-export interface MergeCursor<K, V, TPayload> {
+/**
+ * A walkable cursor for BTree set operations.
+ * @internal
+ */
+export interface Cursor<K, V, TPayload> {
   tree: BTreeWithInternals<K, V>;
   leaf: BNode<K, V>;
   leafIndex: number;
@@ -11,20 +13,21 @@ export interface MergeCursor<K, V, TPayload> {
   leafPayload: TPayload;
   makePayload: () => TPayload;
   onMoveInLeaf: (leaf: BNode<K, V>, payload: TPayload, fromIndex: number, toIndex: number, isInclusive: boolean) => void;
-  onExitLeaf: (leaf: BNode<K, V>, payload: TPayload, startingIndex: number, isInclusive: boolean, cursorThis: MergeCursor<K, V, TPayload>) => void;
-  onStepUp: (parent: BNodeInternal<K, V>, height: number, payload: TPayload, fromIndex: number, spineIndex: number, stepDownIndex: number, cursorThis: MergeCursor<K, V, TPayload>) => void;
-  onStepDown: (node: BNodeInternal<K, V>, height: number, spineIndex: number, stepDownIndex: number, cursorThis: MergeCursor<K, V, TPayload>) => void;
-  onEnterLeaf: (leaf: BNode<K, V>, destIndex: number, cursorThis: MergeCursor<K, V, TPayload>, cursorOther: MergeCursor<K, V, TPayload>) => void;
+  onExitLeaf: (leaf: BNode<K, V>, payload: TPayload, startingIndex: number, isInclusive: boolean, cursorThis: Cursor<K, V, TPayload>) => void;
+  onStepUp: (parent: BNodeInternal<K, V>, height: number, payload: TPayload, fromIndex: number, spineIndex: number, stepDownIndex: number, cursorThis: Cursor<K, V, TPayload>) => void;
+  onStepDown: (node: BNodeInternal<K, V>, height: number, spineIndex: number, stepDownIndex: number, cursorThis: Cursor<K, V, TPayload>) => void;
+  onEnterLeaf: (leaf: BNode<K, V>, destIndex: number, cursorThis: Cursor<K, V, TPayload>, cursorOther: Cursor<K, V, TPayload>) => void;
 }
 
 /**
  * Walks the cursor forward by one key.
  * Should only be called to advance cursors that started equal.
  * Returns true if end-of-tree was reached (cursor not structurally mutated).
+ * @internal
  */
 export function moveForwardOne<K, V, TP>(
-  cur: MergeCursor<K, V, TP>,
-  other: MergeCursor<K, V, TP>,
+  cur: Cursor<K, V, TP>,
+  other: Cursor<K, V, TP>,
   currentKey: K,
   cmp: (a: K, b: K) => number
 ): boolean {
@@ -44,16 +47,17 @@ export function moveForwardOne<K, V, TP>(
 
 /**
  * Create a cursor pointing to the leftmost key of the supplied tree.
+ * @internal
  */
 export function createCursor<K, V, TP>(
   tree: BTreeWithInternals<K, V>,
-  makePayload: MergeCursor<K, V, TP>["makePayload"],
-  onEnterLeaf: MergeCursor<K, V, TP>["onEnterLeaf"],
-  onMoveInLeaf: MergeCursor<K, V, TP>["onMoveInLeaf"],
-  onExitLeaf: MergeCursor<K, V, TP>["onExitLeaf"],
-  onStepUp: MergeCursor<K, V, TP>["onStepUp"],
-  onStepDown: MergeCursor<K, V, TP>["onStepDown"],
-): MergeCursor<K, V, TP> {
+  makePayload: Cursor<K, V, TP>["makePayload"],
+  onEnterLeaf: Cursor<K, V, TP>["onEnterLeaf"],
+  onMoveInLeaf: Cursor<K, V, TP>["onMoveInLeaf"],
+  onExitLeaf: Cursor<K, V, TP>["onExitLeaf"],
+  onStepUp: Cursor<K, V, TP>["onStepUp"],
+  onStepDown: Cursor<K, V, TP>["onStepDown"],
+): Cursor<K, V, TP> {
   const spine: Array<{ node: BNodeInternal<K, V>, childIndex: number, payload: TP }> = [];
   let n: BNode<K, V> = tree._root;
   while (!n.isLeaf) {
@@ -63,14 +67,18 @@ export function createCursor<K, V, TP>(
     n = ni.children[0];
   }
   const leafPayload = makePayload();
-  const cur: MergeCursor<K, V, TP> = {
+  const cur: Cursor<K, V, TP> = {
     tree, leaf: n, leafIndex: 0, spine, leafPayload, makePayload: makePayload,
     onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown
   };
   return cur;
 }
 
-export function getKey<K, V, TP>(c: MergeCursor<K, V, TP>): K {
+/**
+ * Gets the key at the current cursor position.
+ * @internal
+ */
+export function getKey<K, V, TP>(c: Cursor<K, V, TP>): K {
   return c.leaf.keys[c.leafIndex];
 }
 
@@ -78,10 +86,11 @@ export function getKey<K, V, TP>(c: MergeCursor<K, V, TP>): K {
  * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
  * Returns a boolean indicating if end-of-tree was reached (cursor not structurally mutated).
  * Also returns a boolean indicating if the target key was landed on exactly.
+ * @internal
  */
 export function moveTo<K, V, TP>(
-  cur: MergeCursor<K, V, TP>,
-  other: MergeCursor<K, V, TP>,
+  cur: Cursor<K, V, TP>,
+  other: Cursor<K, V, TP>,
   targetKey: K,
   isInclusive: boolean,
   startedEqual: boolean,
@@ -207,12 +216,28 @@ export function moveTo<K, V, TP>(
   return [false, targetExactlyReached];
 }
 
+/**
+ * A no-operation function.
+ * @internal
+ */
 export function noop(): void { }
 
+/**
+ * Error message used when comparators differ between trees.
+ * @internal
+ */
 export const comparatorErrorMsg = "Cannot perform set operations on BTrees with different comparators.";
 
+/**
+ * Error message used when branching factors differ between trees.
+ * @internal
+ */
 export const branchingFactorErrorMsg = "Cannot perform set operations on BTrees with different max node sizes.";
 
+/**
+ * Checks that two trees can be used together in a set operation.
+ * @internal
+ */
 export function checkCanDoSetOperation<K, V>(treeA: BTreeWithInternals<K, V>, treeB: BTreeWithInternals<K, V>): number {
   if (treeA._compare !== treeB._compare)
     throw new Error(comparatorErrorMsg);

@@ -5,6 +5,7 @@ exports.checkCanDoSetOperation = exports.branchingFactorErrorMsg = exports.compa
  * Walks the cursor forward by one key.
  * Should only be called to advance cursors that started equal.
  * Returns true if end-of-tree was reached (cursor not structurally mutated).
+ * @internal
  */
 function moveForwardOne(cur, other, currentKey, cmp) {
     var leaf = cur.leaf;
@@ -22,6 +23,7 @@ function moveForwardOne(cur, other, currentKey, cmp) {
 exports.moveForwardOne = moveForwardOne;
 /**
  * Create a cursor pointing to the leftmost key of the supplied tree.
+ * @internal
  */
 function createCursor(tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown) {
     var spine = [];
@@ -48,6 +50,10 @@ function createCursor(tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, 
     return cur;
 }
 exports.createCursor = createCursor;
+/**
+ * Gets the key at the current cursor position.
+ * @internal
+ */
 function getKey(c) {
     return c.leaf.keys[c.leafIndex];
 }
@@ -56,6 +62,7 @@ exports.getKey = getKey;
  * Move cursor strictly forward to the first key >= (inclusive) or > (exclusive) target.
  * Returns a boolean indicating if end-of-tree was reached (cursor not structurally mutated).
  * Also returns a boolean indicating if the target key was landed on exactly.
+ * @internal
  */
 function moveTo(cur, other, targetKey, isInclusive, startedEqual, cmp) {
     // Cache callbacks for perf
@@ -172,10 +179,26 @@ function moveTo(cur, other, targetKey, isInclusive, startedEqual, cmp) {
     return [false, targetExactlyReached];
 }
 exports.moveTo = moveTo;
+/**
+ * A no-operation function.
+ * @internal
+ */
 function noop() { }
 exports.noop = noop;
+/**
+ * Error message used when comparators differ between trees.
+ * @internal
+ */
 exports.comparatorErrorMsg = "Cannot perform set operations on BTrees with different comparators.";
+/**
+ * Error message used when branching factors differ between trees.
+ * @internal
+ */
 exports.branchingFactorErrorMsg = "Cannot perform set operations on BTrees with different max node sizes.";
+/**
+ * Checks that two trees can be used together in a set operation.
+ * @internal
+ */
 function checkCanDoSetOperation(treeA, treeB) {
     if (treeA._compare !== treeB._compare)
         throw new Error(exports.comparatorErrorMsg);

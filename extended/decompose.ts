@@ -1,12 +1,17 @@
 import BTree, { areOverlapping, BNode, BNodeInternal, check } from '../b+tree';
 import { alternatingCount, alternatingGetFirst, alternatingGetSecond, alternatingPush, flushToLeaves, type BTreeWithInternals } from './shared';
-import { createCursor, getKey, MergeCursor, MergeCursorPayload, moveForwardOne, moveTo, noop } from "./parallelWalk";
+import { createCursor, getKey, Cursor, moveForwardOne, moveTo, noop } from "./parallelWalk";
 
 /**
  * A set of disjoint nodes, their heights, and the index of the tallest node.
  * @internal
  */
 export type DecomposeResult<K, V> = { disjoint: (number | BNode<K, V>)[], tallestIndex: number };
+
+/**
+ * Payload type used by decomposition cursors.
+ */
+type DecomposePayload = { disqualified: boolean };
 
 /**
  * Decomposes two trees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
@@ -21,7 +26,7 @@ export type DecomposeResult<K, V> = { disjoint: (number | BNode<K, V>)[], talles
 export function decompose<K, V>(
   left: BTreeWithInternals<K, V>,
   right: BTreeWithInternals<K, V>,
-  mergeValues: (key: K, leftValue: V, rightValue: V) => V | undefined,
+  combineFn: (key: K, leftValue: V, rightValue: V) => V | undefined,
   ignoreRight: boolean = false
 ): DecomposeResult<K, V> {
   const cmp = left._compare;
@@ -76,7 +81,7 @@ export function decompose<K, V>(
   };
 
   // Mark all nodes at or above depthFrom in the cursor spine as disqualified (non-disjoint)
-  const disqualifySpine = (cursor: MergeCursor<K, V, MergeCursorPayload>, depthFrom: number) => {
+  const disqualifySpine = (cursor: Cursor<K, V, DecomposePayload>, depthFrom: number) => {
     const spine = cursor.spine;
     for (let i = depthFrom; i >= 0; --i) {
       const payload = spine[i].payload;
@@ -90,7 +95,7 @@ export function decompose<K, V>(
   };
 
   // Cursor payload factory
-  const makePayload = (): MergeCursorPayload => ({ disqualified: false });
+  const makePayload = (): DecomposePayload => ({ disqualified: false });
 
   const pushLeafRange = (leaf: BNode<K, V>, from: number, toExclusive: number) => {
     const keys = leaf.keys;
@@ -101,7 +106,7 @@ export function decompose<K, V>(
 
   const onMoveInLeaf = (
     leaf: BNode<K, V>,
-    payload: MergeCursorPayload,
+    payload: DecomposePayload,
     fromIndex: number,
     toIndex: number,
     startedEqual: boolean
@@ -114,10 +119,10 @@ export function decompose<K, V>(
 
   const onExitLeaf = (
     leaf: BNode<K, V>,
-    payload: MergeCursorPayload,
+    payload: DecomposePayload,
     startingIndex: number,
     startedEqual: boolean,
-    cursorThis: MergeCursor<K, V, MergeCursorPayload>,
+    cursorThis: Cursor<K, V, DecomposePayload>,
   ) => {
     highestDisjoint = undefined;
     if (!payload.disqualified) {
@@ -138,11 +143,11 @@ export function decompose<K, V>(
   const onStepUp = (
     parent: BNodeInternal<K, V>,
     height: number,
-    payload: MergeCursorPayload,
+    payload: DecomposePayload,
     fromIndex: number,
     spineIndex: number,
     stepDownIndex: number,
-    cursorThis: MergeCursor<K, V, MergeCursorPayload>
+    cursorThis: Cursor<K, V, DecomposePayload>
   ) => {
     const children = parent.children;
     const nextHeight = height - 1;
@@ -178,7 +183,7 @@ export function decompose<K, V>(
     height: number,
     spineIndex: number,
     stepDownIndex: number,
-    cursorThis: MergeCursor<K, V, MergeCursorPayload>
+    cursorThis: Cursor<K, V, DecomposePayload>
   ) => {
     if (stepDownIndex > 0) {
       // When we step down into a node, we know that we have walked from a key that is less than our target.
@@ -198,8 +203,8 @@ export function decompose<K, V>(
   const onEnterLeaf = (
     leaf: BNode<K, V>,
     destIndex: number,
-    cursorThis: MergeCursor<K, V, MergeCursorPayload>,
-    cursorOther: MergeCursor<K, V, MergeCursorPayload>
+    cursorThis: Cursor<K, V, DecomposePayload>,
+    cursorOther: Cursor<K, V, DecomposePayload>
   ) => {
     if (destIndex > 0
       || areOverlapping(leaf.minKey()!, leaf.maxKey(), getKey(cursorOther), cursorOther.leaf.maxKey(), cmp)) {
@@ -219,14 +224,14 @@ export function decompose<K, V>(
   const maxKey = cmp(maxKeyLeft, maxKeyRight) >= 0 ? maxKeyLeft : maxKeyRight;
 
   // Initialize cursors at minimum keys.
-  const curA = createCursor<K, V, MergeCursorPayload>(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+  const curA = createCursor<K, V, DecomposePayload>(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
 
   let curB: typeof curA;
   if (ignoreRight) {
-    const dummyPayload: MergeCursorPayload = { disqualified: true };
-    curB = createCursor<K, V, MergeCursorPayload>(right, () => dummyPayload, noop, noop, noop, noop, noop);
+    const dummyPayload: DecomposePayload = { disqualified: true };
+    curB = createCursor<K, V, DecomposePayload>(right, () => dummyPayload, noop, noop, noop, noop, noop);
   } else {
-    curB = createCursor<K, V, MergeCursorPayload>(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+    curB = createCursor<K, V, DecomposePayload>(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
   }
 
   // The guarantee that no overlapping interior nodes are accidentally reused relies on the careful
@@ -239,7 +244,7 @@ export function decompose<K, V>(
   // The one issue then is detecting any overlaps that occur based on their very initial position (minimum key of each tree).
   // This is handled by the initial disqualification step below, which essentially emulates the step down disqualification for each spine.
   // Initialize disqualification w.r.t. opposite leaf.
-  const initDisqualify = (cur: MergeCursor<K, V, MergeCursorPayload>, other: MergeCursor<K, V, MergeCursorPayload>) => {
+  const initDisqualify = (cur: Cursor<K, V, DecomposePayload>, other: Cursor<K, V, DecomposePayload>) => {
     const minKey = getKey(cur);
     const otherMin = getKey(other);
     const otherMax = other.leaf.maxKey();
@@ -270,9 +275,9 @@ export function decompose<K, V>(
       const vB = curB.leaf.values[curB.leafIndex];
       // Perform the actual merge of values here. The cursors will avoid adding a duplicate of this key/value
       // to pending because they respect the areEqual flag during their moves.
-      const merged = mergeValues(key, vA, vB);
-      if (merged !== undefined)
-        alternatingPush<K, V>(pending, key, merged);
+      const combined = combineFn(key, vA, vB);
+      if (combined !== undefined)
+        alternatingPush<K, V>(pending, key, combined);
       const outTrailing = moveForwardOne(trailing, leading, key, cmp);
       const outLeading = moveForwardOne(leading, trailing, key, cmp);
       if (outTrailing || outLeading) {
@@ -371,15 +376,15 @@ export function buildFromDecomposition<TBTree extends BTree<K, V>, K, V>(
     );
   }
 
-  const merged = new constructor(undefined, cmp, maxNodeSize);
-  (merged as unknown as BTreeWithInternals<K, V>)._root = frontier[0];
+  const reconstructed = new constructor(undefined, cmp, maxNodeSize);
+  (reconstructed as unknown as BTreeWithInternals<K, V>)._root = frontier[0];
 
   // Return the resulting tree
-  return merged;
+  return reconstructed;
 }
 
 /**
- * Processes one side (left or right) of the disjoint subtree set during a merge operation.
+ * Processes one side (left or right) of the disjoint subtree set during a reconstruction operation.
  * Merges each subtree in the disjoint set from start to end (exclusive) into the given spine.
  * @internal
  */

@@ -14,7 +14,7 @@ var parallelWalk_1 = require("./parallelWalk");
  * The cursor walk is efficient, meaning it skips over disjoint subtrees entirely rather than visiting every leaf.
  * @internal
  */
-function decompose(left, right, mergeValues, ignoreRight) {
+function decompose(left, right, combineFn, ignoreRight) {
     if (ignoreRight === void 0) { ignoreRight = false; }
     var cmp = left._compare;
     (0, b_tree_1.check)(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
@@ -212,9 +212,9 @@ function decompose(left, right, mergeValues, ignoreRight) {
             var vB = curB.leaf.values[curB.leafIndex];
             // Perform the actual merge of values here. The cursors will avoid adding a duplicate of this key/value
             // to pending because they respect the areEqual flag during their moves.
-            var merged = mergeValues(key, vA, vB);
-            if (merged !== undefined)
-                (0, shared_1.alternatingPush)(pending, key, merged);
+            var combined = combineFn(key, vA, vB);
+            if (combined !== undefined)
+                (0, shared_1.alternatingPush)(pending, key, combined);
             var outTrailing = (0, parallelWalk_1.moveForwardOne)(trailing, leading, key, cmp);
             var outLeading = (0, parallelWalk_1.moveForwardOne)(leading, trailing, key, cmp);
             if (outTrailing || outLeading) {
@@ -286,14 +286,14 @@ function buildFromDecomposition(constructor, branchingFactor, decomposed, cmp, m
         processSide(branchingFactor, disjoint, frontier, tallestIndex - 1, -1, -1, getLeftmostIndex, getLeftmostIndex, splitOffLeftSide, parallelWalk_1.noop // left side appending doesn't update max keys
         );
     }
-    var merged = new constructor(undefined, cmp, maxNodeSize);
-    merged._root = frontier[0];
+    var reconstructed = new constructor(undefined, cmp, maxNodeSize);
+    reconstructed._root = frontier[0];
     // Return the resulting tree
-    return merged;
+    return reconstructed;
 }
 exports.buildFromDecomposition = buildFromDecomposition;
 /**
- * Processes one side (left or right) of the disjoint subtree set during a merge operation.
+ * Processes one side (left or right) of the disjoint subtree set during a reconstruction operation.
  * Merges each subtree in the disjoint set from start to end (exclusive) into the given spine.
  * @internal
  */
