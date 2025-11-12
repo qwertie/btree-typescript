@@ -22,6 +22,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.bulkLoadRoot = exports.bulkLoad = void 0;
 var b_tree_1 = __importStar(require("../b+tree"));
 var shared_1 = require("./shared");
+/**
+ * Loads a B-Tree from a sorted list of entries in bulk. This is faster than inserting
+ * entries one at a time, and produces a more optimally balanced tree.
+ * Time and space complexity: O(n).
+ * @param entries The list of key/value pairs to load. Must be sorted by key in strictly ascending order.
+ * @param maxNodeSize The branching factor (maximum node size) for the resulting tree.
+ * @param compare Function to compare keys.
+ * @returns A new BTree containing the given entries.
+ */
 function bulkLoad(entries, maxNodeSize, compare) {
     var root = bulkLoadRoot(entries, maxNodeSize, compare);
     var tree = new b_tree_1.default(undefined, compare, maxNodeSize);
@@ -31,6 +40,10 @@ function bulkLoad(entries, maxNodeSize, compare) {
     return tree;
 }
 exports.bulkLoad = bulkLoad;
+/**
+ * Bulk loads, returns the root node of the resulting tree.
+ * @internal
+ */
 function bulkLoadRoot(entries, maxNodeSize, compare) {
     var totalPairs = (0, shared_1.alternatingCount)(entries);
     if (totalPairs > 1) {

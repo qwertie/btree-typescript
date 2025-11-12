@@ -1,12 +1,19 @@
-import BTree, { BNode, BNodeInternal, check, defaultComparator, sumChildSizes } from '../b+tree';
-import { alternatingCount, alternatingGetFirst, alternatingGetSecond, flushToLeaves, type BTreeWithInternals } from './shared';
+import BTree, { BNode, BNodeInternal, check, sumChildSizes } from '../b+tree';
+import { alternatingCount, alternatingGetFirst, flushToLeaves, type BTreeWithInternals } from './shared';
 
-type Comparator<K> = (a: K, b: K) => number;
-
+/**
+ * Loads a B-Tree from a sorted list of entries in bulk. This is faster than inserting
+ * entries one at a time, and produces a more optimally balanced tree.
+ * Time and space complexity: O(n).
+ * @param entries The list of key/value pairs to load. Must be sorted by key in strictly ascending order.
+ * @param maxNodeSize The branching factor (maximum node size) for the resulting tree.
+ * @param compare Function to compare keys.
+ * @returns A new BTree containing the given entries.
+ */
 export function bulkLoad<K, V>(
   entries: (K | V)[],
   maxNodeSize: number,
-  compare: Comparator<K>
+  compare: (a: K, b: K) => number
 ): BTree<K, V> {
   const root = bulkLoadRoot<K, V>(entries, maxNodeSize, compare);
   const tree = new BTree<K, V>(undefined, compare, maxNodeSize);
@@ -16,10 +23,14 @@ export function bulkLoad<K, V>(
   return tree;
 }
 
+/**
+ * Bulk loads, returns the root node of the resulting tree.
+ * @internal
+ */
 export function bulkLoadRoot<K, V>(
   entries: (K | V)[],
   maxNodeSize: number,
-  compare: Comparator<K>
+  compare: (a: K, b: K) => number
 ): BNode<K, V> {
   const totalPairs = alternatingCount(entries);
   if (totalPairs > 1) {
