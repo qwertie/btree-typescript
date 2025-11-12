@@ -1,9 +1,10 @@
-import BTree from "./b+tree";
+import { BNode, BNodeInternal } from '../b+tree';
+import type { BTreeWithInternals } from './shared';
 
 export type MergeCursorPayload = { disqualified: boolean };
 
 export interface MergeCursor<K, V, TPayload> {
-  tree: BTree<K, V>;
+  tree: BTreeWithInternals<K, V>;
   leaf: BNode<K, V>;
   leafIndex: number;
   spine: Array<{ node: BNodeInternal<K, V>, childIndex: number, payload: TPayload }>;
@@ -38,14 +39,14 @@ export function moveForwardOne<K,V,TP>(
 
   // If our optimized step within leaf failed, use full moveTo logic
   // Pass isInclusive=false to ensure we walk forward to the key exactly after the current
-  return BTree.moveTo(cur, other, currentKey, false, true, cmp)[0];
+  return moveTo(cur, other, currentKey, false, true, cmp)[0];
 }
 
 /**
  * Create a cursor pointing to the leftmost key of the supplied tree.
  */
 export function createCursor<K,V,TP>(
-  tree: BTree<K,V>,
+  tree: BTreeWithInternals<K,V>,
   makePayload: MergeCursor<K,V,TP>["makePayload"],
   onEnterLeaf: MergeCursor<K,V,TP>["onEnterLeaf"],
   onMoveInLeaf: MergeCursor<K,V,TP>["onMoveInLeaf"],
@@ -208,7 +209,7 @@ export function moveTo<K,V,TP>(
 
 export function noop(): void {}
 
-export function checkCanDoSetOperation<K,V>(treeA: BTree<K,V>, treeB: BTree<K,V>): number {
+export function checkCanDoSetOperation<K,V>(treeA: BTreeWithInternals<K,V>, treeB: BTreeWithInternals<K,V>): number {
       if (treeA._compare !== treeB._compare)
     throw new Error("Cannot merge BTrees with different comparators.");
 

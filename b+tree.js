@@ -15,7 +15,7 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EmptyBTree = exports.check = exports.BNodeInternal = exports.BNode = exports.asSet = exports.simpleComparator = exports.defaultComparator = void 0;
+exports.EmptyBTree = exports.check = exports.areOverlapping = exports.BNodeInternal = exports.BNode = exports.asSet = exports.simpleComparator = exports.defaultComparator = void 0;
 /**
  * Compares DefaultComparables to form a strict partial ordering.
  *
@@ -1496,6 +1496,41 @@ function sumChildSizes(children) {
         total += children[i].size();
     return total;
 }
+/**
+ * Determines whether two nodes are overlapping in key range.
+ * Takes the leftmost known key of each node to avoid a log(n) min calculation.
+ * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
+ */
+function areOverlapping(aMin, aMax, bMin, bMax, cmp) {
+    // There are 4 possibilities:
+    // 1. aMin.........aMax
+    //            bMin.........bMax
+    // (aMax between bMin and bMax)
+    // 2.            aMin.........aMax
+    //      bMin.........bMax
+    // (aMin between bMin and bMax)
+    // 3. aMin.............aMax
+    //         bMin....bMax
+    // (aMin and aMax enclose bMin and bMax; note this includes equality cases)
+    // 4.      aMin....aMax
+    //     bMin.............bMax
+    // (bMin and bMax enclose aMin and aMax; note equality cases are identical to case 3)
+    var aMinBMin = cmp(aMin, bMin);
+    var aMinBMax = cmp(aMin, bMax);
+    if (aMinBMin >= 0 && aMinBMax <= 0) {
+        // case 2 or 4
+        return true;
+    }
+    var aMaxBMin = cmp(aMax, bMin);
+    var aMaxBMax = cmp(aMax, bMax);
+    if (aMaxBMin >= 0 && aMaxBMax <= 0) {
+        // case 1
+        return true;
+    }
+    // case 3 or no overlap
+    return aMinBMin <= 0 && aMaxBMax >= 0;
+}
+exports.areOverlapping = areOverlapping;
 var Delete = { delete: true }, DeleteRange = function () { return Delete; };
 var Break = { break: true };
 var EmptyLeaf = (function () {

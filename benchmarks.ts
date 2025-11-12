@@ -430,8 +430,8 @@ console.log("### Merge between B+ trees");
 
   const timeMergeVsBaseline = (
     baseTitle: string,
-    tree1: BTree,
-    tree2: BTree,
+    tree1: BTreeEx<number, number>,
+    tree2: BTreeEx<number, number>,
     prefer = preferLeftMerge,
     mergeLabel = 'merge()',
     baselineLabel = 'clone+set loop (baseline)'
@@ -448,8 +448,8 @@ console.log("### Merge between B+ trees");
   // Test 1: Non-overlapping ranges (best case - minimal intersections)
   console.log("# Non-overlapping ranges (disjoint keys)");
   sizes.forEach((size) => {
-    const tree1 = new BTree();
-    const tree2 = new BTree();
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
 
     const offset = size * 3;
     for (let i = 0; i < size; i++) {
@@ -464,8 +464,8 @@ console.log("### Merge between B+ trees");
   console.log();
   console.log("# Adjacent ranges (one intersection point)");
   sizes.forEach((size) => {
-    const tree1 = new BTree();
-    const tree2 = new BTree();
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
 
     // Tree1: 0-size, Tree2: size-(2*size)
     for (let i = 0; i <= size; i++) {
@@ -480,8 +480,8 @@ console.log("### Merge between B+ trees");
   console.log();
   console.log("# Interleaved ranges (two intersection points)");
   sizes.forEach((size) => {
-    const tree1 = new BTree();
-    const tree2 = new BTree();
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
 
     // Tree1: 0-size, 2*size-3*size
     // Tree2: size-2*size
@@ -498,8 +498,8 @@ console.log("### Merge between B+ trees");
   console.log();
   console.log("# Complete overlap (worst case - all keys intersect)");
   sizes.forEach((size) => {
-    const tree1 = new BTree();
-    const tree2 = new BTree();
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
 
     for (let i = 0; i < size; i++) {
       tree1.set(i, i);
@@ -513,8 +513,8 @@ console.log("### Merge between B+ trees");
   console.log();
   console.log("# Partial overlap (10% intersection)");
   sizes.forEach((size) => {
-    const tree1 = new BTree();
-    const tree2 = new BTree();
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
 
     // Tree1: 0-(size)
     // Tree2: (~0.9*size)-(1.9*size)
@@ -538,8 +538,8 @@ console.log("### Merge between B+ trees");
     const keys1 = makeArray(size, true);
     const keys2 = makeArray(size, true);
 
-    const tree1 = new BTree();
-    const tree2 = new BTree();
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
 
     for (let k of keys1) {
       tree1.set(k, k);
@@ -555,8 +555,8 @@ console.log("### Merge between B+ trees");
   console.log();
   console.log("# Merge with empty tree");
   sizes.forEach((size) => {
-    const tree1 = new BTree();
-    const tree2 = new BTree();
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
 
     for (let i = 0; i < size; i++) {
       tree1.set(i, i);
@@ -569,8 +569,8 @@ console.log("### Merge between B+ trees");
   console.log();
   console.log("# Compare merge vs manual iteration for complete overlap");
   sizes.forEach((size) => {
-    const tree1 = new BTree();
-    const tree2 = new BTree();
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
 
     for (let i = 0; i < size; i++) {
       tree1.set(i, i);
@@ -588,12 +588,12 @@ console.log("### Merge between B+ trees");
     const overlapInterval = 100_000;
     const overlapPerInterval = 10;
 
-    const tree1 = new BTree<number, number>();
+    const tree1 = new BTreeEx<number, number>();
     for (let i = 0; i < totalKeys; i++) {
       tree1.set(i, i);
     }
 
-    const tree2 = new BTree<number, number>();
+    const tree2 = new BTreeEx<number, number>();
     for (let i = 0; i < totalKeys; i++) {
       if ((i % overlapInterval) < overlapPerInterval) {
         tree2.set(i, i);
@@ -613,8 +613,8 @@ console.log("### Intersect between B+ trees");
   const sizes = [100, 1000, 10000, 100000];
 
   const runIntersect = (
-    tree1: BTree<number, number>,
-    tree2: BTree<number, number>
+    tree1: BTreeEx<number, number>,
+    tree2: BTreeEx<number, number>
   ) => {
     let count = 0;
     let checksum = 0;
@@ -640,8 +640,8 @@ console.log("### Intersect between B+ trees");
 
   const timeIntersectVsBaseline = (
     baseTitle: string,
-    tree1: BTree<number, number>,
-    tree2: BTree<number, number>,
+    tree1: BTreeEx<number, number>,
+    tree2: BTreeEx<number, number>,
     intersectLabel = 'intersect()',
     baselineLabel = 'sort baseline'
   ) => {
@@ -658,8 +658,8 @@ console.log("### Intersect between B+ trees");
   console.log();
   console.log("# Non-overlapping ranges (no shared keys)");
   sizes.forEach((size) => {
-    const tree1 = new BTree<number, number>();
-    const tree2 = new BTree<number, number>();
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
     const offset = size * 3;
     for (let i = 0; i < size; i++) {
       tree1.set(i, i);
@@ -673,8 +673,8 @@ console.log("### Intersect between B+ trees");
   console.log();
   console.log("# 50% overlapping ranges");
   sizes.forEach((size) => {
-    const tree1 = new BTree<number, number>();
-    const tree2 = new BTree<number, number>();
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
     const offset = Math.floor(size / 2);
     for (let i = 0; i < size; i++) {
       tree1.set(i, i);
@@ -688,8 +688,8 @@ console.log("### Intersect between B+ trees");
   console.log();
   console.log("# Complete overlap (all keys shared)");
   sizes.forEach((size) => {
-    const tree1 = new BTree<number, number>();
-    const tree2 = new BTree<number, number>();
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
     for (let i = 0; i < size; i++) {
       tree1.set(i, i);
       tree2.set(i, i * 3);
@@ -709,8 +709,8 @@ console.log("### Intersect between B+ trees");
       keys2[i] = keys1[i];
     }
 
-    const tree1 = new BTree<number, number>();
-    const tree2 = new BTree<number, number>();
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
 
     for (let i = 0; i < keys1.length; i++) {
       const key = keys1[i];

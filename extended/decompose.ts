@@ -1,5 +1,6 @@
-import BTree, { areOverlapping } from "./b+tree";
-import { createCursor, getKey, MergeCursor, MergeCursorPayload, moveForwardOne } from "./parallelWalk";
+import BTree, { areOverlapping, BNode, BNodeInternal, check } from '../b+tree';
+import type { BTreeWithInternals } from './shared';
+import { createCursor, getKey, MergeCursor, MergeCursorPayload, moveForwardOne, moveTo, noop } from "./parallelWalk";
 
 export type DecomposeResult<K,V> = { disjoint: (number | BNode<K,V>)[], tallestIndex: number };
 
@@ -13,8 +14,8 @@ export type DecomposeResult<K,V> = { disjoint: (number | BNode<K,V>)[], tallestI
  * The cursor walk is efficient, meaning it skips over disjoint subtrees entirely rather than visiting every leaf.
  */
 export function decompose<K,V>(
-  left: BTree<K,V>,
-  right: BTree<K,V>,
+  left: BTreeWithInternals<K,V>,
+  right: BTreeWithInternals<K,V>,
   mergeValues: (key: K, leftValue: V, rightValue: V) => V | undefined
 ): DecomposeResult<K,V> {
   const cmp = left._compare;
@@ -318,11 +319,13 @@ export function decompose<K,V>(
   return { disjoint, tallestIndex };
 }
 
-export function buildFromDecomposition<K,V>(
+export function buildFromDecomposition<TBTree extends BTree<K,V>, K,V>(
+  constructor: new (entries?: [K,V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) => TBTree,
   branchingFactor: number,
-  decomposed: DecomposeResult<K,V>
-): BTree<K,V> {
-
+  decomposed: DecomposeResult<K,V>,
+  cmp: (a: K, b: K) => number,
+  maxNodeSize: number
+): TBTree {
   const { disjoint, tallestIndex } = decomposed;
   const disjointEntryCount = alternatingCount(disjoint);
 
@@ -371,8 +374,8 @@ export function buildFromDecomposition<K,V>(
     );
   }
 
-  const merged = new BTree<K,V>(undefined, this._compare, this._maxNodeSize);
-  merged._root = frontier[0];
+  const merged = new constructor(undefined, cmp, maxNodeSize);
+  (merged as unknown as BTreeWithInternals<K,V>)._root = frontier[0];
 
   // Return the resulting tree
   return merged;
@@ -437,10 +440,10 @@ function processSide<K,V>(
       unflushedSizes.forEach((count) => check(count === 0, "Unexpected unflushed size after root split."));
       unflushedSizes.push(0); // new root level
       isSharedFrontierDepth = insertionDepth + 2;
-      unflushedSizes[insertionDepth + 1] += susize();
+      unflushedSizes[insertionDepth + 1] += subtree.size();
     } else {
       isSharedFrontierDepth = insertionDepth + 1;
-      unflushedSizes[insertionDepth] += susize();
+      unflushedSizes[insertionDepth] += subtree.size();
     }
 
     // Finally, update the frontier from the highest new node downward

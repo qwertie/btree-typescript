@@ -1,7 +1,8 @@
-import BTree from "./b+tree";
-import { decompose, buildFromDecomposition } from "./decompose";
-import { checkCanDoSetOperation } from "./parallelWalk";
-
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.merge = void 0;
+var decompose_1 = require("./decompose");
+var parallelWalk_1 = require("./parallelWalk");
 /**
  * Efficiently merges two trees, reusing subtrees wherever possible.
  * Neither input tree is modified.
@@ -18,16 +19,19 @@ import { checkCanDoSetOperation } from "./parallelWalk";
  * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than cloning `this`
  * and inserting the contents of `other` into the clone.
  */
-export function merge<K,V>(treeA: BTree<K,V>, treeB: BTree<K,V>, merge: (key: K, leftValue: V, rightValue: V) => V | undefined): BTree<K,V> {
-  const branchingFactor = checkCanDoSetOperation(treeA, treeB);
-  if (treeA._root.size() === 0)
-    return treeB.clone();
-  if (treeB._root.size() === 0)
-    return treeA.clone();
-
-  // Decompose both trees into disjoint subtrees leaves.
-  // As many of these as possible will be reused from the original trees, and the remaining
-  // will be leaves that are the result of merging intersecting leaves.
-  const decomposed = decompose(treeA, treeB, merge);
-  return buildFromDecomposition(branchingFactor, decomposed);
+function merge(treeA, treeB, merge) {
+    var _treeA = treeA;
+    var _treeB = treeB;
+    var branchingFactor = (0, parallelWalk_1.checkCanDoSetOperation)(_treeA, _treeB);
+    if (_treeA._root.size() === 0)
+        return treeB.clone();
+    if (_treeB._root.size() === 0)
+        return treeA.clone();
+    // Decompose both trees into disjoint subtrees leaves.
+    // As many of these as possible will be reused from the original trees, and the remaining
+    // will be leaves that are the result of merging intersecting leaves.
+    var decomposed = (0, decompose_1.decompose)(_treeA, _treeB, merge);
+    var constructor = treeA.constructor;
+    return (0, decompose_1.buildFromDecomposition)(constructor, branchingFactor, decomposed, _treeA._compare, _treeA._maxNodeSize);
 }
+exports.merge = merge;

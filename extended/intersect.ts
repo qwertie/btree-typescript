@@ -1,4 +1,6 @@
-import BTree from "./b+tree";
+import BTree from '../b+tree';
+import { BNode, BNodeInternal, check } from '../b+tree';
+import type { BTreeWithInternals } from './shared';
 import { createCursor, moveForwardOne, moveTo, getKey, noop, checkCanDoSetOperation } from "./parallelWalk"
 
 /**
@@ -16,14 +18,16 @@ import { createCursor, moveForwardOne, moveTo, getKey, noop, checkCanDoSetOperat
  * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
  */
 export function intersect<K,V>(treeA: BTree<K,V>, treeB: BTree<K,V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void {
-  checkCanDoSetOperation(treeA, treeB);
+  const _treeA = treeA as unknown as BTreeWithInternals<K,V>;
+  const _treeB = treeB as unknown as BTreeWithInternals<K,V>;
+  checkCanDoSetOperation(_treeA, _treeB);
   if (treeB.size === 0 || treeA.size === 0)
     return;
 
   const cmp = treeA._compare;
   const makePayload = (): undefined => undefined;
-  let cursorA = createCursor<K,V,undefined>(treeA, makePayload, noop, noop, noop, noop, noop);
-  let cursorB = createCursor<K,V,undefined>(treeB, makePayload, noop, noop, noop, noop, noop);
+  let cursorA = createCursor<K,V,undefined>(_treeA, makePayload, noop, noop, noop, noop, noop);
+  let cursorB = createCursor<K,V,undefined>(_treeB, makePayload, noop, noop, noop, noop, noop);
   let leading = cursorA;
   let trailing = cursorB;
   let order = cmp(getKey(leading), getKey(trailing));

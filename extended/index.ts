@@ -1,6 +1,8 @@
 import BTree from '../b+tree';
 import type { BTreeWithInternals } from './shared';
 import { diffAgainst as diffAgainstAlgorithm } from './diffAgainst';
+import { intersect } from './intersect';
+import { merge } from './merge';
 
 export class BTreeEx<K = any, V = any> extends BTree<K, V> {
   clone(): this {
@@ -75,8 +77,8 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
    * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than cloning `this`
    * and inserting the contents of `other` into the clone.
    */
-  merge(other: BTree<K,V>, merge: (key: K, leftValue: V, rightValue: V) => V | undefined): BTreeEx<K,V> {
-
+  merge(other: BTreeEx<K,V>, mergeFn: (key: K, leftValue: V, rightValue: V) => V | undefined): BTreeEx<K,V> {
+    return merge<BTreeEx<K,V>, K, V>(this, other, mergeFn);
   }
 }
 

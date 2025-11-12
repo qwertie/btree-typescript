@@ -425,5 +425,11 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
  *  was the intention, but TypeScript is acting weird and may return `ISortedSet<K>`
  *  even if `V` can't be `undefined` (discussion: btree-typescript issue #14) */
 export declare function asSet<K, V>(btree: BTree<K, V>): undefined extends V ? ISortedSet<K> : unknown;
+/**
+ * Determines whether two nodes are overlapping in key range.
+ * Takes the leftmost known key of each node to avoid a log(n) min calculation.
+ * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
+ */
+export declare function areOverlapping<K, V>(aMin: K, aMax: K, bMin: K, bMax: K, cmp: (x: K, y: K) => number): boolean;
 /** A BTree frozen in the empty state. */
 export declare const EmptyBTree: BTree<any, any>;
