@@ -1639,7 +1639,13 @@ export class BNodeInternal<K,V> extends BNode<K,V> {
 // has the side effect of scanning the prototype chain.
 var undefVals: any[] = [];
 
-function sumChildSizes<K,V>(children: BNode<K,V>[]): number {
+/**
+ * Sums the sizes of the given child nodes.
+ * @param children the child nodes
+ * @returns the total size
+ * @internal
+ */
+export function sumChildSizes<K,V>(children: BNode<K,V>[]): number {
   var total = 0;
   for (var i = 0; i < children.length; i++)
     total += children[i].size();
@@ -1650,6 +1656,7 @@ function sumChildSizes<K,V>(children: BNode<K,V>[]): number {
  * Determines whether two nodes are overlapping in key range.
  * Takes the leftmost known key of each node to avoid a log(n) min calculation.
  * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
+ * @internal
  */
 export function areOverlapping<K,V>(
   aMin: K,

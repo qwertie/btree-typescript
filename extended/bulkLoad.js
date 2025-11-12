@@ -9,9 +9,34 @@ function bulkLoad(entries, maxNodeSize) {
     var leafCount = leaves.length;
     if (leafCount === 0)
         return undefined;
-    if (leafCount === 1)
-        return leaves[0];
-    throw new Error("bulkLoad: multiple leaves not yet supported");
+    var currentLevel = leaves;
+    while (true) {
+        var nodeCount = currentLevel.length;
+        if (nodeCount === 1)
+            return currentLevel[0];
+        if (nodeCount <= maxNodeSize) {
+            return new b_tree_1.BNodeInternal(currentLevel, (0, b_tree_1.sumChildSizes)(currentLevel));
+        }
+        var nextLevelCount = Math.ceil(nodeCount / maxNodeSize);
+        var nextLevel = new Array(nextLevelCount);
+        var remainingNodes = nodeCount;
+        var remainingParents = nextLevelCount;
+        var childIndex = 0;
+        for (var i = 0; i < nextLevelCount; i++) {
+            var chunkSize = Math.ceil(remainingNodes / remainingParents);
+            var children = new Array(chunkSize);
+            var size = 0;
+            for (var j = 0; j < chunkSize; j++) {
+                var child = currentLevel[childIndex++];
+                children[j] = child;
+                size += child.size();
+            }
+            remainingNodes -= chunkSize;
+            remainingParents--;
+            nextLevel[i] = new b_tree_1.BNodeInternal(children, size);
+        }
+        currentLevel = nextLevel;
+    }
 }
 exports.bulkLoad = bulkLoad;
 function flushToLeaves(alternatingList, maxNodeSize, onLeafCreation) {

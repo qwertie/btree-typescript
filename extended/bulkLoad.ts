@@ -1,4 +1,4 @@
-import { BNode, BNodeInternal } from '../b+tree';
+import { BNode, BNodeInternal, sumChildSizes } from '../b+tree';
 import { alternatingCount, alternatingGetFirst, alternatingGetSecond } from './decompose';
 
 export function bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number): BNode<K, V> | undefined {
@@ -7,9 +7,39 @@ export function bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number): BNode<K
   const leafCount = leaves.length;
   if (leafCount === 0)
     return undefined;
-  if (leafCount === 1)
-    return leaves[0];
-  throw new Error("bulkLoad: multiple leaves not yet supported");
+
+  let currentLevel: BNode<K, V>[] = leaves;
+  while (true) {
+    const nodeCount = currentLevel.length;
+    if (nodeCount === 1)
+      return currentLevel[0];
+
+    if (nodeCount <= maxNodeSize) {
+      return new BNodeInternal<K, V>(currentLevel, sumChildSizes(currentLevel));
+    }
+
+    const nextLevelCount = Math.ceil(nodeCount / maxNodeSize);
+    const nextLevel = new Array<BNode<K, V>>(nextLevelCount);
+    let remainingNodes = nodeCount;
+    let remainingParents = nextLevelCount;
+    let childIndex = 0;
+
+    for (let i = 0; i < nextLevelCount; i++) {
+      const chunkSize = Math.ceil(remainingNodes / remainingParents);
+      const children = new Array<BNode<K, V>>(chunkSize);
+      let size = 0;
+      for (let j = 0; j < chunkSize; j++) {
+        const child = currentLevel[childIndex++];
+        children[j] = child;
+        size += child.size();
+      }
+      remainingNodes -= chunkSize;
+      remainingParents--;
+      nextLevel[i] = new BNodeInternal<K, V>(children, size);
+    }
+
+    currentLevel = nextLevel;
+  }
 }
 
 export function flushToLeaves<K, V>(

@@ -15,7 +15,7 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EmptyBTree = exports.check = exports.areOverlapping = exports.BNodeInternal = exports.BNode = exports.asSet = exports.simpleComparator = exports.defaultComparator = void 0;
+exports.EmptyBTree = exports.check = exports.areOverlapping = exports.sumChildSizes = exports.BNodeInternal = exports.BNode = exports.asSet = exports.simpleComparator = exports.defaultComparator = void 0;
 /**
  * Compares DefaultComparables to form a strict partial ordering.
  *
@@ -1490,16 +1490,24 @@ exports.BNodeInternal = BNodeInternal;
 // Reading outside the bounds of an array is relatively slow because it
 // has the side effect of scanning the prototype chain.
 var undefVals = [];
+/**
+ * Sums the sizes of the given child nodes.
+ * @param children the child nodes
+ * @returns the total size
+ * @internal
+ */
 function sumChildSizes(children) {
     var total = 0;
     for (var i = 0; i < children.length; i++)
         total += children[i].size();
     return total;
 }
+exports.sumChildSizes = sumChildSizes;
 /**
  * Determines whether two nodes are overlapping in key range.
  * Takes the leftmost known key of each node to avoid a log(n) min calculation.
  * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
+ * @internal
  */
 function areOverlapping(aMin, aMax, bMin, bMax, cmp) {
     // There are 4 possibilities:
