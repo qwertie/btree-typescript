@@ -83,6 +83,7 @@
       "jsx",
       "json"
     ],
+    "verbose": true,
     "bail": true,
     "testEnvironment": "node"
   },
