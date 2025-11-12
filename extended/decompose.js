@@ -12,6 +12,7 @@ var parallelWalk_1 = require("./parallelWalk");
  * be disjoint. This is true because the leading cursor was also previously walked in this way, and is thus pointing to
  * the first key at or after the trailing cursor's previous position.
  * The cursor walk is efficient, meaning it skips over disjoint subtrees entirely rather than visiting every leaf.
+ * @internal
  */
 function decompose(left, right, mergeValues, ignoreRight) {
     if (ignoreRight === void 0) { ignoreRight = false; }
@@ -256,6 +257,10 @@ function decompose(left, right, mergeValues, ignoreRight) {
     return { disjoint: disjoint, tallestIndex: tallestIndex };
 }
 exports.decompose = decompose;
+/**
+ * Constructs a B-Tree from the result of a decomposition (set of disjoint nodes).
+ * @internal
+ */
 function buildFromDecomposition(constructor, branchingFactor, decomposed, cmp, maxNodeSize) {
     var disjoint = decomposed.disjoint, tallestIndex = decomposed.tallestIndex;
     var disjointEntryCount = (0, shared_1.alternatingCount)(disjoint);
@@ -290,6 +295,7 @@ exports.buildFromDecomposition = buildFromDecomposition;
 /**
  * Processes one side (left or right) of the disjoint subtree set during a merge operation.
  * Merges each subtree in the disjoint set from start to end (exclusive) into the given spine.
+ * @internal
  */
 function processSide(branchingFactor, disjoint, spine, start, end, step, sideIndex, sideInsertionIndex, splitOffSide, updateMax) {
     // Determine the depth of the first shared node on the frontier.

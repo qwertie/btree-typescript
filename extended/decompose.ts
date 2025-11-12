@@ -2,6 +2,10 @@ import BTree, { areOverlapping, BNode, BNodeInternal, check } from '../b+tree';
 import { alternatingCount, alternatingGetFirst, alternatingGetSecond, alternatingPush, flushToLeaves, type BTreeWithInternals } from './shared';
 import { createCursor, getKey, MergeCursor, MergeCursorPayload, moveForwardOne, moveTo, noop } from "./parallelWalk";
 
+/**
+ * A set of disjoint nodes, their heights, and the index of the tallest node.
+ * @internal
+ */
 export type DecomposeResult<K, V> = { disjoint: (number | BNode<K, V>)[], tallestIndex: number };
 
 /**
@@ -12,6 +16,7 @@ export type DecomposeResult<K, V> = { disjoint: (number | BNode<K, V>)[], talles
  * be disjoint. This is true because the leading cursor was also previously walked in this way, and is thus pointing to 
  * the first key at or after the trailing cursor's previous position.
  * The cursor walk is efficient, meaning it skips over disjoint subtrees entirely rather than visiting every leaf.
+ * @internal
  */
 export function decompose<K, V>(
   left: BTreeWithInternals<K, V>,
@@ -307,6 +312,10 @@ export function decompose<K, V>(
   return { disjoint, tallestIndex };
 }
 
+/**
+ * Constructs a B-Tree from the result of a decomposition (set of disjoint nodes).
+ * @internal
+ */
 export function buildFromDecomposition<TBTree extends BTree<K, V>, K, V>(
   constructor: new (entries?: [K, V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) => TBTree,
   branchingFactor: number,
@@ -372,6 +381,7 @@ export function buildFromDecomposition<TBTree extends BTree<K, V>, K, V>(
 /**
  * Processes one side (left or right) of the disjoint subtree set during a merge operation.
  * Merges each subtree in the disjoint set from start to end (exclusive) into the given spine.
+ * @internal
  */
 function processSide<K, V>(
   branchingFactor: number,
