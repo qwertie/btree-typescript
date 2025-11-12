@@ -1,29 +1,41 @@
 import BTree, { BNode, BNodeInternal, check, defaultComparator, sumChildSizes } from '../b+tree';
 import { alternatingCount, alternatingGetFirst, alternatingGetSecond, flushToLeaves, type BTreeWithInternals } from './shared';
 
+type Comparator<K> = (a: K, b: K) => number;
+
 export function bulkLoad<K, V>(
   entries: (K | V)[],
   maxNodeSize: number,
-  compare?: (a: K, b: K) => number
+  compare: Comparator<K>
 ): BTree<K, V> {
+  const root = bulkLoadRoot<K, V>(entries, maxNodeSize, compare);
+  const tree = new BTree<K, V>(undefined, compare, maxNodeSize);
+  const target = tree as unknown as BTreeWithInternals<K, V>;
+  target._root = root;
+  target._size = root.size();
+  return tree;
+}
+
+export function bulkLoadRoot<K, V>(
+  entries: (K | V)[],
+  maxNodeSize: number,
+  compare: Comparator<K>
+): BNode<K, V> {
   const totalPairs = alternatingCount(entries);
-  const cmp = compare ?? (defaultComparator as unknown as (a: K, b: K) => number);
   if (totalPairs > 1) {
     let previousKey = alternatingGetFirst<K, V>(entries, 0);
     for (let i = 1; i < totalPairs; i++) {
       const key = alternatingGetFirst<K, V>(entries, i);
-      if (cmp(previousKey, key) >= 0)
+      if (compare(previousKey, key) >= 0)
         throw new Error("bulkLoad: entries must be sorted by key in strictly ascending order");
       previousKey = key;
     }
   }
 
-  const tree = new BTree<K, V>(undefined, cmp, maxNodeSize);
   const leaves: BNode<K, V>[] = [];
   flushToLeaves<K, V>(entries, maxNodeSize, (leaf) => leaves.push(leaf));
-  const leafCount = leaves.length;
-  if (leafCount === 0)
-    return tree;
+  if (leaves.length === 0)
+    return new BNode<K, V>();
 
   let currentLevel: BNode<K, V>[] = leaves;
   while (currentLevel.length > 1) {
@@ -35,7 +47,7 @@ export function bulkLoad<K, V>(
 
     const nextLevelCount = Math.ceil(nodeCount / maxNodeSize);
     check(nextLevelCount > 1);
-    const nextLevel = new Array<BNodeInternal<K, V>>(nextLevelCount);
+    const nextLevel = new Array<BNode<K, V>>(nextLevelCount);
     let remainingNodes = nodeCount;
     let remainingParents = nextLevelCount;
     let childIndex = 0;
@@ -55,18 +67,13 @@ export function bulkLoad<K, V>(
     }
 
     const minSize = Math.floor(maxNodeSize / 2);
-    const secondLastNode = nextLevel[nextLevelCount - 2];
-    const lastNode = nextLevel[nextLevelCount - 1];
-    while (lastNode.children.length < minSize) {
+    const secondLastNode = nextLevel[nextLevelCount - 2] as BNodeInternal<K, V>;
+    const lastNode = nextLevel[nextLevelCount - 1] as BNodeInternal<K, V>;
+    while (lastNode.children.length < minSize)
       lastNode.takeFromLeft(secondLastNode);
-    }
 
     currentLevel = nextLevel;
   }
 
-  const target = tree as unknown as BTreeWithInternals<K, V>;
-  target._root = currentLevel[0];
-  target._size = totalPairs;
-  return tree;
+  return currentLevel[0];
 }
-

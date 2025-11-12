@@ -19,27 +19,33 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.bulkLoad = void 0;
+exports.bulkLoadRoot = exports.bulkLoad = void 0;
 var b_tree_1 = __importStar(require("../b+tree"));
 var shared_1 = require("./shared");
 function bulkLoad(entries, maxNodeSize, compare) {
+    var root = bulkLoadRoot(entries, maxNodeSize, compare);
+    var tree = new b_tree_1.default(undefined, compare, maxNodeSize);
+    var target = tree;
+    target._root = root;
+    target._size = root.size();
+    return tree;
+}
+exports.bulkLoad = bulkLoad;
+function bulkLoadRoot(entries, maxNodeSize, compare) {
     var totalPairs = (0, shared_1.alternatingCount)(entries);
-    var cmp = compare !== null && compare !== void 0 ? compare : b_tree_1.defaultComparator;
     if (totalPairs > 1) {
         var previousKey = (0, shared_1.alternatingGetFirst)(entries, 0);
         for (var i = 1; i < totalPairs; i++) {
             var key = (0, shared_1.alternatingGetFirst)(entries, i);
-            if (cmp(previousKey, key) >= 0)
+            if (compare(previousKey, key) >= 0)
                 throw new Error("bulkLoad: entries must be sorted by key in strictly ascending order");
             previousKey = key;
         }
     }
-    var tree = new b_tree_1.default(undefined, cmp, maxNodeSize);
     var leaves = [];
     (0, shared_1.flushToLeaves)(entries, maxNodeSize, function (leaf) { return leaves.push(leaf); });
-    var leafCount = leaves.length;
-    if (leafCount === 0)
-        return tree;
+    if (leaves.length === 0)
+        return new b_tree_1.BNode();
     var currentLevel = leaves;
     while (currentLevel.length > 1) {
         var nodeCount = currentLevel.length;
@@ -69,14 +75,10 @@ function bulkLoad(entries, maxNodeSize, compare) {
         var minSize = Math.floor(maxNodeSize / 2);
         var secondLastNode = nextLevel[nextLevelCount - 2];
         var lastNode = nextLevel[nextLevelCount - 1];
-        while (lastNode.children.length < minSize) {
+        while (lastNode.children.length < minSize)
             lastNode.takeFromLeft(secondLastNode);
-        }
         currentLevel = nextLevel;
     }
-    var target = tree;
-    target._root = currentLevel[0];
-    target._size = totalPairs;
-    return tree;
+    return currentLevel[0];
 }
-exports.bulkLoad = bulkLoad;
+exports.bulkLoadRoot = bulkLoadRoot;

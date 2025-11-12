@@ -1,10 +1,25 @@
-import BTree from '../b+tree';
+import BTree, { defaultComparator } from '../b+tree';
 import type { BTreeWithInternals } from './shared';
 import { diffAgainst as diffAgainstAlgorithm } from './diffAgainst';
 import forEachKeyInBoth from './forEachKeyInBoth';
 import union from './union';
+import { bulkLoadRoot } from './bulkLoad';
 
 export class BTreeEx<K = any, V = any> extends BTree<K, V> {
+  static bulkLoad<K, V>(
+    entries: (K | V)[],
+    maxNodeSize: number,
+    compare?: (a: K, b: K) => number
+  ): BTreeEx<K, V> {
+    const cmp = compare ?? (defaultComparator as unknown as (a: K, b: K) => number);
+    const root = bulkLoadRoot<K, V>(entries, maxNodeSize, cmp);
+    const tree = new BTreeEx<K, V>(undefined, cmp, maxNodeSize);
+    const target = tree as unknown as BTreeWithInternals<K, V>;
+    target._root = root;
+    target._size = root.size();
+    return tree;
+  }
+
   clone(): this {
     const source = this as unknown as BTreeWithInternals<K, V>;
     source._root.isShared = true;

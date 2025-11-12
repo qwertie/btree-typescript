@@ -14,20 +14,49 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BTreeEx = void 0;
-var b_tree_1 = __importDefault(require("../b+tree"));
+var b_tree_1 = __importStar(require("../b+tree"));
 var diffAgainst_1 = require("./diffAgainst");
 var forEachKeyInBoth_1 = __importDefault(require("./forEachKeyInBoth"));
 var union_1 = __importDefault(require("./union"));
+var bulkLoad_1 = require("./bulkLoad");
 var BTreeEx = /** @class */ (function (_super) {
     __extends(BTreeEx, _super);
     function BTreeEx() {
         return _super !== null && _super.apply(this, arguments) || this;
     }
+    BTreeEx.bulkLoad = function (entries, maxNodeSize, compare) {
+        var cmp = compare !== null && compare !== void 0 ? compare : b_tree_1.defaultComparator;
+        var root = (0, bulkLoad_1.bulkLoadRoot)(entries, maxNodeSize, cmp);
+        var tree = new BTreeEx(undefined, cmp, maxNodeSize);
+        var target = tree;
+        target._root = root;
+        target._size = root.size();
+        return tree;
+    };
     BTreeEx.prototype.clone = function () {
         var source = this;
         source._root.isShared = true;

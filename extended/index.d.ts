@@ -1,5 +1,6 @@
 import BTree from '../b+tree';
 export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
+    static bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number, compare?: (a: K, b: K) => number): BTreeEx<K, V>;
     clone(): this;
     greedyClone(force?: boolean): this;
     /**

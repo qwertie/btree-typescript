@@ -1,4 +1,5 @@
 import BTree, { BNode, BNodeInternal } from '../b+tree';
+import BTreeEx from '../extended';
 import { bulkLoad } from '../extended/bulkLoad';
 import { makeArray } from './shared';
 
@@ -20,11 +21,15 @@ function pairsFromKeys(keys: number[]): Pair[] {
   return keys.map((key, index) => [key, index - key]);
 }
 
-function buildTreeFromPairs(maxNodeSize: number, pairs: Pair[]) {
+function toAlternating(pairs: Pair[]): number[] {
   const alternating: number[] = [];
-  for (const [key, value] of pairs) {
+  for (const [key, value] of pairs)
     alternating.push(key, value);
-  }
+  return alternating;
+}
+
+function buildTreeFromPairs(maxNodeSize: number, pairs: Pair[]) {
+  const alternating = toAlternating(pairs);
   const tree = bulkLoad<number, number>(alternating, maxNodeSize, compareNumbers);
   const root = tree['_root'] as BNode<number, number>;
   return { tree, root };
@@ -122,5 +127,15 @@ describe.each(branchingFactors)('bulkLoad fanout %i', (maxNodeSize) => {
     const leaves = collectLeaves(tree['_root'] as BNode<number, number>);
     expect(leaves.length).toBe(Math.ceil(pairs.length / maxNodeSize));
     assertInternalNodeFanout(tree['_root'] as BNode<number, number>, maxNodeSize);
+  });
+});
+
+describe('BTreeEx.bulkLoad', () => {
+  test.each(branchingFactors)('creates tree for fanout %i', (maxNodeSize) => {
+    const pairs = sequentialPairs(maxNodeSize * 2 + 3, 7, 1);
+    const alternating = toAlternating(pairs);
+    const tree = BTreeEx.bulkLoad<number, number>(alternating, maxNodeSize, compareNumbers);
+    expect(tree).toBeInstanceOf(BTreeEx);
+    expectTreeMatches(tree, pairs);
   });
 });
