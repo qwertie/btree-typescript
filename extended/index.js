@@ -22,7 +22,7 @@ exports.BTreeEx = void 0;
 var b_tree_1 = __importDefault(require("../b+tree"));
 var diffAgainst_1 = require("./diffAgainst");
 var intersect_1 = require("./intersect");
-var merge_1 = require("./merge");
+var merge_1 = __importDefault(require("./merge"));
 var BTreeEx = /** @class */ (function (_super) {
     __extends(BTreeEx, _super);
     function BTreeEx() {
@@ -92,7 +92,7 @@ var BTreeEx = /** @class */ (function (_super) {
      * and inserting the contents of `other` into the clone.
      */
     BTreeEx.prototype.merge = function (other, mergeFn) {
-        return (0, merge_1.merge)(this, other, mergeFn);
+        return (0, merge_1.default)(this, other, mergeFn);
     };
     return BTreeEx;
 }(b_tree_1.default));

@@ -19,7 +19,7 @@ import { checkCanDoSetOperation } from "./parallelWalk";
  * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than cloning `this`
  * and inserting the contents of `other` into the clone.
  */
-export function merge<TBTree extends BTree<K,V>, K,V>(treeA: TBTree, treeB: TBTree, merge: (key: K, leftValue: V, rightValue: V) => V | undefined): TBTree {
+export default function merge<TBTree extends BTree<K,V>, K,V>(treeA: TBTree, treeB: TBTree, merge: (key: K, leftValue: V, rightValue: V) => V | undefined): TBTree {
   const _treeA = treeA as unknown as BTreeWithInternals<K,V>;
   const _treeB = treeB as unknown as BTreeWithInternals<K,V>;
   const branchingFactor = checkCanDoSetOperation(_treeA, _treeB);

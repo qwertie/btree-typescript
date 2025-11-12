@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.merge = void 0;
 var decompose_1 = require("./decompose");
 var parallelWalk_1 = require("./parallelWalk");
 /**
@@ -34,4 +33,4 @@ function merge(treeA, treeB, merge) {
     var constructor = treeA.constructor;
     return (0, decompose_1.buildFromDecomposition)(constructor, branchingFactor, decomposed, _treeA._compare, _treeA._maxNodeSize);
 }
-exports.merge = merge;
+exports.default = merge;

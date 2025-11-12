@@ -1,6 +1,7 @@
 import BTree, { IMap, defaultComparator, simpleComparator } from './b+tree';
 import BTreeEx from './extended';
 import diffAgainst from './extended/diffAgainst';
+import merge from './extended/merge';
 import { branchingFactorErrorMsg, comparatorErrorMsg } from './extended/parallelWalk';
 import SortedArray from './sorted-array';
 import MersenneTwister from 'mersenne-twister';
@@ -1253,21 +1254,22 @@ function testIntersect(maxNodeSize: number) {
       { key: 4, leftValue: 40, rightValue: 400 },
     ]);
   });
+}
 
-  test('Intersect throws for comparator mismatch', () => {
-    const compareA = (a: number, b: number) => a - b;
-    const compareB = (a: number, b: number) => a - b;
-    const tree1 = new BTreeEx<number, number>([[1, 1]], compareA, maxNodeSize);
-    const tree2 = new BTreeEx<number, number>([[1, 1]], compareB, maxNodeSize);
+describe('BTree intersect input/output validation', () => {
+    test('Intersect throws error when comparators differ', () => {
+    const tree1 = new BTreeEx<number, number>([[1, 10]], (a, b) => b + a);
+    const tree2 = new BTreeEx<number, number>([[2, 20]], (a, b) => b - a);
     expect(() => tree1.intersect(tree2, () => {})).toThrow(comparatorErrorMsg);
   });
 
-  test('Intersect throws for max node size mismatch', () => {
-    const tree1 = new BTreeEx<number, number>([[1, 1]], compare, maxNodeSize);
-    const tree2 = new BTreeEx<number, number>([[1, 1]], compare, maxNodeSize + 1);
+  test('Intersect throws error when max node sizes differ', () => {
+    const compare = (a: number, b: number) => b - a;
+    const tree1 = new BTreeEx<number, number>([[1, 10]], compare, 32);
+    const tree2 = new BTreeEx<number, number>([[2, 20]], compare, 33);
     expect(() => tree1.intersect(tree2, () => {})).toThrow(branchingFactorErrorMsg);
   });
-}
+});
 
 describe('BTree intersect fuzz tests', () => {
   const compare = (a: number, b: number) => a - b;
@@ -1364,6 +1366,8 @@ describe('BTree merge tests with fanout 32', testMerge.bind(null, 32));
 describe('BTree merge tests with fanout 10', testMerge.bind(null, 10));
 describe('BTree merge tests with fanout 4',  testMerge.bind(null, 4));
 
+type MergeFn = (key: number, leftValue: number, rightValue: number) => number | undefined;
+
 function testMerge(maxNodeSize: number) {
   const compare = (a: number, b: number) => a - b;
   const sharesNode = (root: any, targetNode: any): boolean => {
@@ -1399,7 +1403,6 @@ function testMerge(maxNodeSize: number) {
     return result;
   };
 
-  type MergeFn = (key: number, leftValue: number, rightValue: number) => number | undefined;
   type MergeExpectationOptions = {
     expectedMergeFn?: MergeFn;
   };
@@ -2034,25 +2037,32 @@ function testMerge(maxNodeSize: number) {
     for (let i = size; i < upperBound; i++)
       expect(result.get(i)).toBe(i * 10);
   });
+}
 
-  test('Merge throws error when comparators differ', () => {
-    const tree1 = new BTreeEx<number, number>([[1, 10]], compare, maxNodeSize);
-    const tree2 = new BTreeEx<number, number>([[2, 20]], (a, b) => b - a, maxNodeSize);
+describe('BTree merge input/output validation', () => {
+    test('Merge throws error when comparators differ', () => {
+    const tree1 = new BTreeEx<number, number>([[1, 10]], (a, b) => b + a);
+    const tree2 = new BTreeEx<number, number>([[2, 20]], (a, b) => b - a);
     const mergeFn: MergeFn = (_k, v1, v2) => v1 + v2;
 
     expect(() => tree1.merge(tree2, mergeFn)).toThrow(comparatorErrorMsg);
   });
 
   test('Merge throws error when max node sizes differ', () => {
-    const otherFanout = maxNodeSize === 32 ? 16 : 32;
-    const tree1 = new BTreeEx<number, number>([[1, 10]], compare, maxNodeSize);
-    const tree2 = new BTreeEx<number, number>([[2, 20]], compare, otherFanout);
+    const compare = (a: number, b: number) => b - a;
+    const tree1 = new BTreeEx<number, number>([[1, 10]], compare, 32);
+    const tree2 = new BTreeEx<number, number>([[2, 20]], compare, 33);
     const mergeFn: MergeFn = (_k, v1, v2) => v1 + v2;
 
     expect(() => tree1.merge(tree2, mergeFn)).toThrow(branchingFactorErrorMsg);
   });
 
-}
+  test('Merging trees returns a tree of the same class', () => {
+    expect(merge(new BTreeEx(), new BTreeEx(), (_k, v1, v2) => v1)).toBeInstanceOf(BTreeEx);
+    expect(merge(new BTree(), new BTree(), (_k, v1, v2) => v1)).toBeInstanceOf(BTree);
+    expect(merge(new BTree(), new BTree(), (_k, v1, v2) => v1) instanceof BTreeEx).toBeFalsy();
+  });
+});
 
 function swap(keys: any[], i: number, j: number) {
   var tmp = keys[i];

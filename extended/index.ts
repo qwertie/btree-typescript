@@ -2,7 +2,7 @@ import BTree from '../b+tree';
 import type { BTreeWithInternals } from './shared';
 import { diffAgainst as diffAgainstAlgorithm } from './diffAgainst';
 import { intersect } from './intersect';
-import { merge } from './merge';
+import merge from './merge';
 
 export class BTreeEx<K = any, V = any> extends BTree<K, V> {
   clone(): this {

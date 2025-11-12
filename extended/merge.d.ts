@@ -15,4 +15,4 @@ import BTree from '../b+tree';
  * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than cloning `this`
  * and inserting the contents of `other` into the clone.
  */
-export declare function merge<TBTree extends BTree<K, V>, K, V>(treeA: TBTree, treeB: TBTree, merge: (key: K, leftValue: V, rightValue: V) => V | undefined): TBTree;
+export default function merge<TBTree extends BTree<K, V>, K, V>(treeA: TBTree, treeB: TBTree, merge: (key: K, leftValue: V, rightValue: V) => V | undefined): TBTree;
