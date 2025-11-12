@@ -1,7 +1,7 @@
 import BTree from '../b+tree';
 import type { BTreeWithInternals } from './shared';
 import { diffAgainst as diffAgainstAlgorithm } from './diffAgainst';
-import intersect from './intersect';
+import forEachKeyInBoth from './forEachKeyInBoth';
 import union from './union';
 
 export class BTreeEx<K = any, V = any> extends BTree<K, V> {
@@ -46,11 +46,11 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
   }
 
   /**
-   * Intersects this tree with `other`, calling the supplied `intersection` callback for each intersecting key/value pair.
+   * Calls the supplied `callback` for each key/value pair shared by this tree and `other`.
    * Neither tree is modified.
-   * @param other The other tree to intersect with this one.
-   * @param intersection Called for keys that appear in both trees.
-   * @description Complexity is bounded O(N + M) time and O(log(N + M)) for allocations.
+   * @param other The other tree to compare with this one.
+   * @param callback Called for keys that appear in both trees.
+   * @description Complexity is bounded by O(N + M) time.
    * However, time is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
    * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
    * keys with significant numbers of non-overlapping key ranges it is O(log(N + M) * D) which is much faster.
@@ -58,8 +58,8 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
    * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than calling `toArray`
    * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
    */
-  intersect(other: BTree<K,V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void {
-    intersect(this, other, intersection);
+  forEachKeyInBoth(other: BTree<K,V>, callback: (key: K, leftValue: V, rightValue: V) => void): void {
+    forEachKeyInBoth(this, other, callback);
   }
 
   /**
@@ -69,7 +69,7 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
    * @param combineFn Called for keys that appear in both trees. Return the desired value, or
    *        `undefined` to omit the key from the result.
    * @returns A new BTree that contains the unioned key/value pairs.
-   * @description Complexity is bounded O(N + M) for both time and allocations.
+   * @description Complexity is bounded by O(N + M) for both time and allocations.
    * However, it is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
    * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
    * keys with significant numbers of non-overlapping key ranges it is O(log(N + M) * D) which is much faster.

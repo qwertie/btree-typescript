@@ -92,7 +92,7 @@ Features
 - Includes a lattice of interfaces for TypeScript users (see below)
 - Supports diffing computation between two trees that is highly optimized for the case
   in which a majority of nodes are shared (such as when persistent methods are used).
-- Supports fast union & intersection operations with asymptotic speedups when large disjoint ranges of keys are present.
+- Supports fast union & shared-key iteration via `forEachKeyInBoth` with asymptotic speedups when large disjoint ranges of keys are present.
   The union operation generates a new tree that shares nodes with the original trees when possible.
 
 ### Additional operations supported on this B+ tree ###

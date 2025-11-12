@@ -21,7 +21,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BTreeEx = void 0;
 var b_tree_1 = __importDefault(require("../b+tree"));
 var diffAgainst_1 = require("./diffAgainst");
-var intersect_1 = __importDefault(require("./intersect"));
+var forEachKeyInBoth_1 = __importDefault(require("./forEachKeyInBoth"));
 var union_1 = __importDefault(require("./union"));
 var BTreeEx = /** @class */ (function (_super) {
     __extends(BTreeEx, _super);
@@ -61,11 +61,11 @@ var BTreeEx = /** @class */ (function (_super) {
         return (0, diffAgainst_1.diffAgainst)(this, other, onlyThis, onlyOther, different);
     };
     /**
-     * Intersects this tree with `other`, calling the supplied `intersection` callback for each intersecting key/value pair.
+     * Calls the supplied `callback` for each key/value pair shared by this tree and `other`.
      * Neither tree is modified.
-     * @param other The other tree to intersect with this one.
-     * @param intersection Called for keys that appear in both trees.
-     * @description Complexity is bounded O(N + M) time and O(log(N + M)) for allocations.
+     * @param other The other tree to compare with this one.
+     * @param callback Called for keys that appear in both trees.
+     * @description Complexity is bounded by O(N + M) time.
      * However, time is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
      * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
      * keys with significant numbers of non-overlapping key ranges it is O(log(N + M) * D) which is much faster.
@@ -73,8 +73,8 @@ var BTreeEx = /** @class */ (function (_super) {
      * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than calling `toArray`
      * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
      */
-    BTreeEx.prototype.intersect = function (other, intersection) {
-        (0, intersect_1.default)(this, other, intersection);
+    BTreeEx.prototype.forEachKeyInBoth = function (other, callback) {
+        (0, forEachKeyInBoth_1.default)(this, other, callback);
     };
     /**
      * Efficiently unions this tree with `other`, reusing subtrees wherever possible.
@@ -83,7 +83,7 @@ var BTreeEx = /** @class */ (function (_super) {
      * @param combineFn Called for keys that appear in both trees. Return the desired value, or
      *        `undefined` to omit the key from the result.
      * @returns A new BTree that contains the unioned key/value pairs.
-     * @description Complexity is bounded O(N + M) for both time and allocations.
+     * @description Complexity is bounded by O(N + M) for both time and allocations.
      * However, it is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
      * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
      * keys with significant numbers of non-overlapping key ranges it is O(log(N + M) * D) which is much faster.

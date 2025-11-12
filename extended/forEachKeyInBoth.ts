@@ -3,12 +3,12 @@ import type { BTreeWithInternals } from './shared';
 import { createCursor, moveForwardOne, moveTo, getKey, noop, checkCanDoSetOperation } from "./parallelWalk"
 
 /**
- * Intersects the two trees, calling the supplied `intersection` callback for each intersecting key/value pair.
+ * Calls the supplied `callback` for each key/value pair shared by both trees.
  * Neither tree is modified.
- * @param treeA First tree to intersect.
- * @param treeB Second tree to intersect.
- * @param intersection Called for keys that appear in both trees.
- * @description Complexity is bounded O(N + M) time and O(log(N + M)) for allocations.
+ * @param treeA First tree to compare.
+ * @param treeB Second tree to compare.
+ * @param callback Invoked for keys that appear in both trees.
+ * @description Complexity is bounded by O(N + M) for time.
  * However, time is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
  * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
  * keys with significant numbers of non-overlapping key ranges it is O(log(N + M) * D) which is much faster.
@@ -16,7 +16,7 @@ import { createCursor, moveForwardOne, moveTo, getKey, noop, checkCanDoSetOperat
  * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than calling `toArray`
  * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
  */
-export default function intersect<K,V>(treeA: BTree<K,V>, treeB: BTree<K,V>, intersection: (key: K, leftValue: V, rightValue: V) => void): void {
+export default function forEachKeyInBoth<K,V>(treeA: BTree<K,V>, treeB: BTree<K,V>, callback: (key: K, leftValue: V, rightValue: V) => void): void {
   const _treeA = treeA as unknown as BTreeWithInternals<K,V>;
   const _treeB = treeB as unknown as BTreeWithInternals<K,V>;
   checkCanDoSetOperation(_treeA, _treeB);
@@ -31,7 +31,7 @@ export default function intersect<K,V>(treeA: BTree<K,V>, treeB: BTree<K,V>, int
   let trailing = cursorB;
   let order = cmp(getKey(leading), getKey(trailing));
   
-  // The intersect walk is somewhat similar to a merge walk in that it does an alternating hop walk with cursors.
+  // This walk is somewhat similar to a merge walk in that it does an alternating hop walk with cursors.
   // However, the only thing we care about is when the two cursors are equal (equality is intersection).
   // When they are not equal we just advance the trailing cursor.
   while (true) {
@@ -40,7 +40,7 @@ export default function intersect<K,V>(treeA: BTree<K,V>, treeB: BTree<K,V>, int
       const key = getKey(leading);
       const vA = cursorA.leaf.values[cursorA.leafIndex];
       const vB = cursorB.leaf.values[cursorB.leafIndex];
-      intersection(key, vA, vB);
+      callback(key, vA, vB);
       const outT = moveForwardOne(trailing, leading, key, cmp);
       const outL = moveForwardOne(leading, trailing, key, cmp);
       if (outT && outL)

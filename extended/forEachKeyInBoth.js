@@ -2,12 +2,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var parallelWalk_1 = require("./parallelWalk");
 /**
- * Intersects the two trees, calling the supplied `intersection` callback for each intersecting key/value pair.
+ * Calls the supplied `callback` for each key/value pair shared by both trees.
  * Neither tree is modified.
- * @param treeA First tree to intersect.
- * @param treeB Second tree to intersect.
- * @param intersection Called for keys that appear in both trees.
- * @description Complexity is bounded O(N + M) time and O(log(N + M)) for allocations.
+ * @param treeA First tree to compare.
+ * @param treeB Second tree to compare.
+ * @param callback Invoked for keys that appear in both trees.
+ * @description Complexity is bounded by O(N + M) for time.
  * However, time is additionally bounded by O(log(N + M) * D) where D is the number of disjoint ranges of keys between
  * the two trees. In practice, that means for keys of random distribution the performance is O(N + M) and for
  * keys with significant numbers of non-overlapping key ranges it is O(log(N + M) * D) which is much faster.
@@ -15,7 +15,7 @@ var parallelWalk_1 = require("./parallelWalk");
  * Note that in benchmarks even the worst case (fully interleaved keys) performance is faster than calling `toArray`
  * on both trees and performing a walk on the sorted contents due to the reduced allocation overhead.
  */
-function intersect(treeA, treeB, intersection) {
+function forEachKeyInBoth(treeA, treeB, callback) {
     var _treeA = treeA;
     var _treeB = treeB;
     (0, parallelWalk_1.checkCanDoSetOperation)(_treeA, _treeB);
@@ -28,7 +28,7 @@ function intersect(treeA, treeB, intersection) {
     var leading = cursorA;
     var trailing = cursorB;
     var order = cmp((0, parallelWalk_1.getKey)(leading), (0, parallelWalk_1.getKey)(trailing));
-    // The intersect walk is somewhat similar to a merge walk in that it does an alternating hop walk with cursors.
+    // This walk is somewhat similar to a merge walk in that it does an alternating hop walk with cursors.
     // However, the only thing we care about is when the two cursors are equal (equality is intersection).
     // When they are not equal we just advance the trailing cursor.
     while (true) {
@@ -37,7 +37,7 @@ function intersect(treeA, treeB, intersection) {
             var key = (0, parallelWalk_1.getKey)(leading);
             var vA = cursorA.leaf.values[cursorA.leafIndex];
             var vB = cursorB.leaf.values[cursorB.leafIndex];
-            intersection(key, vA, vB);
+            callback(key, vA, vB);
             var outT = (0, parallelWalk_1.moveForwardOne)(trailing, leading, key, cmp);
             var outL = (0, parallelWalk_1.moveForwardOne)(leading, trailing, key, cmp);
             if (outT && outL)
@@ -65,4 +65,4 @@ function intersect(treeA, treeB, intersection) {
         }
     }
 }
-exports.default = intersect;
+exports.default = forEachKeyInBoth;

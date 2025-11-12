@@ -608,17 +608,17 @@ console.log("### Merge between B+ trees");
 }
 
 console.log();
-console.log("### Intersect between B+ trees");
+console.log("### forEachKeyInBoth");
 {
   const sizes = [100, 1000, 10000, 100000];
 
-  const runIntersect = (
+  const runForEachKeyInBoth = (
     tree1: BTreeEx<number, number>,
     tree2: BTreeEx<number, number>
   ) => {
     let count = 0;
     let checksum = 0;
-    tree1.intersect(tree2, (_k, leftValue, rightValue) => {
+    tree1.forEachKeyInBoth(tree2, (_k, leftValue, rightValue) => {
       count++;
       checksum += leftValue + rightValue;
     });
@@ -638,16 +638,16 @@ console.log("### Intersect between B+ trees");
     return { count, checksum };
   };
 
-  const timeIntersectVsBaseline = (
+  const timeForEachKeyInBothVsBaseline = (
     baseTitle: string,
     tree1: BTreeEx<number, number>,
     tree2: BTreeEx<number, number>,
-    intersectLabel = 'intersect()',
+    forEachKeyInBothLabel = 'forEachKeyInBoth()',
     baselineLabel = 'sort baseline'
   ) => {
     measure(
-      result => `${baseTitle} using ${intersectLabel} [count=${result.count}, checksum=${result.checksum}]`,
-      () => runIntersect(tree1, tree2)
+      result => `${baseTitle} using ${forEachKeyInBothLabel} [count=${result.count}, checksum=${result.checksum}]`,
+      () => runForEachKeyInBoth(tree1, tree2)
     );
     measure(
       result => `${baseTitle} using ${baselineLabel} [count=${result.count}, checksum=${result.checksum}]`,
@@ -666,8 +666,8 @@ console.log("### Intersect between B+ trees");
       tree2.set(offset + i, offset + i);
     }
 
-    const baseTitle = `Intersect ${size}+${size} disjoint trees`;
-    timeIntersectVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `forEachKeyInBoth ${size}+${size} disjoint trees`;
+    timeForEachKeyInBothVsBaseline(baseTitle, tree1, tree2);
   });
 
   console.log();
@@ -681,8 +681,8 @@ console.log("### Intersect between B+ trees");
       tree2.set(i + offset, (i + offset) * 2);
     }
 
-    const baseTitle = `Intersect ${size}+${size} half-overlapping trees`;
-    timeIntersectVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `forEachKeyInBoth ${size}+${size} half-overlapping trees`;
+    timeForEachKeyInBothVsBaseline(baseTitle, tree1, tree2);
   });
 
   console.log();
@@ -695,8 +695,8 @@ console.log("### Intersect between B+ trees");
       tree2.set(i, i * 3);
     }
 
-    const baseTitle = `Intersect ${size}+${size} identical-key trees`;
-    timeIntersectVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `forEachKeyInBoth ${size}+${size} identical-key trees`;
+    timeForEachKeyInBothVsBaseline(baseTitle, tree1, tree2);
   });
 
   console.log();
@@ -721,7 +721,7 @@ console.log("### Intersect between B+ trees");
       tree2.set(key, key * 7);
     }
 
-    const baseTitle = `Intersect ${tree1.size}+${tree2.size} random trees`;
-    timeIntersectVsBaseline(baseTitle, tree1, tree2);
+    const baseTitle = `forEachKeyInBoth ${tree1.size}+${tree2.size} random trees`;
+    timeForEachKeyInBothVsBaseline(baseTitle, tree1, tree2);
   });
 }
