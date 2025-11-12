@@ -1,6 +1,6 @@
 import BTree, { defaultComparator } from '../b+tree';
 import type { BTreeWithInternals } from './shared';
-import { diffAgainst as diffAgainstAlgorithm } from './diffAgainst';
+import diffAgainst from './diffAgainst';
 import forEachKeyInBoth from './forEachKeyInBoth';
 import union from './union';
 import { bulkLoadRoot } from './bulkLoad';
@@ -57,7 +57,7 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
     onlyOther?: (k: K, v: V) => { break?: R } | void,
     different?: (k: K, vThis: V, vOther: V) => { break?: R } | void
   ): R | undefined {
-    return diffAgainstAlgorithm(this, other, onlyThis, onlyOther, different);
+    return diffAgainst(this, other, onlyThis, onlyOther, different);
   }
 
   /**

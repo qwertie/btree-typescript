@@ -12,11 +12,10 @@ import BTree from '../b+tree';
  * @param onlyB Callback invoked for all keys only present in `treeB`.
  * @param different Callback invoked for all keys with differing values.
  */
-export declare function diffAgainst<K, V, R>(_treeA: BTree<K, V>, _treeB: BTree<K, V>, onlyA?: (k: K, v: V) => {
+export default function diffAgainst<K, V, R>(_treeA: BTree<K, V>, _treeB: BTree<K, V>, onlyA?: (k: K, v: V) => {
     break?: R;
 } | void, onlyB?: (k: K, v: V) => {
     break?: R;
 } | void, different?: (k: K, vThis: V, vOther: V) => {
     break?: R;
 } | void): R | undefined;
-export default diffAgainst;

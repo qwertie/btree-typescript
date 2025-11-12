@@ -39,7 +39,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BTreeEx = void 0;
 var b_tree_1 = __importStar(require("../b+tree"));
-var diffAgainst_1 = require("./diffAgainst");
+var diffAgainst_1 = __importDefault(require("./diffAgainst"));
 var forEachKeyInBoth_1 = __importDefault(require("./forEachKeyInBoth"));
 var union_1 = __importDefault(require("./union"));
 var bulkLoad_1 = require("./bulkLoad");
@@ -87,7 +87,7 @@ var BTreeEx = /** @class */ (function (_super) {
      * @param different Callback invoked for all keys with differing values.
      */
     BTreeEx.prototype.diffAgainst = function (other, onlyThis, onlyOther, different) {
-        return (0, diffAgainst_1.diffAgainst)(this, other, onlyThis, onlyOther, different);
+        return (0, diffAgainst_1.default)(this, other, onlyThis, onlyOther, different);
     };
     /**
      * Calls the supplied `callback` for each key/value pair shared by this tree and `other`.
