@@ -43,8 +43,8 @@ function forEachKeyInBoth(treeA, treeB, callback) {
             if (result && result.break) {
                 return result.break;
             }
-            var outT = (0, parallelWalk_1.moveForwardOne)(trailing, leading, key, cmp);
-            var outL = (0, parallelWalk_1.moveForwardOne)(leading, trailing, key, cmp);
+            var outT = (0, parallelWalk_1.moveForwardOne)(trailing, leading);
+            var outL = (0, parallelWalk_1.moveForwardOne)(leading, trailing);
             if (outT && outL)
                 break;
             order = cmp((0, parallelWalk_1.getKey)(leading), (0, parallelWalk_1.getKey)(trailing));
@@ -56,7 +56,7 @@ function forEachKeyInBoth(treeA, treeB, callback) {
                 leading = tmp;
             }
             // At this point, leading is guaranteed to be ahead of trailing.
-            var _a = (0, parallelWalk_1.moveTo)(trailing, leading, (0, parallelWalk_1.getKey)(leading), true, areEqual, cmp), out = _a[0], nowEqual = _a[1];
+            var _a = (0, parallelWalk_1.moveTo)(trailing, leading, (0, parallelWalk_1.getKey)(leading), true, areEqual), out = _a[0], nowEqual = _a[1];
             if (out) {
                 // We've reached the end of one tree, so intersections are guaranteed to be done.
                 break;

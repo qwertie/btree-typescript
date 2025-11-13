@@ -49,8 +49,8 @@ export default function forEachKeyInBoth<K, V, R = void>(
       if (result && result.break) {
         return result.break;
       }
-      const outT = moveForwardOne(trailing, leading, key, cmp);
-      const outL = moveForwardOne(leading, trailing, key, cmp);
+      const outT = moveForwardOne(trailing, leading);
+      const outL = moveForwardOne(leading, trailing);
       if (outT && outL)
         break;
       order = cmp(getKey(leading), getKey(trailing));
@@ -60,7 +60,7 @@ export default function forEachKeyInBoth<K, V, R = void>(
         trailing = leading; leading = tmp;
       }
       // At this point, leading is guaranteed to be ahead of trailing.
-      const [out, nowEqual] = moveTo(trailing, leading, getKey(leading), true, areEqual, cmp)
+      const [out, nowEqual] = moveTo(trailing, leading, getKey(leading), true, areEqual)
       if (out) {
         // We've reached the end of one tree, so intersections are guaranteed to be done.
         break;

@@ -3,11 +3,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.noop = exports.moveTo = exports.getKey = exports.createCursor = exports.moveForwardOne = void 0;
 /**
  * Walks the cursor forward by one key.
- * Should only be called to advance cursors that started equal.
  * Returns true if end-of-tree was reached (cursor not structurally mutated).
+ * Optimized for this case over the more general `moveTo` function.
  * @internal
  */
-function moveForwardOne(cur, other, currentKey, cmp) {
+function moveForwardOne(cur, other) {
     var leaf = cur.leaf;
     var nextIndex = cur.leafIndex + 1;
     if (nextIndex < leaf.keys.length) {
@@ -18,7 +18,7 @@ function moveForwardOne(cur, other, currentKey, cmp) {
     }
     // If our optimized step within leaf failed, use full moveTo logic
     // Pass isInclusive=false to ensure we walk forward to the key exactly after the current
-    return moveTo(cur, other, currentKey, false, true, cmp)[0];
+    return moveTo(cur, other, getKey(cur), false, true)[0];
 }
 exports.moveForwardOne = moveForwardOne;
 /**
@@ -64,8 +64,9 @@ exports.getKey = getKey;
  * Also returns a boolean indicating if the target key was landed on exactly.
  * @internal
  */
-function moveTo(cur, other, targetKey, isInclusive, startedEqual, cmp) {
-    // Cache callbacks for perf
+function moveTo(cur, other, targetKey, isInclusive, startedEqual) {
+    // Cache for perf
+    var cmp = cur.tree._compare;
     var onMoveInLeaf = cur.onMoveInLeaf;
     // Fast path: destination within current leaf
     var leaf = cur.leaf;

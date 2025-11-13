@@ -215,18 +215,18 @@ function decompose(left, right, combineFn, ignoreRight) {
             var combined = combineFn(key, vA, vB);
             if (combined !== undefined)
                 (0, shared_1.alternatingPush)(pending, key, combined);
-            var outTrailing = (0, parallelWalk_1.moveForwardOne)(trailing, leading, key, cmp);
-            var outLeading = (0, parallelWalk_1.moveForwardOne)(leading, trailing, key, cmp);
+            var outTrailing = (0, parallelWalk_1.moveForwardOne)(trailing, leading);
+            var outLeading = (0, parallelWalk_1.moveForwardOne)(leading, trailing);
             if (outTrailing || outLeading) {
                 if (!outTrailing || !outLeading) {
                     // In these cases, we pass areEqual=false because a return value of "out of tree" means
                     // the cursor did not move. This must be true because they started equal and one of them had more tree
                     // to walk (one is !out), so they cannot be equal at this point.
                     if (outTrailing) {
-                        (0, parallelWalk_1.moveTo)(leading, trailing, maxKey, false, false, cmp);
+                        (0, parallelWalk_1.moveTo)(leading, trailing, maxKey, false, false);
                     }
                     else {
-                        (0, parallelWalk_1.moveTo)(trailing, leading, maxKey, false, false, cmp);
+                        (0, parallelWalk_1.moveTo)(trailing, leading, maxKey, false, false);
                     }
                 }
                 break;
@@ -239,9 +239,9 @@ function decompose(left, right, combineFn, ignoreRight) {
                 trailing = leading;
                 leading = tmp;
             }
-            var _a = (0, parallelWalk_1.moveTo)(trailing, leading, (0, parallelWalk_1.getKey)(leading), true, areEqual, cmp), out = _a[0], nowEqual = _a[1];
+            var _a = (0, parallelWalk_1.moveTo)(trailing, leading, (0, parallelWalk_1.getKey)(leading), true, areEqual), out = _a[0], nowEqual = _a[1];
             if (out) {
-                (0, parallelWalk_1.moveTo)(leading, trailing, maxKey, false, areEqual, cmp);
+                (0, parallelWalk_1.moveTo)(leading, trailing, maxKey, false, areEqual);
                 break;
             }
             else if (nowEqual) {

@@ -278,17 +278,17 @@ export function decompose<K, V>(
       const combined = combineFn(key, vA, vB);
       if (combined !== undefined)
         alternatingPush(pending, key, combined);
-      const outTrailing = moveForwardOne(trailing, leading, key, cmp);
-      const outLeading = moveForwardOne(leading, trailing, key, cmp);
+      const outTrailing = moveForwardOne(trailing, leading);
+      const outLeading = moveForwardOne(leading, trailing);
       if (outTrailing || outLeading) {
         if (!outTrailing || !outLeading) {
           // In these cases, we pass areEqual=false because a return value of "out of tree" means
           // the cursor did not move. This must be true because they started equal and one of them had more tree
           // to walk (one is !out), so they cannot be equal at this point.
           if (outTrailing) {
-            moveTo(leading, trailing, maxKey, false, false, cmp);
+            moveTo(leading, trailing, maxKey, false, false);
           } else {
-            moveTo(trailing, leading, maxKey, false, false, cmp);
+            moveTo(trailing, leading, maxKey, false, false);
           }
         }
         break;
@@ -300,9 +300,9 @@ export function decompose<K, V>(
         trailing = leading;
         leading = tmp;
       }
-      const [out, nowEqual] = moveTo(trailing, leading, getKey(leading), true, areEqual, cmp);
+      const [out, nowEqual] = moveTo(trailing, leading, getKey(leading), true, areEqual);
       if (out) {
-        moveTo(leading, trailing, maxKey, false, areEqual, cmp);
+        moveTo(leading, trailing, maxKey, false, areEqual);
         break;
       } else if (nowEqual) {
         order = 0;

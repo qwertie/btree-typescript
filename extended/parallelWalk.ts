@@ -21,15 +21,13 @@ export interface Cursor<K, V, TPayload> {
 
 /**
  * Walks the cursor forward by one key.
- * Should only be called to advance cursors that started equal.
  * Returns true if end-of-tree was reached (cursor not structurally mutated).
+ * Optimized for this case over the more general `moveTo` function.
  * @internal
  */
 export function moveForwardOne<K, V, TP>(
   cur: Cursor<K, V, TP>,
-  other: Cursor<K, V, TP>,
-  currentKey: K,
-  cmp: (a: K, b: K) => number
+  other: Cursor<K, V, TP>
 ): boolean {
   const leaf = cur.leaf;
   const nextIndex = cur.leafIndex + 1;
@@ -42,7 +40,7 @@ export function moveForwardOne<K, V, TP>(
 
   // If our optimized step within leaf failed, use full moveTo logic
   // Pass isInclusive=false to ensure we walk forward to the key exactly after the current
-  return moveTo(cur, other, currentKey, false, true, cmp)[0];
+  return moveTo(cur, other, getKey(cur), false, true)[0];
 }
 
 /**
@@ -94,9 +92,9 @@ export function moveTo<K, V, TP>(
   targetKey: K,
   isInclusive: boolean,
   startedEqual: boolean,
-  cmp: (a: K, b: K) => number
 ): [outOfTree: boolean, targetExactlyReached: boolean] {
-  // Cache callbacks for perf
+  // Cache for perf
+  const cmp = cur.tree._compare
   const onMoveInLeaf = cur.onMoveInLeaf;
   // Fast path: destination within current leaf
   const leaf = cur.leaf;
