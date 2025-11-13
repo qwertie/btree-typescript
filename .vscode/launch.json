@@ -9,7 +9,7 @@
             "request": "launch",
             "name": "Jest Tests",
             "program": "${workspaceRoot}/node_modules/jest/bin/jest.js",
-            "args": [ "--runInBand", "--ci", "--bail" ],
+            "args": [ "--runInBand", "--ci" ],
             //"preLaunchTask": "build",
             "internalConsoleOptions": "openOnSessionStart",
             "outFiles": [
@@ -24,7 +24,7 @@
             "name": "Debug Jest Tests",
             "runtimeArgs": [ "--nolazy", "--inspect-brk", 
                 "${workspaceRoot}/node_modules/jest/bin/jest.js", 
-                "--runInBand", "--coverage", "false", "--ci", "--bail" ],
+                "--runInBand", "--coverage", "false", "--ci" ],
             "console": "integratedTerminal",
             //"internalConsoleOptions": "openOnSessionStart",
             "port": 9229,

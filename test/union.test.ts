@@ -1,7 +1,7 @@
 import BTree from '../b+tree';
 import BTreeEx from '../extended';
 import union from '../extended/union';
-import { branchingFactorErrorMsg, comparatorErrorMsg } from '../extended/parallelWalk';
+import { branchingFactorErrorMsg, comparatorErrorMsg } from '../extended/shared';
 import MersenneTwister from 'mersenne-twister';
 import { makeArray, randomInt } from './shared';
 

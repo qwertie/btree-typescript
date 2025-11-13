@@ -84,7 +84,7 @@
       "json"
     ],
     "verbose": true,
-    "bail": true,
+    "bail": false,
     "testEnvironment": "node"
   },
   "testpack": {

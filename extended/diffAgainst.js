@@ -1,9 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.diffAgainst2 = void 0;
 var b_tree_1 = require("../b+tree");
-var parallelWalk_1 = require("./parallelWalk");
-var shared_1 = require("./shared");
 /**
  * Computes the differences between `treeA` and `treeB`.
  * For efficiency, the diff is returned via invocations of supplied handlers.
@@ -11,7 +8,6 @@ var shared_1 = require("./shared");
  * (obtained by calling the `clone` or `with` APIs) and will avoid any iteration of shared state.
  * The handlers can cause computation to early exit by returning `{ break: R }`.
  * Neither collection should be mutated during the comparison (inside your callbacks), as this method assumes they remain stable.
- * Time complexity is O(N + M), but shared nodes are skipped entirely.
  * @param treeA The tree whose differences will be reported via the callbacks.
  * @param treeB The tree to compute a diff against.
  * @param onlyA Callback invoked for all keys only present in `treeA`.
@@ -19,139 +15,6 @@ var shared_1 = require("./shared");
  * @param different Callback invoked for all keys with differing values.
  */
 function diffAgainst(_treeA, _treeB, onlyA, onlyB, different) {
-    var treeA = _treeA;
-    var treeB = _treeB;
-    (0, shared_1.checkCanDoSetOperation)(treeA, treeB, true);
-    // During the downward walk of the cursors, this will be assigned the index of the highest node that is shared between the two trees
-    // along the paths of the two cursors.
-    var highestSharedIndex = -1;
-    var onExitLeaf = function () {
-        highestSharedIndex = -1;
-    };
-    var maybeSetHighest = function (node, height, spineIndex, cursorOther) {
-        if (highestSharedIndex < 0) {
-            var heightOther = cursorOther.spine.length;
-            if (height <= heightOther) {
-                var depthOther = heightOther - height;
-                if (depthOther >= 0) {
-                    var otherNode = cursorOther.spine[depthOther].node;
-                    if (otherNode === node) {
-                        highestSharedIndex = spineIndex;
-                    }
-                }
-            }
-        }
-    };
-    var onStepUp = function (parent, height, _, __, spineIndex, stepDownIndex, ___, cursorOther) {
-        (0, b_tree_1.check)(highestSharedIndex < 0, "Shared nodes should have been skipped");
-        if (stepDownIndex > 0) {
-            maybeSetHighest(parent, height, spineIndex, cursorOther);
-        }
-    };
-    var onStepDown = function (node, height, spineIndex, _, __, cursorOther) {
-        maybeSetHighest(node, height, spineIndex, cursorOther);
-    };
-    var onEnterLeaf = function (leaf, _, cursorThis, cursorOther) {
-        if (highestSharedIndex < 0) {
-            if (cursorOther.leaf === leaf) {
-                highestSharedIndex = cursorThis.spine.length - 1;
-            }
-        }
-    };
-    var cmp = treeA._compare;
-    // Need the max key of both trees to perform the "finishing" walk of which ever cursor finishes second
-    var maxKeyLeft = treeA.maxKey();
-    var maxKeyRight = treeB.maxKey();
-    var maxKey = cmp(maxKeyLeft, maxKeyRight) >= 0 ? maxKeyLeft : maxKeyRight;
-    var payloadA = { only: onlyA ? onlyA : function () { } };
-    var payloadB = { only: onlyB ? onlyB : function () { } };
-    var curA = (0, parallelWalk_1.createCursor)(treeA, function () { return payloadA; }, onEnterLeaf, parallelWalk_1.noop, onExitLeaf, onStepUp, onStepDown);
-    var curB = (0, parallelWalk_1.createCursor)(treeB, function () { return payloadB; }, onEnterLeaf, parallelWalk_1.noop, onExitLeaf, onStepUp, onStepDown);
-    for (var depth = 0; depth < curA.spine.length - 1; depth++) {
-        onStepDown(curA.spine[depth].node, curA.spine.length - depth, depth, curA.spine[depth].childIndex, curA, curB);
-    }
-    onEnterLeaf(curA.leaf, curA.leafIndex, curA, curB);
-    var leading = curA;
-    var trailing = curB;
-    var order = cmp((0, parallelWalk_1.getKey)(leading), (0, parallelWalk_1.getKey)(trailing));
-    // Walk both cursors in alternating hops
-    while (true) {
-        var areEqual = order === 0;
-        if (areEqual) {
-            var key = (0, parallelWalk_1.getKey)(leading);
-            var vA = curA.leaf.values[curA.leafIndex];
-            var vB = curB.leaf.values[curB.leafIndex];
-            var combined = different ? different(key, vA, vB) : undefined;
-            if (combined && combined.break) {
-                return combined.break;
-            }
-            var outTrailing = (0, parallelWalk_1.moveForwardOne)(trailing, leading, key, cmp);
-            var outLeading = (0, parallelWalk_1.moveForwardOne)(leading, trailing, key, cmp);
-            if (outTrailing || outLeading) {
-                if (!outTrailing || !outLeading) {
-                    // In these cases, we pass areEqual=false because a return value of "out of tree" means
-                    // the cursor did not move. This must be true because they started equal and one of them had more tree
-                    // to walk (one is !out), so they cannot be equal at this point.
-                    if (outTrailing) {
-                        finishWalk(leading, trailing);
-                    }
-                    else {
-                        finishWalk(trailing, leading);
-                    }
-                }
-                break;
-            }
-            order = cmp((0, parallelWalk_1.getKey)(leading), (0, parallelWalk_1.getKey)(trailing));
-        }
-        else {
-            if (order < 0) {
-                var tmp = trailing;
-                trailing = leading;
-                leading = tmp;
-            }
-            var _a = (0, parallelWalk_1.moveTo)(trailing, leading, (0, parallelWalk_1.getKey)(leading), true, areEqual, cmp), out = _a[0], nowEqual = _a[1];
-            if (out) {
-                return finishWalk(leading, trailing);
-            }
-            else if (nowEqual) {
-                order = 0;
-            }
-            else {
-                order = -1;
-            }
-        }
-    }
-}
-exports.default = diffAgainst;
-function finishWalk(toFinish, done) {
-    var outOfTree;
-    do {
-        outOfTree = (0, parallelWalk_1.moveForwardOne)(toFinish, done, (0, parallelWalk_1.getKey)(done), toFinish.tree._compare);
-        if (!outOfTree) {
-            var key = (0, parallelWalk_1.getKey)(toFinish);
-            var value = toFinish.leaf.values[toFinish.leafIndex];
-            var result = toFinish.leafPayload.only(key, value);
-            if (result && result.break) {
-                return result.break;
-            }
-        }
-    } while (!outOfTree);
-    return undefined;
-}
-/**
- * Computes the differences between `treeA` and `treeB`.
- * For efficiency, the diff is returned via invocations of supplied handlers.
- * The computation is optimized for the case in which the two trees have large amounts of shared data
- * (obtained by calling the `clone` or `with` APIs) and will avoid any iteration of shared state.
- * The handlers can cause computation to early exit by returning `{ break: R }`.
- * Neither collection should be mutated during the comparison (inside your callbacks), as this method assumes they remain stable.
- * @param treeA The tree whose differences will be reported via the callbacks.
- * @param treeB The tree to compute a diff against.
- * @param onlyA Callback invoked for all keys only present in `treeA`.
- * @param onlyB Callback invoked for all keys only present in `treeB`.
- * @param different Callback invoked for all keys with differing values.
- */
-function diffAgainst2(_treeA, _treeB, onlyA, onlyB, different) {
     var treeA = _treeA;
     var treeB = _treeB;
     if (treeB._compare !== treeA._compare) {
@@ -262,7 +125,7 @@ function diffAgainst2(_treeA, _treeB, onlyA, onlyB, different) {
         return finishCursorWalk(otherCursor, thisCursor, compareKeys, onlyB);
     return undefined;
 }
-exports.diffAgainst2 = diffAgainst2;
+exports.default = diffAgainst;
 /**
  * Finishes walking `cursor` once the other cursor has already completed its walk.
  */
