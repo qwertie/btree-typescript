@@ -1,6 +1,5 @@
 import BTree from '../b+tree';
-import { alternatingPush, createAlternatingList, type BTreeWithInternals } from './shared';
-import { checkCanDoSetOperation } from "./parallelWalk"
+import { alternatingPush, createAlternatingList, checkCanDoSetOperation, type BTreeWithInternals } from './shared';
 import { buildFromDecomposition, decompose } from './decompose';
 import forEachKeyInBoth from './forEachKeyInBoth';
 
@@ -26,7 +25,7 @@ export default function intersect<TBTree extends BTree<K, V>, K, V>(
 ): TBTree {
   const _treeA = treeA as unknown as BTreeWithInternals<K, V>;
   const _treeB = treeB as unknown as BTreeWithInternals<K, V>;
-  const branchingFactor = checkCanDoSetOperation(_treeA, _treeB);
+  const branchingFactor = checkCanDoSetOperation(_treeA, _treeB, true);
   if (_treeA._root.size() === 0)
     return treeB.clone();
   if (_treeB._root.size() === 0)

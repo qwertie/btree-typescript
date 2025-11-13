@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkCanDoSetOperation = exports.branchingFactorErrorMsg = exports.comparatorErrorMsg = exports.noop = exports.moveTo = exports.getKey = exports.createCursor = exports.moveForwardOne = void 0;
+exports.noop = exports.moveTo = exports.getKey = exports.createCursor = exports.moveForwardOne = void 0;
 /**
  * Walks the cursor forward by one key.
  * Should only be called to advance cursors that started equal.
@@ -124,17 +124,17 @@ function moveTo(cur, other, targetKey, isInclusive, startedEqual, cmp) {
         for (var depth = initialSpineLength - 1; depth >= 0; depth--) {
             var entry_1 = spine[depth];
             var sd = depth === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
-            onStepUp(entry_1.node, initialSpineLength - depth, entry_1.payload, entry_1.childIndex, depth, sd, cur);
+            onStepUp(entry_1.node, initialSpineLength - depth, entry_1.payload, entry_1.childIndex, depth, sd, cur, other);
         }
         return [true, false];
     }
     // Step up through ancestors above the descentLevel
     for (var depth = initialSpineLength - 1; depth > descentLevel; depth--) {
         var entry_2 = spine[depth];
-        onStepUp(entry_2.node, initialSpineLength - depth, entry_2.payload, entry_2.childIndex, depth, Number.NaN, cur);
+        onStepUp(entry_2.node, initialSpineLength - depth, entry_2.payload, entry_2.childIndex, depth, Number.NaN, cur, other);
     }
     var entry = spine[descentLevel];
-    onStepUp(entry.node, initialSpineLength - descentLevel, entry.payload, entry.childIndex, descentLevel, descentIndex, cur);
+    onStepUp(entry.node, initialSpineLength - descentLevel, entry.payload, entry.childIndex, descentLevel, descentIndex, cur, other);
     entry.childIndex = descentIndex;
     var onStepDown = cur.onStepDown;
     var makePayload = cur.makePayload;
@@ -151,7 +151,7 @@ function moveTo(cur, other, targetKey, isInclusive, startedEqual, cmp) {
         var payload = makePayload();
         var spineIndex = spine.length;
         spine.push({ node: ni, childIndex: stepDownIndex, payload: payload });
-        onStepDown(ni, height, spineIndex, stepDownIndex, cur);
+        onStepDown(ni, height, spineIndex, stepDownIndex, cur, other);
         node = ni.children[stepDownIndex];
         height -= 1;
     }
@@ -185,26 +185,3 @@ exports.moveTo = moveTo;
  */
 function noop() { }
 exports.noop = noop;
-/**
- * Error message used when comparators differ between trees.
- * @internal
- */
-exports.comparatorErrorMsg = "Cannot perform set operations on BTrees with different comparators.";
-/**
- * Error message used when branching factors differ between trees.
- * @internal
- */
-exports.branchingFactorErrorMsg = "Cannot perform set operations on BTrees with different max node sizes.";
-/**
- * Checks that two trees can be used together in a set operation.
- * @internal
- */
-function checkCanDoSetOperation(treeA, treeB) {
-    if (treeA._compare !== treeB._compare)
-        throw new Error(exports.comparatorErrorMsg);
-    var branchingFactor = treeA._maxNodeSize;
-    if (branchingFactor !== treeB._maxNodeSize)
-        throw new Error(exports.branchingFactorErrorMsg);
-    return branchingFactor;
-}
-exports.checkCanDoSetOperation = checkCanDoSetOperation;

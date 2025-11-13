@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.alternatingPush = exports.alternatingGetSecond = exports.alternatingGetFirst = exports.alternatingCount = exports.createAlternatingList = exports.flushToLeaves = void 0;
+exports.checkCanDoSetOperation = exports.branchingFactorErrorMsg = exports.comparatorErrorMsg = exports.alternatingPush = exports.alternatingGetSecond = exports.alternatingGetFirst = exports.alternatingCount = exports.createAlternatingList = exports.flushToLeaves = void 0;
 var b_tree_1 = require("../b+tree");
 /**
  * Flushes entries from an alternating list into leaf nodes.
@@ -82,3 +82,26 @@ function alternatingPush(list, first, second) {
     list.push(first, second);
 }
 exports.alternatingPush = alternatingPush;
+/**
+ * Error message used when comparators differ between trees.
+ * @internal
+ */
+exports.comparatorErrorMsg = "Cannot perform set operations on BTrees with different comparators.";
+/**
+ * Error message used when branching factors differ between trees.
+ * @internal
+ */
+exports.branchingFactorErrorMsg = "Cannot perform set operations on BTrees with different max node sizes.";
+/**
+ * Checks that two trees can be used together in a set operation.
+ * @internal
+ */
+function checkCanDoSetOperation(treeA, treeB, supportsDifferentBranchingFactors) {
+    if (treeA._compare !== treeB._compare)
+        throw new Error(exports.comparatorErrorMsg);
+    var branchingFactor = treeA._maxNodeSize;
+    if (!supportsDifferentBranchingFactors && branchingFactor !== treeB._maxNodeSize)
+        throw new Error(exports.branchingFactorErrorMsg);
+    return branchingFactor;
+}
+exports.checkCanDoSetOperation = checkCanDoSetOperation;

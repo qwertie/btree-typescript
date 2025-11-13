@@ -1,6 +1,6 @@
 import BTree from '../b+tree';
-import type { BTreeWithInternals } from './shared';
-import { createCursor, moveForwardOne, moveTo, getKey, noop, checkCanDoSetOperation } from "./parallelWalk"
+import { type BTreeWithInternals, checkCanDoSetOperation } from './shared';
+import { createCursor, moveForwardOne, moveTo, getKey, noop } from "./parallelWalk"
 
 /**
  * Calls the supplied `callback` for each key/value pair shared by both trees.
@@ -24,7 +24,7 @@ export default function forEachKeyInBoth<K, V, R = void>(
 ): R | undefined {
   const _treeA = treeA as unknown as BTreeWithInternals<K, V>;
   const _treeB = treeB as unknown as BTreeWithInternals<K, V>;
-  checkCanDoSetOperation(_treeA, _treeB);
+  checkCanDoSetOperation(_treeA, _treeB, true);
   if (treeB.size === 0 || treeA.size === 0)
     return;
 

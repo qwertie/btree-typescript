@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+var shared_1 = require("./shared");
 var parallelWalk_1 = require("./parallelWalk");
 /**
  * Calls the supplied `callback` for each key/value pair shared by both trees.
@@ -19,7 +20,7 @@ var parallelWalk_1 = require("./parallelWalk");
 function forEachKeyInBoth(treeA, treeB, callback) {
     var _treeA = treeA;
     var _treeB = treeB;
-    (0, parallelWalk_1.checkCanDoSetOperation)(_treeA, _treeB);
+    (0, shared_1.checkCanDoSetOperation)(_treeA, _treeB, true);
     if (treeB.size === 0 || treeA.size === 0)
         return;
     var cmp = treeA._compare;

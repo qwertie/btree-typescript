@@ -1,7 +1,6 @@
 import BTree from '../b+tree';
-import type { BTreeWithInternals } from './shared';
+import { type BTreeWithInternals, checkCanDoSetOperation } from './shared';
 import { decompose, buildFromDecomposition } from "./decompose";
-import { checkCanDoSetOperation } from "./parallelWalk";
 
 /**
  * Efficiently unions two trees, reusing subtrees wherever possible.
@@ -26,7 +25,7 @@ export default function union<TBTree extends BTree<K, V>, K, V>(
 ): TBTree {
   const _treeA = treeA as unknown as BTreeWithInternals<K, V>;
   const _treeB = treeB as unknown as BTreeWithInternals<K, V>;
-  const branchingFactor = checkCanDoSetOperation(_treeA, _treeB);
+  const branchingFactor = checkCanDoSetOperation(_treeA, _treeB, false);
   if (_treeA._root.size() === 0)
     return treeB.clone();
   if (_treeB._root.size() === 0)

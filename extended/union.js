@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+var shared_1 = require("./shared");
 var decompose_1 = require("./decompose");
-var parallelWalk_1 = require("./parallelWalk");
 /**
  * Efficiently unions two trees, reusing subtrees wherever possible.
  * Neither input tree is modified.
@@ -21,7 +21,7 @@ var parallelWalk_1 = require("./parallelWalk");
 function union(treeA, treeB, combineFn) {
     var _treeA = treeA;
     var _treeB = treeB;
-    var branchingFactor = (0, parallelWalk_1.checkCanDoSetOperation)(_treeA, _treeB);
+    var branchingFactor = (0, shared_1.checkCanDoSetOperation)(_treeA, _treeB, false);
     if (_treeA._root.size() === 0)
         return treeB.clone();
     if (_treeB._root.size() === 0)

@@ -1,5 +1,5 @@
 import BTreeEx from '../extended';
-import { branchingFactorErrorMsg, comparatorErrorMsg } from '../extended/parallelWalk';
+import { branchingFactorErrorMsg, comparatorErrorMsg } from '../extended/shared';
 import MersenneTwister from 'mersenne-twister';
 import { makeArray } from './shared';
 
@@ -168,13 +168,6 @@ describe('BTree forEachKeyInBoth input/output validation', () => {
     const tree1 = new BTreeEx<number, number>([[1, 10]], (a, b) => b + a);
     const tree2 = new BTreeEx<number, number>([[2, 20]], (a, b) => b - a);
     expect(() => tree1.forEachKeyInBoth(tree2, () => {})).toThrow(comparatorErrorMsg);
-  });
-
-  test('forEachKeyInBoth throws error when max node sizes differ', () => {
-    const compare = (a: number, b: number) => b - a;
-    const tree1 = new BTreeEx<number, number>([[1, 10]], compare, 32);
-    const tree2 = new BTreeEx<number, number>([[2, 20]], compare, 33);
-    expect(() => tree1.forEachKeyInBoth(tree2, () => {})).toThrow(branchingFactorErrorMsg);
   });
 });
 

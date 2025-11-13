@@ -102,3 +102,29 @@ export function alternatingPush<A, B>(list: AlternatingList<A, B>, first: A, sec
   // Micro benchmarks show this is the fastest way to do this
   list.push(first, second);
 }
+
+/**
+ * Error message used when comparators differ between trees.
+ * @internal
+ */
+export const comparatorErrorMsg = "Cannot perform set operations on BTrees with different comparators.";
+
+/**
+ * Error message used when branching factors differ between trees.
+ * @internal
+ */
+export const branchingFactorErrorMsg = "Cannot perform set operations on BTrees with different max node sizes.";
+
+/**
+ * Checks that two trees can be used together in a set operation.
+ * @internal
+ */
+export function checkCanDoSetOperation<K, V>(treeA: BTreeWithInternals<K, V>, treeB: BTreeWithInternals<K, V>, supportsDifferentBranchingFactors: boolean): number {
+  if (treeA._compare !== treeB._compare)
+    throw new Error(comparatorErrorMsg);
+
+  const branchingFactor = treeA._maxNodeSize;
+  if (!supportsDifferentBranchingFactors && branchingFactor !== treeB._maxNodeSize)
+    throw new Error(branchingFactorErrorMsg);
+  return branchingFactor;
+}

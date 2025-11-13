@@ -14,8 +14,8 @@ export interface Cursor<K, V, TPayload> {
   makePayload: () => TPayload;
   onMoveInLeaf: (leaf: BNode<K, V>, payload: TPayload, fromIndex: number, toIndex: number, isInclusive: boolean) => void;
   onExitLeaf: (leaf: BNode<K, V>, payload: TPayload, startingIndex: number, isInclusive: boolean, cursorThis: Cursor<K, V, TPayload>) => void;
-  onStepUp: (parent: BNodeInternal<K, V>, height: number, payload: TPayload, fromIndex: number, spineIndex: number, stepDownIndex: number, cursorThis: Cursor<K, V, TPayload>) => void;
-  onStepDown: (node: BNodeInternal<K, V>, height: number, spineIndex: number, stepDownIndex: number, cursorThis: Cursor<K, V, TPayload>) => void;
+  onStepUp: (parent: BNodeInternal<K, V>, height: number, payload: TPayload, fromIndex: number, spineIndex: number, stepDownIndex: number, cursorThis: Cursor<K, V, TPayload>, cursorOther: Cursor<K, V, TPayload>) => void;
+  onStepDown: (node: BNodeInternal<K, V>, height: number, spineIndex: number, stepDownIndex: number, cursorThis: Cursor<K, V, TPayload>, cursorOther: Cursor<K, V, TPayload>) => void;
   onEnterLeaf: (leaf: BNode<K, V>, destIndex: number, cursorThis: Cursor<K, V, TPayload>, cursorOther: Cursor<K, V, TPayload>) => void;
 }
 
@@ -157,7 +157,7 @@ export function moveTo<K, V, TP>(
     for (let depth = initialSpineLength - 1; depth >= 0; depth--) {
       const entry = spine[depth];
       const sd = depth === 0 ? Number.POSITIVE_INFINITY : Number.NaN;
-      onStepUp(entry.node, initialSpineLength - depth, entry.payload, entry.childIndex, depth, sd, cur);
+      onStepUp(entry.node, initialSpineLength - depth, entry.payload, entry.childIndex, depth, sd, cur, other);
     }
     return [true, false];
   }
@@ -165,11 +165,11 @@ export function moveTo<K, V, TP>(
   // Step up through ancestors above the descentLevel
   for (let depth = initialSpineLength - 1; depth > descentLevel; depth--) {
     const entry = spine[depth];
-    onStepUp(entry.node, initialSpineLength - depth, entry.payload, entry.childIndex, depth, Number.NaN, cur);
+    onStepUp(entry.node, initialSpineLength - depth, entry.payload, entry.childIndex, depth, Number.NaN, cur, other);
   }
 
   const entry = spine[descentLevel];
-  onStepUp(entry.node, initialSpineLength - descentLevel, entry.payload, entry.childIndex, descentLevel, descentIndex, cur);
+  onStepUp(entry.node, initialSpineLength - descentLevel, entry.payload, entry.childIndex, descentLevel, descentIndex, cur, other);
   entry.childIndex = descentIndex;
 
   const onStepDown = cur.onStepDown;
@@ -189,7 +189,7 @@ export function moveTo<K, V, TP>(
     const payload = makePayload();
     const spineIndex = spine.length;
     spine.push({ node: ni, childIndex: stepDownIndex, payload });
-    onStepDown(ni, height, spineIndex, stepDownIndex, cur);
+    onStepDown(ni, height, spineIndex, stepDownIndex, cur, other);
     node = ni.children[stepDownIndex];
     height -= 1;
   }
@@ -221,29 +221,3 @@ export function moveTo<K, V, TP>(
  * @internal
  */
 export function noop(): void { }
-
-/**
- * Error message used when comparators differ between trees.
- * @internal
- */
-export const comparatorErrorMsg = "Cannot perform set operations on BTrees with different comparators.";
-
-/**
- * Error message used when branching factors differ between trees.
- * @internal
- */
-export const branchingFactorErrorMsg = "Cannot perform set operations on BTrees with different max node sizes.";
-
-/**
- * Checks that two trees can be used together in a set operation.
- * @internal
- */
-export function checkCanDoSetOperation<K, V>(treeA: BTreeWithInternals<K, V>, treeB: BTreeWithInternals<K, V>): number {
-  if (treeA._compare !== treeB._compare)
-    throw new Error(comparatorErrorMsg);
-
-  const branchingFactor = treeA._maxNodeSize;
-  if (branchingFactor !== treeB._maxNodeSize)
-    throw new Error(branchingFactorErrorMsg);
-  return branchingFactor;
-}

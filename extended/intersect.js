@@ -4,7 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 var shared_1 = require("./shared");
-var parallelWalk_1 = require("./parallelWalk");
 var decompose_1 = require("./decompose");
 var forEachKeyInBoth_1 = __importDefault(require("./forEachKeyInBoth"));
 /**
@@ -25,7 +24,7 @@ var forEachKeyInBoth_1 = __importDefault(require("./forEachKeyInBoth"));
 function intersect(treeA, treeB, combineFn) {
     var _treeA = treeA;
     var _treeB = treeB;
-    var branchingFactor = (0, parallelWalk_1.checkCanDoSetOperation)(_treeA, _treeB);
+    var branchingFactor = (0, shared_1.checkCanDoSetOperation)(_treeA, _treeB, true);
     if (_treeA._root.size() === 0)
         return treeB.clone();
     if (_treeB._root.size() === 0)

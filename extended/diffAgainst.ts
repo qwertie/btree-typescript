@@ -1,6 +1,194 @@
 import BTree from '../b+tree';
 import { BNode, BNodeInternal, check } from '../b+tree';
-import type { BTreeWithInternals } from './shared';
+import { createCursor, Cursor, getKey, moveForwardOne, moveTo, noop } from './parallelWalk';
+import { checkCanDoSetOperation, type BTreeWithInternals } from './shared';
+
+/**
+ * Computes the differences between `treeA` and `treeB`.
+ * For efficiency, the diff is returned via invocations of supplied handlers.
+ * The computation is optimized for the case in which the two trees have large amounts of shared data
+ * (obtained by calling the `clone` or `with` APIs) and will avoid any iteration of shared state.
+ * The handlers can cause computation to early exit by returning `{ break: R }`.
+ * Neither collection should be mutated during the comparison (inside your callbacks), as this method assumes they remain stable.
+ * Time complexity is O(N + M), but shared nodes are skipped entirely.
+ * @param treeA The tree whose differences will be reported via the callbacks.
+ * @param treeB The tree to compute a diff against.
+ * @param onlyA Callback invoked for all keys only present in `treeA`.
+ * @param onlyB Callback invoked for all keys only present in `treeB`.
+ * @param different Callback invoked for all keys with differing values.
+ */
+export default function diffAgainst<K, V, R>(
+  _treeA: BTree<K, V>,
+  _treeB: BTree<K, V>,
+  onlyA?: (k: K, v: V) => { break?: R } | void,
+  onlyB?: (k: K, v: V) => { break?: R } | void,
+  different?: (k: K, vA: V, vB: V) => { break?: R } | void
+): R | undefined {
+  const treeA = _treeA as unknown as BTreeWithInternals<K, V>;
+  const treeB = _treeB as unknown as BTreeWithInternals<K, V>;
+  checkCanDoSetOperation(treeA, treeB, true);
+
+  // During the downward walk of the cursors, this will be assigned the index of the highest node that is shared between the two trees
+  // along the paths of the two cursors.
+  let highestSharedIndex: number = -1;
+
+  const onExitLeaf = () => {
+    highestSharedIndex = -1;
+  }
+
+  const maybeSetHighest = (
+    node: BNodeInternal<K, V>,
+    height: number,
+    spineIndex: number,
+    cursorOther: Cursor<K, V, DiffPayload<K, V, R>>
+  ) => {
+    if (highestSharedIndex < 0) {
+      const heightOther = cursorOther.spine.length;
+      if (height <= heightOther) {
+        const depthOther = heightOther - height;
+        if (depthOther >= 0) {
+          const otherNode = cursorOther.spine[depthOther].node;
+          if (otherNode === node) {
+            highestSharedIndex = spineIndex;
+          }
+        }
+      }
+    }
+  }
+
+  const onStepUp = (
+    parent: BNodeInternal<K, V>,
+    height: number,
+    _: DiffPayload<K, V, R>,
+    __: number,
+    spineIndex: number,
+    stepDownIndex: number,
+    ___: Cursor<K, V, DiffPayload<K, V, R>>,
+    cursorOther: Cursor<K, V, DiffPayload<K, V, R>>
+  ) => {
+    check(highestSharedIndex < 0, "Shared nodes should have been skipped");
+    if (stepDownIndex > 0) {
+      maybeSetHighest(parent, height, spineIndex, cursorOther);
+    }
+  };
+
+  const onStepDown = (
+    node: BNodeInternal<K, V>,
+    height: number,
+    spineIndex: number,
+    _: number,
+    __: Cursor<K, V, DiffPayload<K, V, R>>,
+    cursorOther: Cursor<K, V, DiffPayload<K, V, R>>
+  ) => {
+    maybeSetHighest(node, height, spineIndex, cursorOther);
+  };
+
+  const onEnterLeaf = (
+    leaf: BNode<K, V>,
+    _: number,
+    cursorThis: Cursor<K, V, DiffPayload<K, V, R>>,
+    cursorOther: Cursor<K, V, DiffPayload<K, V, R>>
+  ) => {
+    if (highestSharedIndex < 0) {
+      if (cursorOther.leaf === leaf) {
+        highestSharedIndex = cursorThis.spine.length - 1;
+      }
+    }
+  };
+
+  const cmp = treeA._compare;
+  // Need the max key of both trees to perform the "finishing" walk of which ever cursor finishes second
+  const maxKeyLeft = treeA.maxKey() as K;
+  const maxKeyRight = treeB.maxKey() as K;
+  const maxKey = cmp(maxKeyLeft, maxKeyRight) >= 0 ? maxKeyLeft : maxKeyRight;
+
+  const payloadA = { only: onlyA ? onlyA : () => {} };
+  const payloadB = { only: onlyB ? onlyB : () => {} };
+  const curA = createCursor<K, V, DiffPayload<K, V, R>>(treeA, () => payloadA, onEnterLeaf, noop, onExitLeaf, onStepUp, onStepDown);
+  const curB = createCursor<K, V, DiffPayload<K, V, R>>(treeB, () => payloadB, onEnterLeaf, noop, onExitLeaf, onStepUp, onStepDown);
+
+  for (let depth = 0; depth < curA.spine.length - 1; depth++) {
+    onStepDown(
+      curA.spine[depth].node,
+      curA.spine.length - depth,
+      depth,
+      curA.spine[depth].childIndex,
+      curA,
+      curB
+    );
+  }
+  onEnterLeaf(curA.leaf, curA.leafIndex, curA, curB);
+
+  let leading = curA;
+  let trailing = curB;
+  let order = cmp(getKey(leading), getKey(trailing));
+
+  // Walk both cursors in alternating hops
+  while (true) {
+    const areEqual = order === 0;
+
+    if (areEqual) {
+      const key = getKey(leading);
+      const vA = curA.leaf.values[curA.leafIndex];
+      const vB = curB.leaf.values[curB.leafIndex];
+      const combined = different ? different(key, vA, vB) : undefined;
+      if (combined && combined.break) {
+        return combined.break;
+      }
+      const outTrailing = moveForwardOne(trailing, leading, key, cmp);
+      const outLeading = moveForwardOne(leading, trailing, key, cmp);
+      if (outTrailing || outLeading) {
+        if (!outTrailing || !outLeading) {
+          // In these cases, we pass areEqual=false because a return value of "out of tree" means
+          // the cursor did not move. This must be true because they started equal and one of them had more tree
+          // to walk (one is !out), so they cannot be equal at this point.
+          if (outTrailing) {
+            finishWalk(leading, trailing);
+          } else {
+            finishWalk(trailing, leading);
+          }
+        }
+        break;
+      }
+      order = cmp(getKey(leading), getKey(trailing));
+    } else {
+      if (order < 0) {
+        const tmp = trailing;
+        trailing = leading;
+        leading = tmp;
+      }
+      const [out, nowEqual] = moveTo(trailing, leading, getKey(leading), true, areEqual, cmp);
+      if (out) {
+        return finishWalk(leading, trailing);
+      } else if (nowEqual) {
+        order = 0;
+      } else {
+        order = -1;
+      }
+    }
+  }
+}
+
+function finishWalk<K, V, R>(
+  toFinish: Cursor<K, V, DiffPayload<K, V, R>>,
+  done: Cursor<K, V, DiffPayload<K, V, R>>
+): R | undefined {
+  let outOfTree: boolean;
+  do {
+    outOfTree = moveForwardOne(toFinish, done, getKey(done), toFinish.tree._compare);
+    if (!outOfTree) {
+      const key = getKey(toFinish);
+      const value = toFinish.leaf.values[toFinish.leafIndex];
+      const result = toFinish.leafPayload.only(key, value);
+      if (result && result.break) {
+        return result.break;
+      }
+    }
+  } while (!outOfTree);
+  return undefined;
+}
+
+type DiffPayload<K, V, R> = { only: (k: K, v: V) => { break?: R } | void};
 
 /**
  * Computes the differences between `treeA` and `treeB`.
@@ -15,7 +203,7 @@ import type { BTreeWithInternals } from './shared';
  * @param onlyB Callback invoked for all keys only present in `treeB`.
  * @param different Callback invoked for all keys with differing values.
  */
-export default function diffAgainst<K, V, R>(
+export function diffAgainst2<K, V, R>(
   _treeA: BTree<K, V>,
   _treeB: BTree<K, V>,
   onlyA?: (k: K, v: V) => { break?: R } | void,
