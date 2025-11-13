@@ -1,7 +1,7 @@
 import BTree from '../b+tree';
-import { alternatingPush, createAlternatingList, checkCanDoSetOperation, type BTreeWithInternals } from './shared';
-import { buildFromDecomposition, decompose } from './decompose';
+import { alternatingPush, createAlternatingList, checkCanDoSetOperation, type BTreeWithInternals, BTreeConstructor } from './shared';
 import forEachKeyInBoth from './forEachKeyInBoth';
+import { bulkLoadRoot } from './bulkLoad';
 
 /**
  * Returns a new tree containing only keys present in both input trees.
@@ -37,10 +37,9 @@ export default function intersect<TBTree extends BTree<K, V>, K, V>(
     alternatingPush(intersected, key, mergedValue);
   });
 
-  // Decompose both trees into disjoint subtrees leaves.
-  // As many of these as possible will be reused from the original trees, and the remaining
-  // will be leaves that are the result of merging intersecting leaves.
-  const decomposed = decompose(_treeA, _treeB, combineFn);
-  const constructor = treeA.constructor as new (entries?: [K, V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) => TBTree;
-  return buildFromDecomposition(constructor, branchingFactor, decomposed, _treeA._compare, _treeA._maxNodeSize);
+  // Intersected keys are guaranteed to be in order, so we can bulk load
+  const constructor = treeA.constructor as BTreeConstructor<TBTree, K, V>;
+  const resultTree = new constructor(undefined, treeA._compare, branchingFactor);
+  resultTree._root = bulkLoadRoot(intersected, branchingFactor, treeA._compare);
+  return resultTree as unknown as TBTree;
 }

@@ -1,5 +1,5 @@
 import BTree from '../b+tree';
-import { type BTreeWithInternals, checkCanDoSetOperation } from './shared';
+import { BTreeConstructor, type BTreeWithInternals, checkCanDoSetOperation } from './shared';
 import { decompose, buildFromDecomposition } from "./decompose";
 
 /**
@@ -35,6 +35,6 @@ export default function union<TBTree extends BTree<K, V>, K, V>(
   // As many of these as possible will be reused from the original trees, and the remaining
   // will be leaves that are the result of merging intersecting leaves.
   const decomposed = decompose(_treeA, _treeB, combineFn);
-  const constructor = treeA.constructor as new (entries?: [K, V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) => TBTree;
+  const constructor = treeA.constructor as BTreeConstructor<TBTree, K, V>;
   return buildFromDecomposition(constructor, branchingFactor, decomposed, _treeA._compare, _treeA._maxNodeSize);
 }

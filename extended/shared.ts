@@ -5,12 +5,12 @@ import BTree from '../b+tree';
  * BTree with access to internal properties.
  * @internal
  */
-export type BTreeWithInternals<K, V> = {
+export type BTreeWithInternals<K, V, TBTree extends BTree<K, V> = BTree<K, V>> = {
   _root: BNode<K, V>;
   _size: number;
   _maxNodeSize: number;
   _compare: (a: K, b: K) => number;
-} & Omit<BTree<K, V>, '_root' | '_size' | '_maxNodeSize' | '_compare'>;
+} & Omit<TBTree, '_root' | '_size' | '_maxNodeSize' | '_compare'>;
 
 /**
  * Alternating list storing entries as `[A0, B0, A1, B1, ...]`.
@@ -128,3 +128,5 @@ export function checkCanDoSetOperation<K, V>(treeA: BTreeWithInternals<K, V>, tr
     throw new Error(branchingFactorErrorMsg);
   return branchingFactor;
 }
+
+export type BTreeConstructor<TBTree extends BTree<K, V>, K, V> = new (entries?: [K, V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) => BTreeWithInternals<K, V, TBTree>;

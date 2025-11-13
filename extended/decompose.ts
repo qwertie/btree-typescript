@@ -1,5 +1,5 @@
 import BTree, { areOverlapping, BNode, BNodeInternal, check } from '../b+tree';
-import { alternatingCount, alternatingGetFirst, alternatingGetSecond, alternatingPush, createAlternatingList, flushToLeaves, type AlternatingList, type BTreeWithInternals } from './shared';
+import { alternatingCount, alternatingGetFirst, alternatingGetSecond, alternatingPush, BTreeConstructor, createAlternatingList, flushToLeaves, type AlternatingList, type BTreeWithInternals } from './shared';
 import { createCursor, getKey, Cursor, moveForwardOne, moveTo, noop } from "./parallelWalk";
 
 /**
@@ -322,7 +322,7 @@ export function decompose<K, V>(
  * @internal
  */
 export function buildFromDecomposition<TBTree extends BTree<K, V>, K, V>(
-  constructor: new (entries?: [K, V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) => TBTree,
+  constructor: BTreeConstructor<TBTree, K, V>,
   branchingFactor: number,
   decomposed: DecomposeResult<K, V>,
   cmp: (a: K, b: K) => number,
@@ -377,10 +377,10 @@ export function buildFromDecomposition<TBTree extends BTree<K, V>, K, V>(
   }
 
   const reconstructed = new constructor(undefined, cmp, maxNodeSize);
-  (reconstructed as unknown as BTreeWithInternals<K, V>)._root = frontier[0];
+  reconstructed._root = frontier[0];
 
   // Return the resulting tree
-  return reconstructed;
+  return reconstructed as unknown as TBTree;
 }
 
 /**

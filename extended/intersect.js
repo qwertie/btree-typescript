@@ -4,8 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 var shared_1 = require("./shared");
-var decompose_1 = require("./decompose");
 var forEachKeyInBoth_1 = __importDefault(require("./forEachKeyInBoth"));
+var bulkLoad_1 = require("./bulkLoad");
 /**
  * Returns a new tree containing only keys present in both input trees.
  * Neither tree is modified.
@@ -34,11 +34,10 @@ function intersect(treeA, treeB, combineFn) {
         var mergedValue = combineFn(key, leftValue, rightValue);
         (0, shared_1.alternatingPush)(intersected, key, mergedValue);
     });
-    // Decompose both trees into disjoint subtrees leaves.
-    // As many of these as possible will be reused from the original trees, and the remaining
-    // will be leaves that are the result of merging intersecting leaves.
-    var decomposed = (0, decompose_1.decompose)(_treeA, _treeB, combineFn);
+    // Intersected keys are guaranteed to be in order, so we can bulk load
     var constructor = treeA.constructor;
-    return (0, decompose_1.buildFromDecomposition)(constructor, branchingFactor, decomposed, _treeA._compare, _treeA._maxNodeSize);
+    var resultTree = new constructor(undefined, treeA._compare, branchingFactor);
+    resultTree._root = (0, bulkLoad_1.bulkLoadRoot)(intersected, branchingFactor, treeA._compare);
+    return resultTree;
 }
 exports.default = intersect;
