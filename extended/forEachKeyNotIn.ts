@@ -59,15 +59,10 @@ export default function forEachKeyNotIn<K, V, R = void>(
     const areEqual = order === 0;
     if (areEqual) {
       // Keys are equal, so this key is in both trees and should be skipped.
-      const outInclude = moveForwardOne(cursorExclude, cursorInclude);
+      const outInclude = moveForwardOne(cursorInclude, cursorExclude);
       if (outInclude)
         break;
-      const [outExclude, nowEqual] = moveTo(cursorInclude, cursorExclude, getKey(cursorInclude), true, areEqual);
-      if (outExclude) {
-        finishWalk();
-        break;
-      }
-      order = nowEqual ? 0 : -1;
+      order = 1; // include is now ahead of exclude
     } else {
       if (order < 0) {
         const key = getKey(cursorInclude);
@@ -91,7 +86,7 @@ export default function forEachKeyNotIn<K, V, R = void>(
         } else if (nowEqual) {
           order = 0;
         } else {
-          order = -1; // trailing is ahead of leading
+          order = -1;
         }
       }
     }

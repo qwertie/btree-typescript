@@ -50,15 +50,10 @@ function forEachKeyNotIn(includeTree, excludeTree, callback) {
         var areEqual = order === 0;
         if (areEqual) {
             // Keys are equal, so this key is in both trees and should be skipped.
-            var outInclude = (0, parallelWalk_1.moveForwardOne)(cursorExclude, cursorInclude);
+            var outInclude = (0, parallelWalk_1.moveForwardOne)(cursorInclude, cursorExclude);
             if (outInclude)
                 break;
-            var _a = (0, parallelWalk_1.moveTo)(cursorInclude, cursorExclude, (0, parallelWalk_1.getKey)(cursorInclude), true, areEqual), outExclude = _a[0], nowEqual = _a[1];
-            if (outExclude) {
-                finishWalk();
-                break;
-            }
-            order = nowEqual ? 0 : -1;
+            order = 1; // include is now ahead of exclude
         }
         else {
             if (order < 0) {
@@ -76,7 +71,7 @@ function forEachKeyNotIn(includeTree, excludeTree, callback) {
             }
             else {
                 // At this point, include is guaranteed to be ahead of exclude.
-                var _b = (0, parallelWalk_1.moveTo)(cursorExclude, cursorInclude, (0, parallelWalk_1.getKey)(cursorInclude), true, areEqual), out = _b[0], nowEqual = _b[1];
+                var _a = (0, parallelWalk_1.moveTo)(cursorExclude, cursorInclude, (0, parallelWalk_1.getKey)(cursorInclude), true, areEqual), out = _a[0], nowEqual = _a[1];
                 if (out) {
                     // We've reached the end of exclude, so call for all remaining keys in include
                     finishWalk();
@@ -86,7 +81,7 @@ function forEachKeyNotIn(includeTree, excludeTree, callback) {
                     order = 0;
                 }
                 else {
-                    order = -1; // trailing is ahead of leading
+                    order = -1;
                 }
             }
         }

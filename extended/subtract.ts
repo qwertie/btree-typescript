@@ -1,5 +1,5 @@
 import BTree from '../b+tree';
-import { checkCanDoSetOperation, type BTreeWithInternals, BTreeConstructor } from './shared';
+import { checkCanDoSetOperation, type BTreeWithInternals, BTreeConstructor, alternatingCount } from './shared';
 import { buildFromDecomposition, decompose } from './decompose';
 
 /**
@@ -31,5 +31,8 @@ export default function subtract<TBTree extends BTree<K, V>, K, V>(
   // will be leaves that are exploded (and filtered) due to intersecting leaves in subtractTree.
   const decomposed = decompose(_targetTree, _subtractTree, () => undefined, true);
   const constructor = targetTree.constructor as BTreeConstructor<TBTree, K, V>;
+  if (alternatingCount(decomposed.disjoint) === 0) {
+    return new constructor(undefined, targetTree._compare, targetTree._maxNodeSize) as unknown as TBTree;
+  }
   return buildFromDecomposition(constructor, branchingFactor, decomposed, targetTree._compare, targetTree._maxNodeSize);
 }

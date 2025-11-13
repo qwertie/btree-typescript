@@ -27,6 +27,9 @@ function subtract(targetTree, subtractTree) {
     // will be leaves that are exploded (and filtered) due to intersecting leaves in subtractTree.
     var decomposed = (0, decompose_1.decompose)(_targetTree, _subtractTree, function () { return undefined; }, true);
     var constructor = targetTree.constructor;
+    if ((0, shared_1.alternatingCount)(decomposed.disjoint) === 0) {
+        return new constructor(undefined, targetTree._compare, targetTree._maxNodeSize);
+    }
     return (0, decompose_1.buildFromDecomposition)(constructor, branchingFactor, decomposed, targetTree._compare, targetTree._maxNodeSize);
 }
 exports.default = subtract;
