@@ -216,19 +216,19 @@ describe('BTree forEachKeyNotIn early exiting', () => {
 describe('BTree forEachKeyNotIn and subtract input/output validation', () => {
   it('forEachKeyNotIn throws error when comparators differ', () => {
     const includeTree = new BTreeEx<number, number>([[1, 10]], (a, b) => b - a);
-    const excludeTree = new BTreeEx<number, number>([[2, 20]], (a, b) => a - b);
+    const excludeTree = new BTreeEx<number, number>([[2, 20]], (a, b) => a + b);
     expect(() => forEachKeyNotIn(includeTree, excludeTree, () => {})).toThrow(comparatorErrorMsg);
   });
 
   it('subtract throws error when comparators differ', () => {
     const includeTree = new BTreeEx<number, number>([[1, 10]], (a, b) => b - a);
-    const excludeTree = new BTreeEx<number, number>([[2, 20]], (a, b) => a - b);
+    const excludeTree = new BTreeEx<number, number>([[2, 20]], (a, b) => a + b);
     expect(() => subtract<BTreeEx<number, number>, number, number>(includeTree, excludeTree)).toThrow(comparatorErrorMsg);
   });
 
   it('subtract throws error when branching factors differ', () => {
     const includeTree = new BTreeEx<number, number>([[1, 10]], (a, b) => a - b, 4);
-    const excludeTree = new BTreeEx<number, number>([[2, 20]], (a, b) => a - b, 8);
+    const excludeTree = new BTreeEx<number, number>([[2, 20]], includeTree._compare, 8);
     expect(() => subtract<BTreeEx<number, number>, number, number>(includeTree, excludeTree)).toThrow(branchingFactorErrorMsg);
   });
 });
