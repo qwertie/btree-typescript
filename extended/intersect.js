@@ -25,9 +25,9 @@ function intersect(treeA, treeB, combineFn) {
     var _treeB = treeB;
     var branchingFactor = (0, shared_1.checkCanDoSetOperation)(_treeA, _treeB, true);
     if (_treeA._root.size() === 0)
-        return treeB.clone();
-    if (_treeB._root.size() === 0)
         return treeA.clone();
+    if (_treeB._root.size() === 0)
+        return treeB.clone();
     var intersected = (0, shared_1.createAlternatingList)();
     (0, forEachKeyInBoth_1.default)(treeA, treeB, function (key, leftValue, rightValue) {
         var mergedValue = combineFn(key, leftValue, rightValue);

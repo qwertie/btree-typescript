@@ -26,9 +26,9 @@ export default function intersect<TBTree extends BTree<K, V>, K, V>(
   const _treeB = treeB as unknown as BTreeWithInternals<K, V>;
   const branchingFactor = checkCanDoSetOperation(_treeA, _treeB, true);
   if (_treeA._root.size() === 0)
-    return treeB.clone();
-  if (_treeB._root.size() === 0)
     return treeA.clone();
+  if (_treeB._root.size() === 0)
+    return treeB.clone();
 
   const intersected = createAlternatingList<K, V>();
   forEachKeyInBoth(treeA, treeB, (key, leftValue, rightValue) => {
