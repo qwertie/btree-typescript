@@ -1,7 +1,8 @@
 import BTree, { BNode, BNodeInternal } from '../b+tree';
 import BTreeEx from '../extended';
 import { bulkLoad } from '../extended/bulkLoad';
-import { makeArray } from './shared';
+import MersenneTwister from 'mersenne-twister';
+import { makeArray, randomInt } from './shared';
 
 type Pair = [number, number];
 const compareNumbers = (a: number, b: number) => a - b;
@@ -138,4 +139,55 @@ describe('BTreeEx.bulkLoad', () => {
     expect(tree).toBeInstanceOf(BTreeEx);
     expectTreeMatches(tree, pairs);
   });
+});
+
+describe('bulkLoad fuzz tests', () => {
+  const FUZZ_SETTINGS = {
+    branchingFactors,
+    ooms: [2, 3],
+    iterationsPerOOM: 3,
+    spacings: [1, 2, 3, 5, 8, 13],
+    payloadMods: [1, 2, 5, 11, 17],
+    timeoutMs: 30_000,
+  } as const;
+
+  jest.setTimeout(FUZZ_SETTINGS.timeoutMs);
+
+  const rng = new MersenneTwister(0xB01C10AD);
+
+  for (const maxNodeSize of FUZZ_SETTINGS.branchingFactors) {
+    describe(`fanout ${maxNodeSize}`, () => {
+      for (const oom of FUZZ_SETTINGS.ooms) {
+        const baseSize = 5 * Math.pow(10, oom);
+        for (let iteration = 0; iteration < FUZZ_SETTINGS.iterationsPerOOM; iteration++) {
+          const spacing = FUZZ_SETTINGS.spacings[randomInt(rng, FUZZ_SETTINGS.spacings.length)];
+          const payloadMod = FUZZ_SETTINGS.payloadMods[randomInt(rng, FUZZ_SETTINGS.payloadMods.length)];
+          const sizeJitter = randomInt(rng, baseSize);
+          const size = baseSize + sizeJitter;
+
+          test(`size ${size}, spacing ${spacing}, payload ${payloadMod}, iteration ${iteration}`, () => {
+            const keys = makeArray(size, false, spacing, 0, rng);
+            const pairs = pairsFromKeys(keys).map(([key, value], index) => [key, value * payloadMod + index] as Pair);
+            const { tree, root } = buildTreeFromPairs(maxNodeSize, pairs);
+            expectTreeMatches(tree, pairs);
+
+            const leaves = collectLeaves(root);
+            const leafSizes = leaves.map((leaf) => leaf.keys.length);
+            const expectedLeafCount = Math.ceil(pairs.length / maxNodeSize);
+            expect(leaves.length).toBe(expectedLeafCount);
+            const minLeaf = Math.min(...leafSizes);
+            const maxLeaf = Math.max(...leafSizes);
+            expect(maxLeaf - minLeaf).toBeLessThanOrEqual(1);
+
+            if (!root.isLeaf)
+              assertInternalNodeFanout(root, maxNodeSize);
+
+            const alternating = toAlternating(pairs);
+            const bulkLoadTree = BTreeEx.bulkLoad<number, number>(alternating, maxNodeSize, compareNumbers);
+            expectTreeMatches(bulkLoadTree, pairs);
+          });
+        }
+      }
+    });
+  }
 });
