@@ -129,4 +129,8 @@ export function checkCanDoSetOperation<K, V>(treeA: BTreeWithInternals<K, V>, tr
   return branchingFactor;
 }
 
+/**
+ * Helper constructor signature used by set-operation helpers to create a result tree that preserves the input subtype.
+ * @internal
+ */
 export type BTreeConstructor<TBTree extends BTree<K, V>, K, V> = new (entries?: [K, V][], compare?: (a: K, b: K) => number, maxNodeSize?: number) => BTreeWithInternals<K, V, TBTree>;
