@@ -233,7 +233,7 @@ describe('BTree forEachKeyNotIn and subtract input/output validation', () => {
   });
 });
 
-describe.skip('BTree forEachKeyNotIn fuzz tests', () => {
+describe('BTree forEachKeyNotIn fuzz tests', () => {
   const compare = (a: number, b: number) => a - b;
   const FUZZ_SETTINGS = {
     branchingFactors: [4, 5, 32],
