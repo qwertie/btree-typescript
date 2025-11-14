@@ -13,6 +13,8 @@ var b_tree_1 = require("../b+tree");
  * @param onlyA Callback invoked for all keys only present in `treeA`.
  * @param onlyB Callback invoked for all keys only present in `treeB`.
  * @param different Callback invoked for all keys with differing values.
+ * @returns The first `break` payload returned by a handler, or `undefined` if no handler breaks.
+ * @throws Error if the supplied trees were created with different comparators.
  */
 function diffAgainst(_treeA, _treeB, onlyA, onlyB, different) {
     var treeA = _treeA;

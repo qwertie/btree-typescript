@@ -14,6 +14,8 @@ import { type BTreeWithInternals } from './shared';
  * @param onlyA Callback invoked for all keys only present in `treeA`.
  * @param onlyB Callback invoked for all keys only present in `treeB`.
  * @param different Callback invoked for all keys with differing values.
+ * @returns The first `break` payload returned by a handler, or `undefined` if no handler breaks.
+ * @throws Error if the supplied trees were created with different comparators.
  */
 export default function diffAgainst<K, V, R>(
   _treeA: BTree<K, V>,
@@ -292,4 +294,3 @@ type DiffCursor<K, V> = {
   leaf: BNode<K, V> | undefined;
   currentKey: K;
 };
-

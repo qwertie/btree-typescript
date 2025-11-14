@@ -8,5 +8,6 @@ import BTree from '../b+tree';
  * @param maxNodeSize The branching factor (maximum node size) for the resulting tree.
  * @param compare Function to compare keys.
  * @returns A new BTree containing the given entries.
+ * @throws Error if the entries are not sorted by key in strictly ascending order (duplicates disallowed).
  */
 export declare function bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number, compare: (a: K, b: K) => number): BTree<K, V>;

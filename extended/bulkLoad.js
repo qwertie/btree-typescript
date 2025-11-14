@@ -31,6 +31,7 @@ var shared_1 = require("./shared");
  * @param maxNodeSize The branching factor (maximum node size) for the resulting tree.
  * @param compare Function to compare keys.
  * @returns A new BTree containing the given entries.
+ * @throws Error if the entries are not sorted by key in strictly ascending order (duplicates disallowed).
  */
 function bulkLoad(entries, maxNodeSize, compare) {
     var alternatingEntries = entries;
