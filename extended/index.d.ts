@@ -18,15 +18,9 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * @throws Error if the entries are not strictly sorted or contain duplicate keys.
      */
     static bulkLoad<K, V>(entries: (K | V)[], maxNodeSize: number, compare?: (a: K, b: K) => number): BTreeEx<K, V>;
-    /**
-     * Quickly clones the tree while preserving the `BTreeEx` prototype.
-     * The clone shares structure (copy-on-write) until either instance is mutated.
-     */
+    /** See {@link BTree.clone}. */
     clone(): this;
-    /**
-     * Performs a greedy clone that eagerly duplicates non-shared nodes to avoid marking the original tree as shared.
-     * @param force When true, clones even the nodes that are already marked as shared.
-     */
+    /** See {@link BTree.greedyClone}. */
     greedyClone(force?: boolean): this;
     /**
      * Computes the differences between `this` and `other`.
@@ -80,23 +74,15 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
     union(other: BTreeEx<K, V>, combineFn: (key: K, leftValue: V, rightValue: V) => V | undefined): BTreeEx<K, V>;
 }
 export interface BTreeEx<K = any, V = any> {
-    /**
-     * Variants of `BTree#with` that preserve the `BTreeEx` return type for fluent chaining.
-     */
+    /** See {@link BTree.with}. */
     with(key: K): BTreeEx<K, V | undefined>;
     with<V2>(key: K, value: V2, overwrite?: boolean): BTreeEx<K, V | V2>;
     with<V2>(key: K, value?: V2, overwrite?: boolean): BTreeEx<K, V | V2 | undefined>;
-    /**
-     * Equivalent to `BTree#withPairs`, but returns a `BTreeEx`.
-     */
+    /** See {@link BTree.withPairs}. */
     withPairs<V2>(pairs: [K, V | V2][], overwrite: boolean): BTreeEx<K, V | V2>;
-    /**
-     * Equivalent to `BTree#withKeys`, but returns a `BTreeEx`.
-     */
+    /** See {@link BTree.withKeys}. */
     withKeys(keys: K[], returnThisIfUnchanged?: boolean): BTreeEx<K, V | undefined>;
-    /**
-     * Equivalent to `BTree#mapValues`, but returns a `BTreeEx` so the extended helpers remain available.
-     */
+    /** See {@link BTree.mapValues}. */
     mapValues<R>(callback: (v: V, k: K, counter: number) => R): BTreeEx<K, R>;
 }
 export default BTreeEx;

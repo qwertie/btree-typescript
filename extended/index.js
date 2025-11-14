@@ -74,10 +74,7 @@ var BTreeEx = /** @class */ (function (_super) {
         target._size = root.size();
         return tree;
     };
-    /**
-     * Quickly clones the tree while preserving the `BTreeEx` prototype.
-     * The clone shares structure (copy-on-write) until either instance is mutated.
-     */
+    /** See {@link BTree.clone}. */
     BTreeEx.prototype.clone = function () {
         var source = this;
         source._root.isShared = true;
@@ -87,10 +84,7 @@ var BTreeEx = /** @class */ (function (_super) {
         target._size = source._size;
         return result;
     };
-    /**
-     * Performs a greedy clone that eagerly duplicates non-shared nodes to avoid marking the original tree as shared.
-     * @param force When true, clones even the nodes that are already marked as shared.
-     */
+    /** See {@link BTree.greedyClone}. */
     BTreeEx.prototype.greedyClone = function (force) {
         var source = this;
         var result = new BTreeEx(undefined, this._compare, this._maxNodeSize);

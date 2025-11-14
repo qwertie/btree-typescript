@@ -37,10 +37,7 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
     return tree;
   }
 
-  /**
-   * Quickly clones the tree while preserving the `BTreeEx` prototype.
-   * The clone shares structure (copy-on-write) until either instance is mutated.
-   */
+  /** See {@link BTree.clone}. */
   clone(): this {
     const source = this as unknown as BTreeWithInternals<K, V>;
     source._root.isShared = true;
@@ -51,10 +48,7 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
     return result as this;
   }
 
-  /**
-   * Performs a greedy clone that eagerly duplicates non-shared nodes to avoid marking the original tree as shared.
-   * @param force When true, clones even the nodes that are already marked as shared.
-   */
+  /** See {@link BTree.greedyClone}. */
   greedyClone(force?: boolean): this {
     const source = this as unknown as BTreeWithInternals<K, V>;
     const result = new BTreeEx<K, V>(undefined, this._compare, this._maxNodeSize);
@@ -125,23 +119,15 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
 }
 
 export interface BTreeEx<K = any, V = any> {
-  /**
-   * Variants of `BTree#with` that preserve the `BTreeEx` return type for fluent chaining.
-   */
+  /** See {@link BTree.with}. */
   with(key: K): BTreeEx<K, V | undefined>;
   with<V2>(key: K, value: V2, overwrite?: boolean): BTreeEx<K, V | V2>;
   with<V2>(key: K, value?: V2, overwrite?: boolean): BTreeEx<K, V | V2 | undefined>;
-  /**
-   * Equivalent to `BTree#withPairs`, but returns a `BTreeEx`.
-   */
+  /** See {@link BTree.withPairs}. */
   withPairs<V2>(pairs: [K, V | V2][], overwrite: boolean): BTreeEx<K, V | V2>;
-  /**
-   * Equivalent to `BTree#withKeys`, but returns a `BTreeEx`.
-   */
+  /** See {@link BTree.withKeys}. */
   withKeys(keys: K[], returnThisIfUnchanged?: boolean): BTreeEx<K, V | undefined>;
-  /**
-   * Equivalent to `BTree#mapValues`, but returns a `BTreeEx` so the extended helpers remain available.
-   */
+  /** See {@link BTree.mapValues}. */
   mapValues<R>(callback: (v: V, k: K, counter: number) => R): BTreeEx<K, R>;
 }
 
