@@ -519,6 +519,40 @@ function testUnion(maxNodeSize: number) {
     result.checkValid();
   });
 
+  test('Union tree with itself returns a clone without invoking combineFn', () => {
+    const size = maxNodeSize * 2 + 5;
+    const tree = buildTree(range(0, size), 3, 1);
+    let unionCalls = 0;
+    const unionFn: UnionFn = (key, leftValue, rightValue) => {
+      unionCalls++;
+      return leftValue + rightValue;
+    };
+
+    const original = tree.toArray();
+    const result = tree.union(tree, unionFn);
+    expect(unionCalls).toBe(0);
+    expect(result).not.toBe(tree);
+    expect(result.toArray()).toEqual(original);
+    expect(tree.toArray()).toEqual(original);
+  });
+
+  test('Standalone union short-circuits when given the same tree twice', () => {
+    const size = maxNodeSize * 2 + 1;
+    const tree = buildTree(range(0, size), 1, 0);
+    let unionCalls = 0;
+    const unionFn: UnionFn = (_key, _leftValue, _rightValue) => {
+      unionCalls++;
+      return undefined;
+    };
+
+    const original = tree.toArray();
+    const result = union(tree, tree, unionFn);
+    expect(unionCalls).toBe(0);
+    expect(result).not.toBe(tree);
+    expect(result.toArray()).toEqual(original);
+    expect(tree.toArray()).toEqual(original);
+  });
+
   test('Union with disjoint ranges', () => {
     const entries1: [number, number][] = [];
     for (let i = 1; i <= 100; i++) entries1.push([i, i]);

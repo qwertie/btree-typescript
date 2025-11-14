@@ -23,6 +23,8 @@ export default function union<TBTree extends BTree<K, V>, K, V>(
   treeB: TBTree,
   combineFn: (key: K, leftValue: V, rightValue: V) => V | undefined
 ): TBTree {
+  if (treeA === treeB)
+    return treeA.clone();
   const _treeA = treeA as unknown as BTreeWithInternals<K, V>;
   const _treeB = treeB as unknown as BTreeWithInternals<K, V>;
   const branchingFactor = checkCanDoSetOperation(_treeA, _treeB, false);

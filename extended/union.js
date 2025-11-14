@@ -19,6 +19,8 @@ var decompose_1 = require("./decompose");
  * and inserting the contents of `other` into the clone.
  */
 function union(treeA, treeB, combineFn) {
+    if (treeA === treeB)
+        return treeA.clone();
     var _treeA = treeA;
     var _treeB = treeB;
     var branchingFactor = (0, shared_1.checkCanDoSetOperation)(_treeA, _treeB, false);
