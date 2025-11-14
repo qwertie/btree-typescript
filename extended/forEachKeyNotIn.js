@@ -36,13 +36,13 @@ function forEachKeyNotIn(includeTree, excludeTree, callback) {
             }
             out = (0, parallelWalk_1.moveForwardOne)(cursorInclude, cursorExclude);
         } while (!out);
+        return undefined;
     };
     var cmp = includeTree._compare;
     var makePayload = function () { return undefined; };
     var cursorInclude = (0, parallelWalk_1.createCursor)(_includeTree, makePayload, parallelWalk_1.noop, parallelWalk_1.noop, parallelWalk_1.noop, parallelWalk_1.noop, parallelWalk_1.noop);
     if (excludeTree.size === 0) {
-        finishWalk();
-        return;
+        return finishWalk();
     }
     var cursorExclude = (0, parallelWalk_1.createCursor)(_excludeTree, makePayload, parallelWalk_1.noop, parallelWalk_1.noop, parallelWalk_1.noop, parallelWalk_1.noop, parallelWalk_1.noop);
     var order = cmp((0, parallelWalk_1.getKey)(cursorInclude), (0, parallelWalk_1.getKey)(cursorExclude));
@@ -74,8 +74,7 @@ function forEachKeyNotIn(includeTree, excludeTree, callback) {
                 var _a = (0, parallelWalk_1.moveTo)(cursorExclude, cursorInclude, (0, parallelWalk_1.getKey)(cursorInclude), true, areEqual), out = _a[0], nowEqual = _a[1];
                 if (out) {
                     // We've reached the end of exclude, so call for all remaining keys in include
-                    finishWalk();
-                    break;
+                    return finishWalk();
                 }
                 else if (nowEqual) {
                     order = 0;

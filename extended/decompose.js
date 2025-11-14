@@ -170,7 +170,24 @@ function decompose(left, right, combineFn, ignoreRight) {
     var curB;
     if (ignoreRight) {
         var dummyPayload_1 = { disqualified: true };
-        curB = (0, parallelWalk_1.createCursor)(right, function () { return dummyPayload_1; }, parallelWalk_1.noop, parallelWalk_1.noop, parallelWalk_1.noop, parallelWalk_1.noop, parallelWalk_1.noop);
+        var onStepUpIgnore = function (_1, _2, _3, _4, spineIndex, stepDownIndex, cursorThis) {
+            if (stepDownIndex > 0) {
+                disqualifySpine(cursorThis, spineIndex);
+            }
+        };
+        var onStepDownIgnore = function (_, __, spineIndex, stepDownIndex, cursorThis) {
+            if (stepDownIndex > 0) {
+                disqualifySpine(cursorThis, spineIndex);
+            }
+        };
+        var onEnterLeafIgnore = function (leaf, destIndex, _, cursorOther) {
+            if (destIndex > 0
+                || (0, b_tree_1.areOverlapping)(leaf.minKey(), leaf.maxKey(), (0, parallelWalk_1.getKey)(cursorOther), cursorOther.leaf.maxKey(), cmp)) {
+                cursorOther.leafPayload.disqualified = true;
+                disqualifySpine(cursorOther, cursorOther.spine.length - 1);
+            }
+        };
+        curB = (0, parallelWalk_1.createCursor)(right, function () { return dummyPayload_1; }, onEnterLeafIgnore, parallelWalk_1.noop, parallelWalk_1.noop, onStepUpIgnore, onStepDownIgnore);
     }
     else {
         curB = (0, parallelWalk_1.createCursor)(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);

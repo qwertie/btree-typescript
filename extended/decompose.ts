@@ -229,7 +229,45 @@ export function decompose<K, V>(
   let curB: typeof curA;
   if (ignoreRight) {
     const dummyPayload: DecomposePayload = { disqualified: true };
-    curB = createCursor<K, V, DecomposePayload>(right, () => dummyPayload, noop, noop, noop, noop, noop);
+    const onStepUpIgnore = (
+      _1: BNodeInternal<K, V>,
+      _2: number,
+      _3: DecomposePayload,
+      _4: number,
+      spineIndex: number,
+      stepDownIndex: number,
+      cursorThis: Cursor<K, V, DecomposePayload>
+    ) => {
+      if (stepDownIndex > 0) {
+        disqualifySpine(cursorThis, spineIndex);
+      }
+    };
+
+    const onStepDownIgnore = (
+      _: BNodeInternal<K, V>,
+      __: number,
+      spineIndex: number,
+      stepDownIndex: number,
+      cursorThis: Cursor<K, V, DecomposePayload>
+    ) => {
+      if (stepDownIndex > 0) {
+        disqualifySpine(cursorThis, spineIndex);
+      }
+    };
+
+    const onEnterLeafIgnore = (
+      leaf: BNode<K, V>,
+      destIndex: number,
+      _: Cursor<K, V, DecomposePayload>,
+      cursorOther: Cursor<K, V, DecomposePayload>
+    ) => {
+      if (destIndex > 0
+        || areOverlapping(leaf.minKey()!, leaf.maxKey(), getKey(cursorOther), cursorOther.leaf.maxKey(), cmp)) {
+        cursorOther.leafPayload.disqualified = true;
+        disqualifySpine(cursorOther, cursorOther.spine.length - 1);
+      }
+    };
+    curB = createCursor<K, V, DecomposePayload>(right, () => dummyPayload, onEnterLeafIgnore, noop, noop, onStepUpIgnore, onStepDownIgnore);
   } else {
     curB = createCursor<K, V, DecomposePayload>(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
   }
