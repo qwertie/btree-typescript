@@ -1,7 +1,9 @@
 #!/usr/bin/env ts-node
-import BTree, {IMap} from '.';
+import BTree from '.';
 import BTreeEx from './extended';
 import SortedArray from './sorted-array';
+import forEachKeyNotIn from './extended/forEachKeyNotIn';
+import subtract from './extended/subtract';
 // Note: The `bintrees` package also includes a `BinTree` type which turned
 // out to be an unbalanced binary tree. It is faster than `RBTree` for
 // randomized data, but it becomes extremely slow when filled with sorted 
@@ -44,6 +46,83 @@ function measure<T=void>(message: (t:T) => string, callback: () => T, minMillise
   ms /= counter;
   log((Math.round(ms * 10) / 10) + "\t" + message(result));
   return result;
+}
+
+function countTreeNodeStats(tree: BTree<any, any>) {
+  const root = (tree as any)._root;
+  if (!root)
+    return { total: 0, shared: 0 };
+
+  const visit = (node: any, ancestorShared: boolean): { total: number, shared: number } => {
+    if (!node)
+      return { total: 0, shared: 0 };
+    const selfShared = node.isShared === true || ancestorShared;
+    let shared = selfShared ? 1 : 0;
+    let total = 1;
+    const children: any[] | undefined = node.children;
+    if (children) {
+      for (const child of children) {
+        const stats = visit(child, selfShared);
+        total += stats.total;
+        shared += stats.shared;
+      }
+    }
+    return { total, shared };
+  };
+
+  return visit(root, false);
+}
+
+function intersectBySorting(
+  tree1: BTree<number, number>,
+  tree2: BTree<number, number>,
+  callback: (k: number, leftValue: number, rightValue: number) => void
+) {
+  const left = tree1.toArray();
+  const right = tree2.toArray();
+  let i = 0;
+  let j = 0;
+  const leftLen = left.length;
+  const rightLen = right.length;
+
+  while (i < leftLen && j < rightLen) {
+    const [leftKey, leftValue] = left[i];
+    const [rightKey, rightValue] = right[j];
+    if (leftKey === rightKey) {
+      callback(leftKey, leftValue, rightValue);
+      i++;
+      j++;
+    } else if (leftKey < rightKey) {
+      i++;
+    } else {
+      j++;
+    }
+  }
+}
+
+function subtractBySorting(
+  includeTree: BTree<number, number>,
+  excludeTree: BTree<number, number>,
+  callback: (k: number, value: number) => void
+) {
+  const include = includeTree.toArray();
+  const exclude = excludeTree.toArray();
+  let i = 0;
+  let j = 0;
+  const includeLen = include.length;
+  const excludeLen = exclude.length;
+
+  while (i < includeLen) {
+    const [includeKey, includeValue] = include[i];
+    while (j < excludeLen && exclude[j][0] < includeKey)
+      j++;
+    if (j < excludeLen && exclude[j][0] === includeKey) {
+      i++;
+      continue;
+    }
+    callback(includeKey, includeValue);
+    i++;
+  }
 }
 
 console.log("Benchmark results (milliseconds with integer keys/values)");
@@ -354,4 +433,632 @@ console.log("### Delta between B+ trees");
       });
     }
   })
+}
+
+console.log();
+console.log("### Union between B+ trees");
+{
+  console.log();
+  const sizes = [100, 1000, 10000, 100000];
+
+  const timeBaselineMerge = (title: string, tree1: BTree, tree2: BTree) => {
+    const baselineResult = measure(() => title, () => {
+      const result = tree1.clone();
+      tree2.forEachPair((k, v) => {
+        result.set(k, v, false);
+      });
+      return result;
+    });
+    const baselineStats = countTreeNodeStats(baselineResult);
+    console.log(`\tShared nodes (baseline): ${baselineStats.shared}/${baselineStats.total}`);
+  };
+
+  const preferLeftUnion = (_k: number, leftValue: any, _rightValue: any) => leftValue;
+
+  const timeUnionVsBaseline = (
+    baseTitle: string,
+    tree1: BTreeEx<number, number>,
+    tree2: BTreeEx<number, number>,
+    prefer = preferLeftUnion,
+    unionLabel = 'union()',
+    baselineLabel = 'clone+set loop (baseline)'
+  ) => {
+    const unionResult = measure(() => `${baseTitle} using ${unionLabel}`, () => {
+      return tree1.union(tree2, prefer);
+    });
+    const unionStats = countTreeNodeStats(unionResult);
+    console.log(`\tShared nodes (union): ${unionStats.shared}/${unionStats.total}`);
+
+    timeBaselineMerge(`${baseTitle} using ${baselineLabel}`, tree1, tree2);
+  };
+
+  console.log("# Non-overlapping ranges (disjoint keys)");
+  sizes.forEach((size) => {
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
+
+    const offset = size * 3;
+    for (let i = 0; i < size; i++) {
+      tree1.set(i, i);
+      tree2.set(offset + i, offset + i);
+    }
+
+    const baseTitle = `Union ${size}+${size} non-overlapping trees`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
+  });
+
+  console.log();
+  console.log("# Adjacent ranges (one intersection point)");
+  sizes.forEach((size) => {
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
+
+    // Tree1: 0-size, Tree2: size-(2*size)
+    for (let i = 0; i <= size; i++) {
+      tree1.set(i, i);
+      tree2.set(i + size, i + size);
+    }
+
+    const baseTitle = `Union ${size}+${size} adjacent range trees`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
+  });
+
+  console.log();
+  console.log("# Interleaved ranges (two intersection points)");
+  sizes.forEach((size) => {
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
+
+    // Tree1: 0-size, 2*size-3*size
+    // Tree2: size-2*size
+    for (let i = 0; i <= size; i++) {
+      tree1.set(i, i);
+      tree1.set(i + 2 * size, i + 2 * size);
+      tree2.set(i + size, i + size);
+    }
+
+    const baseTitle = `Union ${size * 2}+${size} interleaved range trees`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
+  });
+
+  console.log();
+  console.log("# Complete overlap (all keys intersect)");
+  sizes.forEach((size) => {
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
+
+    for (let i = 0; i < size; i++) {
+      tree1.set(i, i);
+      tree2.set(i, i * 10);
+    }
+
+    const baseTitle = `Union ${size}+${size} completely overlapping trees (prefer left)`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
+  });
+
+  console.log();
+  console.log("# Partial overlap (10% intersection)");
+  sizes.forEach((size) => {
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
+
+    // Tree1: 0-(size)
+    // Tree2: (~0.9*size)-(1.9*size)
+    // Overlap: last 10% of tree1 and first 10% of tree2
+    for (let i = 0; i < size; i++) {
+      tree1.set(i, i);
+    }
+    const offset = Math.floor(size * 0.9);
+    for (let i = 0; i < size; i++) {
+      const key = offset + i;
+      tree2.set(key, key * 10);
+    }
+
+    const baseTitle = `Union trees with 10% overlap (${size}+${size} keys)`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
+  });
+
+  console.log();
+  console.log("# Union random overlaps");
+  sizes.forEach((size) => {
+    const keys1 = makeArray(size, true);
+    const keys2 = makeArray(size, true);
+
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
+
+    for (let k of keys1) {
+      tree1.set(k, k);
+    }
+    for (let k of keys2) {
+      tree2.set(k, k * 10);
+    }
+
+    const baseTitle = `Union ${tree1.size}+${tree2.size} trees with random keys`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
+  });
+
+  console.log();
+  console.log("# Union with empty tree");
+  sizes.forEach((size) => {
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
+
+    for (let i = 0; i < size; i++) {
+      tree1.set(i, i);
+    }
+
+    const baseTitle = `Union ${size}-key tree with empty tree`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
+  });
+
+  console.log();
+  console.log("# Large sparse-overlap trees (1M keys each, 10 overlaps per 100k)");
+  {
+    const totalKeys = 1_000_000;
+    const overlapInterval = 100_000;
+    const overlapPerInterval = 10;
+
+    const tree1 = new BTreeEx<number, number>();
+    for (let i = 0; i < totalKeys; i++) {
+      tree1.set(i, i);
+    }
+
+    const tree2 = new BTreeEx<number, number>();
+    for (let i = 0; i < totalKeys; i++) {
+      if ((i % overlapInterval) < overlapPerInterval) {
+        tree2.set(i, i);
+      } else {
+        tree2.set(totalKeys + i, totalKeys + i);
+      }
+    }
+
+    const baseTitle = `Union ${tree1.size}+${tree2.size} sparse-overlap trees`;
+    timeUnionVsBaseline(baseTitle, tree1, tree2);
+  }
+}
+
+console.log();
+console.log("### Subtract between B+ trees");
+{
+  console.log();
+  const sizes = [100, 1000, 10000, 100000];
+
+  const timeBaselineSubtract = (
+    title: string,
+    includeTree: BTreeEx<number, number>,
+    excludeTree: BTreeEx<number, number>
+  ) => {
+    const baselineResult = measure(() => title, () => {
+      const result = includeTree.clone();
+      excludeTree.forEachPair((key) => {
+        result.delete(key);
+      });
+      return result;
+    });
+    const stats = countTreeNodeStats(baselineResult);
+    console.log(`\tShared nodes (baseline): ${stats.shared}/${stats.total}`);
+  };
+
+  const timeSubtractVsBaseline = (
+    baseTitle: string,
+    includeTree: BTreeEx<number, number>,
+    excludeTree: BTreeEx<number, number>,
+    subtractLabel = 'subtract()',
+    baselineLabel = 'clone+delete loop (baseline)'
+  ) => {
+    const subtractResult = measure(() => `${baseTitle} using ${subtractLabel}`, () => {
+      return subtract<BTreeEx<number, number>, number, number>(includeTree, excludeTree);
+    });
+    const subtractStats = countTreeNodeStats(subtractResult);
+    console.log(`\tShared nodes (subtract): ${subtractStats.shared}/${subtractStats.total}`);
+
+    timeBaselineSubtract(`${baseTitle} using ${baselineLabel}`, includeTree, excludeTree);
+  };
+
+  console.log("# Non-overlapping ranges (nothing removed)");
+  sizes.forEach((size) => {
+    const includeTree = new BTreeEx<number, number>();
+    const excludeTree = new BTreeEx<number, number>();
+    const offset = size * 3;
+    for (let i = 0; i < size; i++) {
+      includeTree.set(i, i);
+      excludeTree.set(offset + i, offset + i);
+    }
+
+    const baseTitle = `Subtract ${includeTree.size}-${excludeTree.size} disjoint trees`;
+    timeSubtractVsBaseline(baseTitle, includeTree, excludeTree);
+  });
+
+  console.log();
+  console.log("# Partial overlap (middle segment removed)");
+  sizes.forEach((size) => {
+    const includeTree = new BTreeEx<number, number>();
+    const excludeTree = new BTreeEx<number, number>();
+    const overlapStart = Math.floor(size / 3);
+    const overlapEnd = overlapStart + Math.floor(size / 2);
+    for (let i = 0; i < size; i++) {
+      includeTree.set(i, i);
+      if (i >= overlapStart && i < overlapEnd)
+        excludeTree.set(i, i * 10);
+    }
+
+    const baseTitle = `Subtract ${includeTree.size}-${excludeTree.size} partially overlapping trees`;
+    timeSubtractVsBaseline(baseTitle, includeTree, excludeTree);
+  });
+
+  console.log();
+  console.log("# Interleaved keys (every other key removed)");
+  sizes.forEach((size) => {
+    const includeTree = new BTreeEx<number, number>();
+    const excludeTree = new BTreeEx<number, number>();
+    for (let i = 0; i < size * 2; i++) {
+      includeTree.set(i, i);
+      if (i % 2 === 0)
+        excludeTree.set(i, i);
+    }
+
+    const baseTitle = `Subtract ${includeTree.size}-${excludeTree.size} interleaved trees`;
+    timeSubtractVsBaseline(baseTitle, includeTree, excludeTree);
+  });
+
+  console.log();
+  console.log("# Complete overlap (entire tree removed)");
+  sizes.forEach((size) => {
+    const includeTree = new BTreeEx<number, number>();
+    const excludeTree = new BTreeEx<number, number>();
+    for (let i = 0; i < size; i++) {
+      includeTree.set(i, i);
+      excludeTree.set(i, i * 5);
+    }
+
+    const baseTitle = `Subtract ${includeTree.size}-${excludeTree.size} identical trees`;
+    timeSubtractVsBaseline(baseTitle, includeTree, excludeTree);
+  });
+
+  console.log();
+  console.log("# Random overlaps (~10% removed)");
+  sizes.forEach((size) => {
+    const keysInclude = makeArray(size, true);
+    const keysExclude = makeArray(size, true);
+    const overlapCount = Math.max(1, Math.floor(size * 0.1));
+    for (let i = 0; i < overlapCount && i < keysInclude.length && i < keysExclude.length; i++) {
+      keysExclude[i] = keysInclude[i];
+    }
+
+    const includeTree = new BTreeEx<number, number>();
+    const excludeTree = new BTreeEx<number, number>();
+    for (const key of keysInclude)
+      includeTree.set(key, key * 3);
+    for (const key of keysExclude)
+      excludeTree.set(key, key * 7);
+
+    const baseTitle = `Subtract ${includeTree.size}-${excludeTree.size} random trees`;
+    timeSubtractVsBaseline(baseTitle, includeTree, excludeTree);
+  });
+
+  console.log();
+  console.log("# Subtract with empty exclude tree");
+  sizes.forEach((size) => {
+    const includeTree = new BTreeEx<number, number>();
+    const excludeTree = new BTreeEx<number, number>();
+    for (let i = 0; i < size; i++)
+      includeTree.set(i, i);
+
+    const baseTitle = `Subtract ${includeTree.size}-0 keys`;
+    timeSubtractVsBaseline(baseTitle, includeTree, excludeTree);
+  });
+
+  console.log();
+  console.log("# Large sparse-overlap trees (1M keys each, 10 overlaps per 100k)");
+  {
+    const totalKeys = 1_000_000;
+    const overlapInterval = 100_000;
+    const overlapPerInterval = 10;
+
+    const includeTree = new BTreeEx<number, number>();
+    for (let i = 0; i < totalKeys; i++) {
+      includeTree.set(i, i);
+    }
+
+    const excludeTree = new BTreeEx<number, number>();
+    for (let i = 0; i < totalKeys; i++) {
+      if ((i % overlapInterval) < overlapPerInterval) {
+        excludeTree.set(i, i);
+      } else {
+        excludeTree.set(totalKeys + i, totalKeys + i);
+      }
+    }
+
+    const baseTitle = `Subtract ${includeTree.size}-${excludeTree.size} sparse-overlap trees`;
+    timeSubtractVsBaseline(baseTitle, includeTree, excludeTree);
+  }
+}
+
+console.log();
+console.log("### forEachKeyInBoth");
+{
+  const sizes = [100, 1000, 10000, 100000];
+
+  const runForEachKeyInBoth = (
+    tree1: BTreeEx<number, number>,
+    tree2: BTreeEx<number, number>
+  ) => {
+    let count = 0;
+    let checksum = 0;
+    tree1.forEachKeyInBoth(tree2, (_k, leftValue, rightValue) => {
+      count++;
+      checksum += leftValue + rightValue;
+    });
+    return { count, checksum };
+  };
+
+  const runBaseline = (
+    tree1: BTree<number, number>,
+    tree2: BTree<number, number>
+  ) => {
+    let count = 0;
+    let checksum = 0;
+    intersectBySorting(tree1, tree2, (_k, leftValue, rightValue) => {
+      count++;
+      checksum += leftValue + rightValue;
+    });
+    return { count, checksum };
+  };
+
+  const timeForEachKeyInBothVsBaseline = (
+    baseTitle: string,
+    tree1: BTreeEx<number, number>,
+    tree2: BTreeEx<number, number>,
+    forEachKeyInBothLabel = 'forEachKeyInBoth()',
+    baselineLabel = 'sort baseline'
+  ) => {
+    measure(
+      result => `${baseTitle} using ${forEachKeyInBothLabel} [count=${result.count}, checksum=${result.checksum}]`,
+      () => runForEachKeyInBoth(tree1, tree2)
+    );
+    measure(
+      result => `${baseTitle} using ${baselineLabel} [count=${result.count}, checksum=${result.checksum}]`,
+      () => runBaseline(tree1, tree2)
+    );
+  };
+
+  console.log();
+  console.log("# Non-overlapping ranges (no shared keys)");
+  sizes.forEach((size) => {
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
+    const offset = size * 3;
+    for (let i = 0; i < size; i++) {
+      tree1.set(i, i);
+      tree2.set(offset + i, offset + i);
+    }
+
+    const baseTitle = `forEachKeyInBoth ${size}+${size} disjoint trees`;
+    timeForEachKeyInBothVsBaseline(baseTitle, tree1, tree2);
+  });
+
+  console.log();
+  console.log("# 50% overlapping ranges");
+  sizes.forEach((size) => {
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
+    const offset = Math.floor(size / 2);
+    for (let i = 0; i < size; i++) {
+      tree1.set(i, i);
+      tree2.set(i + offset, (i + offset) * 2);
+    }
+
+    const baseTitle = `forEachKeyInBoth ${size}+${size} half-overlapping trees`;
+    timeForEachKeyInBothVsBaseline(baseTitle, tree1, tree2);
+  });
+
+  console.log();
+  console.log("# Complete overlap (all keys shared)");
+  sizes.forEach((size) => {
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
+    for (let i = 0; i < size; i++) {
+      tree1.set(i, i);
+      tree2.set(i, i * 3);
+    }
+
+    const baseTitle = `forEachKeyInBoth ${size}+${size} identical-key trees`;
+    timeForEachKeyInBothVsBaseline(baseTitle, tree1, tree2);
+  });
+
+  console.log();
+  console.log("# Random overlaps (~10% shared keys)");
+  sizes.forEach((size) => {
+    const keys1 = makeArray(size, true);
+    const keys2 = makeArray(size, true);
+    const overlapCount = Math.max(1, Math.floor(size * 0.1));
+    for (let i = 0; i < overlapCount && i < keys1.length && i < keys2.length; i++) {
+      keys2[i] = keys1[i];
+    }
+
+    const tree1 = new BTreeEx<number, number>();
+    const tree2 = new BTreeEx<number, number>();
+
+    for (let i = 0; i < keys1.length; i++) {
+      const key = keys1[i];
+      tree1.set(key, key * 5);
+    }
+    for (let i = 0; i < keys2.length; i++) {
+      const key = keys2[i];
+      tree2.set(key, key * 7);
+    }
+
+    const baseTitle = `forEachKeyInBoth ${tree1.size}+${tree2.size} random trees`;
+    timeForEachKeyInBothVsBaseline(baseTitle, tree1, tree2);
+  });
+
+  console.log();
+  console.log("# Large sparse-overlap trees (1M keys each, 10 overlaps per 100k)");
+  {
+    const totalKeys = 1_000_000;
+    const overlapInterval = 100_000;
+    const overlapPerInterval = 10;
+
+    const tree1 = new BTreeEx<number, number>();
+    for (let i = 0; i < totalKeys; i++) {
+      tree1.set(i, i);
+    }
+
+    const tree2 = new BTreeEx<number, number>();
+    for (let i = 0; i < totalKeys; i++) {
+      if ((i % overlapInterval) < overlapPerInterval) {
+        tree2.set(i, i * 7);
+      } else {
+        tree2.set(totalKeys + i, (totalKeys + i) * 7);
+      }
+    }
+
+    const baseTitle = `forEachKeyInBoth ${tree1.size}+${tree2.size} sparse-overlap trees`;
+    timeForEachKeyInBothVsBaseline(baseTitle, tree1, tree2);
+  }
+}
+
+console.log();
+console.log("### forEachKeyNotIn");
+{
+  const sizes = [100, 1000, 10000, 100000];
+
+  const runForEachKeyNotIn = (
+    includeTree: BTreeEx<number, number>,
+    excludeTree: BTreeEx<number, number>
+  ) => {
+    let count = 0;
+    let checksum = 0;
+    forEachKeyNotIn(includeTree, excludeTree, (_key, value) => {
+      count++;
+      checksum += value;
+    });
+    return { count, checksum };
+  };
+
+  const runBaseline = (
+    includeTree: BTree<number, number>,
+    excludeTree: BTree<number, number>
+  ) => {
+    let count = 0;
+    let checksum = 0;
+    subtractBySorting(includeTree, excludeTree, (_key, value) => {
+      count++;
+      checksum += value;
+    });
+    return { count, checksum };
+  };
+
+  const timeForEachKeyNotInVsBaseline = (
+    baseTitle: string,
+    includeTree: BTreeEx<number, number>,
+    excludeTree: BTreeEx<number, number>,
+    forEachKeyNotInLabel = 'forEachKeyNotIn()',
+    baselineLabel = 'sort baseline'
+  ) => {
+    measure(
+      result => `${baseTitle} using ${forEachKeyNotInLabel} [count=${result.count}, checksum=${result.checksum}]`,
+      () => runForEachKeyNotIn(includeTree, excludeTree)
+    );
+    measure(
+      result => `${baseTitle} using ${baselineLabel} [count=${result.count}, checksum=${result.checksum}]`,
+      () => runBaseline(includeTree, excludeTree)
+    );
+  };
+
+  console.log();
+  console.log("# Non-overlapping ranges (all keys survive)");
+  sizes.forEach((size) => {
+    const includeTree = new BTreeEx<number, number>();
+    const excludeTree = new BTreeEx<number, number>();
+    const offset = size * 3;
+    for (let i = 0; i < size; i++) {
+      includeTree.set(i, i);
+      excludeTree.set(offset + i, offset + i);
+    }
+
+    const baseTitle = `forEachKeyNotIn ${includeTree.size}+${excludeTree.size} disjoint trees`;
+    timeForEachKeyNotInVsBaseline(baseTitle, includeTree, excludeTree);
+  });
+
+  console.log();
+  console.log("# 50% overlapping ranges");
+  sizes.forEach((size) => {
+    const includeTree = new BTreeEx<number, number>();
+    const excludeTree = new BTreeEx<number, number>();
+    const offset = Math.floor(size / 2);
+    for (let i = 0; i < size; i++) {
+      includeTree.set(i, i);
+      excludeTree.set(i + offset, (i + offset) * 2);
+    }
+
+    const baseTitle = `forEachKeyNotIn ${includeTree.size}+${excludeTree.size} half-overlapping trees`;
+    timeForEachKeyNotInVsBaseline(baseTitle, includeTree, excludeTree);
+  });
+
+  console.log();
+  console.log("# Complete overlap (no keys survive)");
+  sizes.forEach((size) => {
+    const includeTree = new BTreeEx<number, number>();
+    const excludeTree = new BTreeEx<number, number>();
+    for (let i = 0; i < size; i++) {
+      includeTree.set(i, i);
+      excludeTree.set(i, i * 3);
+    }
+
+    const baseTitle = `forEachKeyNotIn ${includeTree.size}+${excludeTree.size} identical-key trees`;
+    timeForEachKeyNotInVsBaseline(baseTitle, includeTree, excludeTree);
+  });
+
+  console.log();
+  console.log("# Random overlaps (~10% of include removed)");
+  sizes.forEach((size) => {
+    const keysInclude = makeArray(size, true);
+    const keysExclude = makeArray(size, true);
+    const overlapCount = Math.max(1, Math.floor(size * 0.1));
+    for (let i = 0; i < overlapCount && i < keysInclude.length && i < keysExclude.length; i++) {
+      keysExclude[i] = keysInclude[i];
+    }
+
+    const includeTree = new BTreeEx<number, number>();
+    const excludeTree = new BTreeEx<number, number>();
+
+    for (let i = 0; i < keysInclude.length; i++) {
+      const key = keysInclude[i];
+      includeTree.set(key, key * 5);
+    }
+    for (let i = 0; i < keysExclude.length; i++) {
+      const key = keysExclude[i];
+      excludeTree.set(key, key * 7);
+    }
+
+    const baseTitle = `forEachKeyNotIn ${includeTree.size}+${excludeTree.size} random trees`;
+    timeForEachKeyNotInVsBaseline(baseTitle, includeTree, excludeTree);
+  });
+
+  console.log();
+  console.log("# Large sparse-overlap trees (1M keys each, 10 overlaps per 100k)");
+  {
+    const totalKeys = 1_000_000;
+    const overlapInterval = 100_000;
+    const overlapPerInterval = 10;
+
+    const includeTree = new BTreeEx<number, number>();
+    for (let i = 0; i < totalKeys; i++) {
+      includeTree.set(i, i);
+    }
+
+    const excludeTree = new BTreeEx<number, number>();
+    for (let i = 0; i < totalKeys; i++) {
+      if ((i % overlapInterval) < overlapPerInterval) {
+        excludeTree.set(i, i);
+      } else {
+        excludeTree.set(totalKeys + i, totalKeys + i);
+      }
+    }
+
+    const baseTitle = `forEachKeyNotIn ${includeTree.size}+${excludeTree.size} sparse-overlap trees`;
+    timeForEachKeyNotInVsBaseline(baseTitle, includeTree, excludeTree);
+  }
 }

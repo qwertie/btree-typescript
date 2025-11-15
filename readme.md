@@ -92,6 +92,8 @@ Features
 - Includes a lattice of interfaces for TypeScript users (see below)
 - Supports diffing computation between two trees that is highly optimized for the case
   in which a majority of nodes are shared (such as when persistent methods are used).
+- Supports fast union & shared-key iteration via `forEachKeyInBoth` with asymptotic speedups when large disjoint ranges of keys are present.
+  The union operation generates a new tree that shares nodes with the original trees when possible.
 
 ### Additional operations supported on this B+ tree ###
 
@@ -133,6 +135,7 @@ The "scanning" methods (`forEach, forRange, editRange, deleteRange`) will normal
 - Get a new tree with one pair removed: `t.without(key)`
 - Get a new tree with specific pairs removed: `t.withoutKeys(keys)`
 - Get a new tree with a range of keys removed: `t.withoutRange(low, high, includeHi)`
+- Get a new tree that is the result of a union: `t.union(other, unionFn)`
 
 **Things to keep in mind:** I ran a test which suggested `t.with` is three times slower than `t.set`. These methods do not return a frozen tree even if the original tree was frozen (for performance reasons, e.g. frozen trees use slightly more memory.)
 

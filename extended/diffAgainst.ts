@@ -1,27 +1,6 @@
 import BTree from '../b+tree';
 import { BNode, BNodeInternal, check } from '../b+tree';
-import type { BTreeWithInternals } from './shared';
-
-/**
- * A walkable pointer into a BTree for computing efficient diffs between trees with shared data.
- * - A cursor points to either a key/value pair (KVP) or a node (which can be either a leaf or an internal node).
- *   As a consequence, a cursor cannot be created for an empty tree.
- * - A cursor can be walked forwards using `step`. A cursor can be compared to another cursor to
- *   determine which is ahead in advancement.
- * - A cursor is valid only for the tree it was created from, and only until the first edit made to
- *   that tree since the cursor's creation.
- * - A cursor contains a key for the current location, which is the maxKey when the cursor points to a node
- *   and a key corresponding to a value when pointing to a leaf.
- * - Leaf is only populated if the cursor points to a KVP. If this is the case, levelIndices.length === internalSpine.length + 1
- *   and levelIndices[levelIndices.length - 1] is the index of the value.
- */
-type DiffCursor<K, V> = {
-  height: number;
-  internalSpine: BNode<K, V>[][];
-  levelIndices: number[];
-  leaf: BNode<K, V> | undefined;
-  currentKey: K;
-};
+import { type BTreeWithInternals } from './shared';
 
 /**
  * Computes the differences between `treeA` and `treeB`.
@@ -35,8 +14,10 @@ type DiffCursor<K, V> = {
  * @param onlyA Callback invoked for all keys only present in `treeA`.
  * @param onlyB Callback invoked for all keys only present in `treeB`.
  * @param different Callback invoked for all keys with differing values.
+ * @returns The first `break` payload returned by a handler, or `undefined` if no handler breaks.
+ * @throws Error if the supplied trees were created with different comparators.
  */
-export function diffAgainst<K, V, R>(
+export default function diffAgainst<K, V, R>(
   _treeA: BTree<K, V>,
   _treeB: BTree<K, V>,
   onlyA?: (k: K, v: V) => { break?: R } | void,
@@ -156,12 +137,12 @@ export function diffAgainst<K, V, R>(
 /**
  * Finishes walking `cursor` once the other cursor has already completed its walk.
  */
-const finishCursorWalk = <K, V, R>(
+function finishCursorWalk<K, V, R>(
   cursor: DiffCursor<K, V>,
   cursorFinished: DiffCursor<K, V>,
   compareKeys: (a: K, b: K) => number,
   callback: (k: K, v: V) => { break?: R } | void
-): R | undefined => {
+): R | undefined {
   const compared = compareDiffCursors(cursor, cursorFinished, compareKeys);
   if (compared === 0) {
     if (!stepDiffCursor(cursor))
@@ -170,15 +151,15 @@ const finishCursorWalk = <K, V, R>(
     check(false, 'cursor walk terminated early');
   }
   return stepToEnd(cursor, callback);
-};
+}
 
 /**
  * Walks the cursor to the end of the tree, invoking the callback for each key/value pair.
  */
-const stepToEnd = <K, V, R>(
+function stepToEnd<K, V, R>(
   cursor: DiffCursor<K, V>,
   callback: (k: K, v: V) => { break?: R } | void
-): R | undefined => {
+): R | undefined {
   let canStep = true;
   while (canStep) {
     const { leaf, levelIndices, currentKey } = cursor;
@@ -191,11 +172,11 @@ const stepToEnd = <K, V, R>(
     canStep = stepDiffCursor(cursor);
   }
   return undefined;
-};
+}
 
-const makeDiffCursor = <K, V>(
+function makeDiffCursor<K, V>(
   internal: BTreeWithInternals<K, V>
-): DiffCursor<K, V> => {
+): DiffCursor<K, V> {
   const root = internal._root;
   return {
     height: internal.height,
@@ -204,13 +185,13 @@ const makeDiffCursor = <K, V>(
     leaf: undefined,
     currentKey: root.maxKey()
   };
-};
+}
 
 /**
  * Advances the cursor to the next step in the walk of its tree.
  * Cursors are walked backwards in sort order, as this allows them to leverage maxKey() in order to be compared in O(1).
  */
-const stepDiffCursor = <K, V>(cursor: DiffCursor<K, V>, stepToNode?: boolean): boolean => {
+function stepDiffCursor<K, V>(cursor: DiffCursor<K, V>, stepToNode?: boolean): boolean {
   const { internalSpine, levelIndices, leaf } = cursor;
   if (stepToNode === true || leaf) {
     const levelsLength = levelIndices.length;
@@ -264,17 +245,17 @@ const stepDiffCursor = <K, V>(cursor: DiffCursor<K, V>, stepToNode?: boolean): b
     }
     return true;
   }
-};
+}
 
 /**
  * Compares two cursors and returns which cursor is ahead in the traversal.
  * Note that cursors advance in reverse sort order.
  */
-const compareDiffCursors = <K, V>(
+function compareDiffCursors<K, V>(
   cursorA: DiffCursor<K, V>,
   cursorB: DiffCursor<K, V>,
   compareKeys: (a: K, b: K) => number
-): number => {
+): number {
   const { height: heightA, currentKey: currentKeyA, levelIndices: levelIndicesA } = cursorA;
   const { height: heightB, currentKey: currentKeyB, levelIndices: levelIndicesB } = cursorB;
   // Reverse the comparison order, as cursors are advanced in reverse sorting order
@@ -291,6 +272,25 @@ const compareDiffCursors = <K, V>(
   const depthANormalized = levelIndicesA.length - (heightA - heightMin);
   const depthBNormalized = levelIndicesB.length - (heightB - heightMin);
   return depthANormalized - depthBNormalized;
-};
+}
 
-export default diffAgainst;
+/**
+ * A walkable pointer into a BTree for computing efficient diffs between trees with shared data.
+ * - A cursor points to either a key/value pair (KVP) or a node (which can be either a leaf or an internal node).
+ *   As a consequence, a cursor cannot be created for an empty tree.
+ * - A cursor can be walked forwards using `step`. A cursor can be compared to another cursor to
+ *   determine which is ahead in advancement.
+ * - A cursor is valid only for the tree it was created from, and only until the first edit made to
+ *   that tree since the cursor's creation.
+ * - A cursor contains a key for the current location, which is the maxKey when the cursor points to a node
+ *   and a key corresponding to a value when pointing to a leaf.
+ * - Leaf is only populated if the cursor points to a KVP. If this is the case, levelIndices.length === internalSpine.length + 1
+ *   and levelIndices[levelIndices.length - 1] is the index of the value.
+ */
+type DiffCursor<K, V> = {
+  height: number;
+  internalSpine: BNode<K, V>[][];
+  levelIndices: number[];
+  leaf: BNode<K, V> | undefined;
+  currentKey: K;
+};

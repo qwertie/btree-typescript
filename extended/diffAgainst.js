@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.diffAgainst = void 0;
 var b_tree_1 = require("../b+tree");
 /**
  * Computes the differences between `treeA` and `treeB`.
@@ -14,6 +13,8 @@ var b_tree_1 = require("../b+tree");
  * @param onlyA Callback invoked for all keys only present in `treeA`.
  * @param onlyB Callback invoked for all keys only present in `treeB`.
  * @param different Callback invoked for all keys with differing values.
+ * @returns The first `break` payload returned by a handler, or `undefined` if no handler breaks.
+ * @throws Error if the supplied trees were created with different comparators.
  */
 function diffAgainst(_treeA, _treeB, onlyA, onlyB, different) {
     var treeA = _treeA;
@@ -126,11 +127,11 @@ function diffAgainst(_treeA, _treeB, onlyA, onlyB, different) {
         return finishCursorWalk(otherCursor, thisCursor, compareKeys, onlyB);
     return undefined;
 }
-exports.diffAgainst = diffAgainst;
+exports.default = diffAgainst;
 /**
  * Finishes walking `cursor` once the other cursor has already completed its walk.
  */
-var finishCursorWalk = function (cursor, cursorFinished, compareKeys, callback) {
+function finishCursorWalk(cursor, cursorFinished, compareKeys, callback) {
     var compared = compareDiffCursors(cursor, cursorFinished, compareKeys);
     if (compared === 0) {
         if (!stepDiffCursor(cursor))
@@ -140,11 +141,11 @@ var finishCursorWalk = function (cursor, cursorFinished, compareKeys, callback) 
         (0, b_tree_1.check)(false, 'cursor walk terminated early');
     }
     return stepToEnd(cursor, callback);
-};
+}
 /**
  * Walks the cursor to the end of the tree, invoking the callback for each key/value pair.
  */
-var stepToEnd = function (cursor, callback) {
+function stepToEnd(cursor, callback) {
     var canStep = true;
     while (canStep) {
         var leaf = cursor.leaf, levelIndices = cursor.levelIndices, currentKey = cursor.currentKey;
@@ -157,8 +158,8 @@ var stepToEnd = function (cursor, callback) {
         canStep = stepDiffCursor(cursor);
     }
     return undefined;
-};
-var makeDiffCursor = function (internal) {
+}
+function makeDiffCursor(internal) {
     var root = internal._root;
     return {
         height: internal.height,
@@ -167,12 +168,12 @@ var makeDiffCursor = function (internal) {
         leaf: undefined,
         currentKey: root.maxKey()
     };
-};
+}
 /**
  * Advances the cursor to the next step in the walk of its tree.
  * Cursors are walked backwards in sort order, as this allows them to leverage maxKey() in order to be compared in O(1).
  */
-var stepDiffCursor = function (cursor, stepToNode) {
+function stepDiffCursor(cursor, stepToNode) {
     var internalSpine = cursor.internalSpine, levelIndices = cursor.levelIndices, leaf = cursor.leaf;
     if (stepToNode === true || leaf) {
         var levelsLength = levelIndices.length;
@@ -229,12 +230,12 @@ var stepDiffCursor = function (cursor, stepToNode) {
         }
         return true;
     }
-};
+}
 /**
  * Compares two cursors and returns which cursor is ahead in the traversal.
  * Note that cursors advance in reverse sort order.
  */
-var compareDiffCursors = function (cursorA, cursorB, compareKeys) {
+function compareDiffCursors(cursorA, cursorB, compareKeys) {
     var heightA = cursorA.height, currentKeyA = cursorA.currentKey, levelIndicesA = cursorA.levelIndices;
     var heightB = cursorB.height, currentKeyB = cursorB.currentKey, levelIndicesB = cursorB.levelIndices;
     // Reverse the comparison order, as cursors are advanced in reverse sorting order
@@ -250,5 +251,4 @@ var compareDiffCursors = function (cursorA, cursorB, compareKeys) {
     var depthANormalized = levelIndicesA.length - (heightA - heightMin);
     var depthBNormalized = levelIndicesB.length - (heightB - heightMin);
     return depthANormalized - depthBNormalized;
-};
-exports.default = diffAgainst;
+}

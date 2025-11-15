@@ -184,7 +184,6 @@ export function simpleComparator(a: any, b: any): number {
 export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap<K,V>
 {
   private _root: BNode<K, V> = EmptyLeaf as BNode<K,V>;
-  _size: number = 0;
   _maxNodeSize: number;
 
   /**
@@ -212,16 +211,15 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   // ES6 Map<K,V> methods /////////////////////////////////////////////////////
 
   /** Gets the number of key-value pairs in the tree. */
-  get size() { return this._size; }
+  get size(): number { return this._root.size(); }
   /** Gets the number of key-value pairs in the tree. */
-  get length() { return this._size; }
+  get length(): number { return this.size; }
   /** Returns true iff the tree contains no key-value pairs. */
-  get isEmpty() { return this._size === 0; }
+  get isEmpty(): boolean { return this._root.size() === 0; }
 
   /** Releases the tree so that its size is 0. */
   clear() {
     this._root = EmptyLeaf as BNode<K,V>;
-    this._size = 0;
   }
 
   forEach(callback: (v:V, k:K, tree:BTree<K,V>) => void, thisArg?: any): number;
@@ -290,7 +288,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     if (result === true || result === false)
       return result;
     // Root node has split, so create a new root node.
-    this._root = new BNodeInternal<K,V>([this._root, result]);
+    const children = [this._root, result];
+    this._root = new BNodeInternal<K,V>(children, sumChildSizes(children));
     return true;
   }
 
@@ -615,7 +614,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     this._root.isShared = true;
     var result = new BTree<K,V>(undefined, this._compare, this._maxNodeSize);
     result._root = this._root;
-    result._size = this._size;
     return result as this;
   }
 
@@ -627,7 +625,6 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
   greedyClone(force?: boolean): this {
     var result = new BTree<K,V>(undefined, this._compare, this._maxNodeSize);
     result._root = this._root.greedyClone(force);
-    result._size = this._size;
     return result as this;
   }
 
@@ -926,7 +923,7 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
    *  skips the most expensive test - whether all keys are sorted - but it
    *  does check that maxKey() of the children of internal nodes are sorted. */
   checkValid() {
-    var size = this._root.checkValid(0, this, 0);
+    var [size] = this._root.checkValid(0, this, 0);
     check(size === this.size, "size mismatch: counted ", size, "but stored", this.size);
   }
 }
@@ -971,6 +968,10 @@ export class BNode<K,V> {
     this.keys = keys;
     this.values = values || undefVals as any[];
     this.isShared = undefined;
+  }
+
+  size(): number {
+    return this.keys.length;
   }
 
   ///////////////////////////////////////////////////////////////////////////
@@ -1111,7 +1112,7 @@ export class BNode<K,V> {
     return undefined;
   }
 
-  checkValid(depth: number, tree: BTree<K,V>, baseIndex: number): number {
+  checkValid(depth: number, tree: BTree<K,V>, baseIndex: number): [size: number, min: K, max: K] {
     var kL = this.keys.length, vL = this.values.length;
     check(this.values === undefVals ? kL <= vL : kL === vL,
       "keys/values length mismatch: depth", depth, "with lengths", kL, vL, "and baseIndex", baseIndex);
@@ -1121,7 +1122,12 @@ export class BNode<K,V> {
     // it can't be merged with adjacent nodes. However, the parent will
     // verify that the average node size is at least half of the maximum.
     check(depth == 0 || kL > 0, "empty leaf at depth", depth, "and baseIndex", baseIndex);
-    return kL;
+    for (var i = 1; i < kL; i++) {
+      var c = tree._compare(this.keys[i-1], this.keys[i]);
+      check(c < 0, "keys out of order at depth", depth, "and baseIndex", baseIndex + i - 1,
+        ": ", this.keys[i-1], " !< ", this.keys[i]);
+    }
+    return [kL, this.keys[0], this.keys[kL - 1]];
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1132,8 +1138,6 @@ export class BNode<K,V> {
     if (i < 0) {
       // key does not exist yet
       i = ~i;
-      tree._size++;
-      
       if (this.keys.length < tree._maxNodeSize) {
         return this.insertInLeaf(i, key, value, tree);
       } else {
@@ -1251,7 +1255,6 @@ export class BNode<K,V> {
               this.keys.splice(i, 1);
               if (this.values !== undefVals)
                 this.values.splice(i, 1);
-              tree._size--;
               i--;
               iHigh--;
             } else if (result.hasOwnProperty('value')) {
@@ -1286,12 +1289,13 @@ export class BNodeInternal<K,V> extends BNode<K,V> {
   // children, but I find it easier to keep the array lengths equal: each
   // keys[i] caches the value of children[i].maxKey().
   children: BNode<K,V>[];
+  _size: number;
 
   /** 
    * This does not mark `children` as shared, so it is the responsibility of the caller
    * to ensure children are either marked shared, or aren't included in another tree.
    */
-  constructor(children: BNode<K,V>[], keys?: K[]) {
+  constructor(children: BNode<K,V>[], size: number, keys?: K[]) {
     if (!keys) {
       keys = [];
       for (var i = 0; i < children.length; i++)
@@ -1299,19 +1303,24 @@ export class BNodeInternal<K,V> extends BNode<K,V> {
     }
     super(keys);
     this.children = children;
+    this._size = size;
   }
 
   clone(): BNode<K,V> {
     var children = this.children.slice(0);
     for (var i = 0; i < children.length; i++)
       children[i].isShared = true;
-    return new BNodeInternal<K,V>(children, this.keys.slice(0));
+    return new BNodeInternal<K,V>(children, this._size, this.keys.slice(0));
+  }
+
+  size(): number {
+    return this._size;
   }
 
   greedyClone(force?: boolean): BNode<K,V> {
     if (this.isShared && !force)
       return this;
-    var nu = new BNodeInternal<K,V>(this.children.slice(0), this.keys.slice(0));
+    var nu = new BNodeInternal<K,V>(this.children.slice(0), this._size, this.keys.slice(0));
     for (var i = 0; i < nu.children.length; i++)
       nu.children[i] = nu.children[i].greedyClone(force);
     return nu;
@@ -1356,27 +1365,42 @@ export class BNodeInternal<K,V> extends BNode<K,V> {
     return result;
   }
 
-  checkValid(depth: number, tree: BTree<K,V>, baseIndex: number): number {
+  checkValid(depth: number, tree: BTree<K,V>, baseIndex: number): [size: number, min: K, max: K] {
     let kL = this.keys.length, cL = this.children.length;
     check(kL === cL, "keys/children length mismatch: depth", depth, "lengths", kL, cL, "baseIndex", baseIndex);
     check(kL > 1 || depth > 0, "internal node has length", kL, "at depth", depth, "baseIndex", baseIndex);
     let size = 0, c = this.children, k = this.keys, childSize = 0;
+    let prevMinKey: K | undefined = undefined;
+    let prevMaxKey: K | undefined = undefined;
     for (var i = 0; i < cL; i++) {
-      size += c[i].checkValid(depth + 1, tree, baseIndex + size);
-      childSize += c[i].keys.length;
+      var child = c[i];
+      var [subtreeSize, minKey, maxKey] = child.checkValid(depth + 1, tree, baseIndex + size);
+      check(subtreeSize === child.size(), "cached size mismatch at depth", depth, "index", i, "baseIndex", baseIndex);
+      check(subtreeSize === 1 || tree._compare(minKey, maxKey) < 0, "child node keys not sorted at depth", depth, "index", i, "baseIndex", baseIndex);
+      if (prevMinKey !== undefined && prevMaxKey !== undefined) {
+        check(!areOverlapping(prevMinKey, prevMaxKey, minKey, maxKey, tree._compare), "children keys not sorted at depth", depth, "index", i, "baseIndex", baseIndex,
+          ": ", prevMaxKey, " !< ", minKey);
+        check(tree._compare(prevMaxKey, minKey) < 0, "children keys not sorted at depth", depth, "index", i, "baseIndex", baseIndex,
+          ": ", prevMaxKey, " !< ", minKey);
+      }
+      prevMinKey = minKey;
+      prevMaxKey = maxKey;
+      size += subtreeSize;
+      childSize += child.keys.length;
       check(size >= childSize, "wtf", baseIndex); // no way this will ever fail
-      check(i === 0 || c[i-1].constructor === c[i].constructor, "type mismatch, baseIndex:", baseIndex);
-      if (c[i].maxKey() != k[i])
-        check(false, "keys[", i, "] =", k[i], "is wrong, should be ", c[i].maxKey(), "at depth", depth, "baseIndex", baseIndex);
+      check(i === 0 || c[i-1].constructor === child.constructor, "type mismatch, baseIndex:", baseIndex);
+      if (child.maxKey() != k[i])
+        check(false, "keys[", i, "] =", k[i], "is wrong, should be ", child.maxKey(), "at depth", depth, "baseIndex", baseIndex);
       if (!(i === 0 || tree._compare(k[i-1], k[i]) < 0))
         check(false, "sort violation at depth", depth, "index", i, "keys", k[i-1], k[i]);
     }
+    check(this._size === size, "internal node cached size mismatch at depth", depth, "baseIndex", baseIndex, "cached", this._size, "actual", size);
     // 2020/08: BTree doesn't always avoid grossly undersized nodes,
     // but AFAIK such nodes are pretty harmless, so accept them.
     let toofew = childSize === 0; // childSize < (tree.maxNodeSize >> 1)*cL;
     if (toofew || childSize > tree.maxNodeSize*cL)
       check(false, toofew ? "too few" : "too many", "children (", childSize, size, ") at depth", depth, "maxNodeSize:", tree.maxNodeSize, "children.length:", cL, "baseIndex:", baseIndex);
-    return size;
+    return [size, this.minKey()!, this.maxKey()];
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1407,7 +1431,9 @@ export class BNodeInternal<K,V> extends BNode<K,V> {
       }
     }
 
+    var oldSize = child.size();
     var result = child.set(key, value, overwrite, tree);
+    this._size += child.size() - oldSize;
     if (result === false)
       return false;
     this.keys[i] = child.maxKey();
@@ -1437,6 +1463,7 @@ export class BNodeInternal<K,V> extends BNode<K,V> {
   insert(i: index, child: BNode<K,V>) {
     this.children.splice(i, 0, child);
     this.keys.splice(i, 0, child.maxKey());
+    this._size += child.size();
   }
 
   /**
@@ -1445,24 +1472,54 @@ export class BNodeInternal<K,V> extends BNode<K,V> {
    */
   splitOffRightSide() {
     // assert !this.isShared;
-    var half = this.children.length >> 1;
-    return new BNodeInternal<K,V>(this.children.splice(half), this.keys.splice(half));
+    const half = this.children.length >> 1;
+    const newChildren = this.children.splice(half);
+    const newKeys = this.keys.splice(half);
+    const sizePrev = this._size;
+    this._size = sumChildSizes(this.children);
+    const newNode = new BNodeInternal<K,V>(newChildren, sizePrev - this._size, newKeys);
+    return newNode;
+  }
+
+  /**
+   * Split this node.
+   * Modifies this to remove the first half of the items, returning a separate node containing them.
+   */
+  splitOffLeftSide() {
+    // assert !this.isShared;
+    const half = this.children.length >> 1;
+    const newChildren = this.children.splice(0, half);
+    const newKeys = this.keys.splice(0, half);
+    const sizePrev = this._size;
+    this._size = sumChildSizes(this.children);
+    const newNode = new BNodeInternal<K,V>(newChildren, sizePrev - this._size, newKeys);
+    return newNode;
   }
 
   takeFromRight(rhs: BNode<K,V>) {
     // Reminder: parent node must update its copy of key for this node
     // assert: neither node is shared
     // assert rhs.keys.length > (maxNodeSize/2 && this.keys.length<maxNodeSize)
+    const rhsInternal = rhs as BNodeInternal<K,V>;
     this.keys.push(rhs.keys.shift()!);
-    this.children.push((rhs as BNodeInternal<K,V>).children.shift()!);
+    const child = rhsInternal.children.shift()!;
+    this.children.push(child);
+    const size = child.size();
+    rhsInternal._size -= size;
+    this._size += size;
   }
 
   takeFromLeft(lhs: BNode<K,V>) {
     // Reminder: parent node must update its copy of key for this node
     // assert: neither node is shared
     // assert rhs.keys.length > (maxNodeSize/2 && this.keys.length<maxNodeSize)
+    const lhsInternal = lhs as BNodeInternal<K,V>;
+    const child = lhsInternal.children.pop()!;
     this.keys.unshift(lhs.keys.pop()!);
-    this.children.unshift((lhs as BNodeInternal<K,V>).children.pop()!);
+    this.children.unshift(child);
+    const size = child.size();
+    lhsInternal._size -= size;
+    this._size += size;
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1489,12 +1546,15 @@ export class BNodeInternal<K,V> extends BNode<K,V> {
     } else if (i <= iHigh) {
       try {
         for (; i <= iHigh; i++) {
-          if (children[i].isShared)
-            children[i] = children[i].clone();
-          var result = children[i].forRange(low, high, includeHigh, editMode, tree, count, onFound);
+          let child = children[i];
+          if (child.isShared)
+            children[i] = child = child.clone();
+          const beforeSize = child.size();
+          const result = child.forRange(low, high, includeHigh, editMode, tree, count, onFound);
           // Note: if children[i] is empty then keys[i]=undefined.
           //       This is an invalid state, but it is fixed below.
-          keys[i] = children[i].maxKey();
+          keys[i] = child.maxKey();
+          this._size += child.size() - beforeSize;
           if (typeof result !== 'number')
             return result;
           count = result;
@@ -1510,7 +1570,8 @@ export class BNodeInternal<K,V> extends BNode<K,V> {
               this.tryMerge(i, tree._maxNodeSize);
             } else { // child is empty! delete it!
               keys.splice(i, 1);
-              children.splice(i, 1);
+              const removed = children.splice(i, 1);
+              check(removed[0].size() === 0, "emptiness cleanup");
             }
           }
         }
@@ -1549,6 +1610,7 @@ export class BNodeInternal<K,V> extends BNode<K,V> {
     this.keys.push.apply(this.keys, rhs.keys);
     const rhsChildren = (rhs as any as BNodeInternal<K,V>).children;
     this.children.push.apply(this.children, rhsChildren);
+    this._size += rhs.size();
 
     if (rhs.isShared && !this.isShared) {
       // All children of a shared node are implicitly shared, and since their new
@@ -1576,6 +1638,61 @@ export class BNodeInternal<K,V> extends BNode<K,V> {
 // Reading outside the bounds of an array is relatively slow because it
 // has the side effect of scanning the prototype chain.
 var undefVals: any[] = [];
+
+/**
+ * Sums the sizes of the given child nodes.
+ * @param children the child nodes
+ * @returns the total size
+ * @internal
+ */
+export function sumChildSizes<K,V>(children: BNode<K,V>[]): number {
+  var total = 0;
+  for (var i = 0; i < children.length; i++)
+    total += children[i].size();
+  return total;
+}
+
+/**
+ * Determines whether two nodes are overlapping in key range.
+ * Takes the leftmost known key of each node to avoid a log(n) min calculation.
+ * This will still catch overlapping nodes because of the alternate hopping walk of the cursors.
+ * @internal
+ */
+export function areOverlapping<K,V>(
+  aMin: K,
+  aMax: K,
+  bMin: K,
+  bMax: K,
+  cmp: (x:K,y:K)=>number
+): boolean {
+  // There are 4 possibilities:
+  // 1. aMin.........aMax
+  //            bMin.........bMax
+  // (aMax between bMin and bMax)
+  // 2.            aMin.........aMax
+  //      bMin.........bMax
+  // (aMin between bMin and bMax)
+  // 3. aMin.............aMax
+  //         bMin....bMax
+  // (aMin and aMax enclose bMin and bMax; note this includes equality cases)
+  // 4.      aMin....aMax
+  //     bMin.............bMax
+  // (bMin and bMax enclose aMin and aMax; note equality cases are identical to case 3)
+  const aMinBMin = cmp(aMin, bMin);
+  const aMinBMax = cmp(aMin, bMax);
+  if (aMinBMin >= 0 && aMinBMax <= 0) {
+    // case 2 or 4
+    return true;
+  }
+  const aMaxBMin = cmp(aMax, bMin);
+  const aMaxBMax = cmp(aMax, bMax);
+  if (aMaxBMin >= 0 && aMaxBMax <= 0) {
+    // case 1
+    return true;
+  }
+  // case 3 or no overlap
+  return aMinBMin <= 0 && aMaxBMax >= 0;
+}
 
 const Delete = {delete: true}, DeleteRange = () => Delete;
 const Break = {break: true};

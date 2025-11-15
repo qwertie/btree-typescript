@@ -83,7 +83,8 @@
       "jsx",
       "json"
     ],
-    "bail": true,
+    "verbose": true,
+    "bail": false,
     "testEnvironment": "node"
   },
   "testpack": {
