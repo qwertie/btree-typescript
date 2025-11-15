@@ -89,7 +89,7 @@ describe('Set operation fuzz tests', () => {
               // 6. Idempotence.
               expect(treeA.union(treeA, keepEither).toArray()).toEqual(treeA.toArray());
               expect(treeA.intersect(treeA, keepEither).toArray()).toEqual(treeA.toArray());
-              expect(treeA.subtract(diffAB).toArray()).toEqual(treeA.subtract(treeB).toArray());
+              expect(diffAB.subtract(treeB).toArray()).toEqual(diffAB.toArray());
 
               // 7. Commutativity.
               expect(intersection.toArray()).toEqual(treeB.intersect(treeA, keepEither).toArray());
