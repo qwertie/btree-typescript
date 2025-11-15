@@ -29,6 +29,7 @@ export function decompose<K, V>(
   combineFn: (key: K, leftValue: V, rightValue: V) => V | undefined,
   ignoreRight: boolean = false
 ): DecomposeResult<K, V> {
+  const maxNodeSize = left._maxNodeSize;
   const cmp = left._compare;
   check(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
   // Holds the disjoint nodes that result from decomposition.
@@ -55,16 +56,8 @@ export function decompose<K, V>(
     alternatingPush(disjoint, 0, leaf);
   }
 
-  const flushPendingEntries = () => {
-    const createdLeaves = flushToLeaves(pending, left._maxNodeSize, onLeafCreation);
-    if (createdLeaves > 0) {
-      tallestIndex = alternatingCount(disjoint) - 1;
-      tallestHeight = 0;
-    }
-  };
-
   const addSharedNodeToDisjointSet = (node: BNode<K, V>, height: number) => {
-    flushPendingEntries();
+    flushToLeaves(pending, maxNodeSize, onLeafCreation);
     node.isShared = true;
     alternatingPush(disjoint, height, node);
     if (height > tallestHeight) {
@@ -351,7 +344,12 @@ export function decompose<K, V>(
   }
 
   // Ensure any trailing non-disjoint entries are added
-  flushPendingEntries();
+  const createdLeaves = flushToLeaves(pending, maxNodeSize, onLeafCreation);
+  // In fully interleaved cases, no leaves may be created until now
+  if (tallestHeight < 0 && createdLeaves > 0) {
+    tallestIndex = alternatingCount(disjoint) - 1;
+    tallestHeight = 0;
+  }
   return { disjoint, tallestIndex };
 }
 
@@ -462,6 +460,7 @@ function processSide<K, V>(
     const currentHeight = spine.length - 1; // height is number of internal levels; 0 means leaf
     const subtree = alternatingGetSecond(disjoint, i);
     const subtreeHeight = alternatingGetFirst(disjoint, i);
+    check(subtreeHeight <= currentHeight, "Subtree taller than spine during reconstruction.");
     const insertionDepth = currentHeight - (subtreeHeight + 1); // node at this depth has children of height 'subtreeHeight'
 
     // Ensure path is unshared before mutation

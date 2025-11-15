@@ -16,6 +16,7 @@ var parallelWalk_1 = require("./parallelWalk");
  */
 function decompose(left, right, combineFn, ignoreRight) {
     if (ignoreRight === void 0) { ignoreRight = false; }
+    var maxNodeSize = left._maxNodeSize;
     var cmp = left._compare;
     (0, b_tree_1.check)(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
     // Holds the disjoint nodes that result from decomposition.
@@ -37,15 +38,8 @@ function decompose(left, right, combineFn, ignoreRight) {
     var onLeafCreation = function (leaf) {
         (0, shared_1.alternatingPush)(disjoint, 0, leaf);
     };
-    var flushPendingEntries = function () {
-        var createdLeaves = (0, shared_1.flushToLeaves)(pending, left._maxNodeSize, onLeafCreation);
-        if (createdLeaves > 0) {
-            tallestIndex = (0, shared_1.alternatingCount)(disjoint) - 1;
-            tallestHeight = 0;
-        }
-    };
     var addSharedNodeToDisjointSet = function (node, height) {
-        flushPendingEntries();
+        (0, shared_1.flushToLeaves)(pending, maxNodeSize, onLeafCreation);
         node.isShared = true;
         (0, shared_1.alternatingPush)(disjoint, height, node);
         if (height > tallestHeight) {
@@ -270,7 +264,12 @@ function decompose(left, right, combineFn, ignoreRight) {
         }
     }
     // Ensure any trailing non-disjoint entries are added
-    flushPendingEntries();
+    var createdLeaves = (0, shared_1.flushToLeaves)(pending, maxNodeSize, onLeafCreation);
+    // In fully interleaved cases, no leaves may be created until now
+    if (tallestHeight < 0 && createdLeaves > 0) {
+        tallestIndex = (0, shared_1.alternatingCount)(disjoint) - 1;
+        tallestHeight = 0;
+    }
     return { disjoint: disjoint, tallestIndex: tallestIndex };
 }
 exports.decompose = decompose;
@@ -337,6 +336,7 @@ function processSide(branchingFactor, disjoint, spine, start, end, step, sideInd
         var currentHeight = spine.length - 1; // height is number of internal levels; 0 means leaf
         var subtree = (0, shared_1.alternatingGetSecond)(disjoint, i);
         var subtreeHeight = (0, shared_1.alternatingGetFirst)(disjoint, i);
+        (0, b_tree_1.check)(subtreeHeight <= currentHeight, "Subtree taller than spine during reconstruction.");
         var insertionDepth = currentHeight - (subtreeHeight + 1); // node at this depth has children of height 'subtreeHeight'
         // Ensure path is unshared before mutation
         ensureNotShared(spine, isSharedFrontierDepth, insertionDepth, sideIndex);
