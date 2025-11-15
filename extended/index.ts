@@ -3,6 +3,7 @@ import type { BTreeWithInternals } from './shared';
 import diffAgainst from './diffAgainst';
 import forEachKeyInBoth from './forEachKeyInBoth';
 import forEachKeyNotIn from './forEachKeyNotIn';
+import intersect from './intersect';
 import subtract from './subtract';
 import union from './union';
 import { bulkLoadRoot } from './bulkLoad';
@@ -121,6 +122,23 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
     callback: (key: K, value: V) => { break?: R } | void
   ): R | undefined {
     return forEachKeyNotIn(this, other, callback);
+  }
+
+  /**
+   * Returns a new tree containing only keys present in both trees.
+   * Neither tree is modified.
+   *
+   * Complexity is O(N + M) in the fully overlapping case and additionally bounded by O(log(N + M) * D),
+   * where `D` is the number of disjoint key ranges, because disjoint subtrees are skipped entirely.
+   * In practice, that means for keys of random distribution the performance is linear and for keys with significant
+   * numbers of non-overlapping key ranges it is much faster.
+   * @param other The other tree to intersect with this one.
+   * @param combineFn Called for keys that appear in both trees. Return the desired value.
+   * @returns A new `BTreeEx` populated with the intersection.
+   * @throws Error if the trees were created with different comparators.
+   */
+  intersect(other: BTreeEx<K, V>, combineFn: (key: K, leftValue: V, rightValue: V) => V): BTreeEx<K, V> {
+    return intersect<BTreeEx<K, V>, K, V>(this, other, combineFn);
   }
 
   /**

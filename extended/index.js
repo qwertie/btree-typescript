@@ -42,6 +42,7 @@ var b_tree_1 = __importStar(require("../b+tree"));
 var diffAgainst_1 = __importDefault(require("./diffAgainst"));
 var forEachKeyInBoth_1 = __importDefault(require("./forEachKeyInBoth"));
 var forEachKeyNotIn_1 = __importDefault(require("./forEachKeyNotIn"));
+var intersect_1 = __importDefault(require("./intersect"));
 var subtract_1 = __importDefault(require("./subtract"));
 var union_1 = __importDefault(require("./union"));
 var bulkLoad_1 = require("./bulkLoad");
@@ -143,6 +144,22 @@ var BTreeEx = /** @class */ (function (_super) {
      */
     BTreeEx.prototype.forEachKeyNotIn = function (other, callback) {
         return (0, forEachKeyNotIn_1.default)(this, other, callback);
+    };
+    /**
+     * Returns a new tree containing only keys present in both trees.
+     * Neither tree is modified.
+     *
+     * Complexity is O(N + M) in the fully overlapping case and additionally bounded by O(log(N + M) * D),
+     * where `D` is the number of disjoint key ranges, because disjoint subtrees are skipped entirely.
+     * In practice, that means for keys of random distribution the performance is linear and for keys with significant
+     * numbers of non-overlapping key ranges it is much faster.
+     * @param other The other tree to intersect with this one.
+     * @param combineFn Called for keys that appear in both trees. Return the desired value.
+     * @returns A new `BTreeEx` populated with the intersection.
+     * @throws Error if the trees were created with different comparators.
+     */
+    BTreeEx.prototype.intersect = function (other, combineFn) {
+        return (0, intersect_1.default)(this, other, combineFn);
     };
     /**
      * Efficiently unions this tree with `other`, reusing subtrees wherever possible without modifying either input.
