@@ -68,6 +68,14 @@
   },
   "dependencies": {},
   "jest": {
+    "globals": {
+      "ts-jest": {
+        "diagnostics": {
+          "//": "There are errors accessing internal symbols during safePublish; treat them as warnings",
+          "warnOnly": true
+        }
+      }
+    },
     "transform": {
       "^.+\\.tsx?$": "ts-jest"
     },
@@ -101,11 +109,15 @@
     "test-folder": ".testpack",
     "rmdir": true,
     "dirty": true,
-    "replace-import//": "// Use the minified version in .testpack",
+    "replace-import//": [
+      "The first argument ensures tests run against the minified version of the library.",
+      "The second and third patterns are similar to defaults in testpack, but only replace relative imports that navigate",
+      "outside the test directory. This is necessary because the test directory is not published with the package."
+    ],
     "replace-import": [
-      "|./b\\+tree|$P/b+tree|",
-      "|..?|$P|",
-      "|..?([/\\\\].*)|$P$1|"
+      "|\\./b\\+tree|$P/b+tree|",
+      "|\\.\\.|$P|",
+      "|\\.\\.([/\\\\].*)|$P$1|"
     ]
   }
 }
