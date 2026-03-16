@@ -187,7 +187,7 @@ export function fixMaxSize(maxNodeSize?: number) {
  * 
  * @author David Piepgrass
  */
-export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap<K,V>
+class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap<K,V>
 {
   private _root: BNode<K, V> = EmptyLeaf as BNode<K,V>;
   _maxNodeSize: number;
@@ -933,6 +933,8 @@ export default class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap
     check(size === this.size, "size mismatch: counted ", size, "but stored", this.size);
   }
 }
+
+export { BTree, BTree as default };
 
 /** A TypeScript helper function that simply returns its argument, typed as 
  *  `ISortedSet<K>` if the BTree implements it, as it does if `V extends undefined`.
