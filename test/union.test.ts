@@ -609,6 +609,16 @@ describe.each([32, 10, 4])('BTree union tests with fanout %i', (maxNodeSize) => 
     expect(result.toArray()).toEqual([[1, 10], [4, 400]]);
   });
 
+  it('Union excluding every key returns an empty tree', () => {
+    const keys = range(0, maxNodeSize * 2 + 1);
+    const tree1 = buildTree(keys);
+    const tree2 = buildTree(keys, 10);
+
+    const { result } = expectUnionMatchesBaseline(tree1, tree2, () => undefined);
+    expect(result.size).toBe(0);
+    expectRootLeafState(result, true);
+  });
+
   it('Union with large disjoint ranges', () => {
     const tree1 = new BTreeEx<number, number>([], compareNumbers, maxNodeSize);
     const tree2 = new BTreeEx<number, number>([], compareNumbers, maxNodeSize);

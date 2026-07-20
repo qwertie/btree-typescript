@@ -315,6 +315,8 @@ function buildFromDecomposition(constructor, branchingFactor, decomposed, cmp, m
     var heights = decomposed.heights, nodes = decomposed.nodes, tallestIndex = decomposed.tallestIndex;
     (0, b_tree_1.check)(heights.length === nodes.length, "Decompose result has mismatched heights and nodes.");
     var disjointEntryCount = heights.length;
+    if (disjointEntryCount === 0)
+        return new constructor(undefined, cmp, maxNodeSize);
     // Now we have a set of disjoint subtrees and we need to merge them into a single tree.
     // To do this, we start with the tallest subtree from the disjoint set and, for all subtrees
     // to the "right" and "left" of it in sorted order, we append them onto the appropriate side

@@ -404,6 +404,8 @@ export function buildFromDecomposition<TBTree extends BTree<K, V>, K, V>(
   const { heights, nodes, tallestIndex } = decomposed;
   check(heights.length === nodes.length, "Decompose result has mismatched heights and nodes.");
   const disjointEntryCount = heights.length;
+  if (disjointEntryCount === 0)
+    return new constructor(undefined, cmp, maxNodeSize) as unknown as TBTree;
 
   // Now we have a set of disjoint subtrees and we need to merge them into a single tree.
   // To do this, we start with the tallest subtree from the disjoint set and, for all subtrees
