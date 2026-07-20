@@ -6,10 +6,11 @@ import { createCursor, moveForwardOne, moveTo, getKey, noop } from "./parallelWa
  * Calls the supplied `callback` for each key/value pair that is in `includeTree` but not in `excludeTree`
  * (set subtraction). The callback runs in sorted key order and neither tree is modified.
  *
- * Complexity is O(N + M) when the key ranges overlap heavily, and additionally bounded by O(log(N + M) * D)
- * where `D` is the number of disjoint ranges between the trees, because non-overlapping subtrees are skipped.
- * In practice, that means for keys of random distribution the performance is linear and for keys with significant
- * numbers of non-overlapping key ranges it is much faster.
+ * Let `N` and `M` be the sizes of `includeTree` and `excludeTree`, respectively, `I` the number of keys present
+ * in both trees, `U = N + M - 2I` the number of keys present in exactly one tree, `H` the larger tree height,
+ * and `G` the number of maximal runs of keys belonging exclusively to one particular tree in merged key order.
+ * With a fixed max node size and normally occupied nodes, the complexity is
+ * `O(min(I + U, N + G * H))`.
  * @param includeTree The tree to iterate keys from.
  * @param excludeTree Keys present in this tree are omitted from the callback.
  * @param callback Invoked for keys that are in `includeTree` but not `excludeTree`. It can cause iteration to early exit by returning `{ break: R }`.

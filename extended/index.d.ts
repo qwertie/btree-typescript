@@ -30,6 +30,8 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * (obtained by calling the `clone` or `with` APIs) and will avoid any iteration of shared state.
      * The handlers can cause computation to early exit by returning `{ break: R }`.
      * Neither collection should be mutated during the comparison (inside your callbacks), as this method assumes they remain stable.
+     * Time complexity is O(N + M) in the worst case, but is linear in the number of nodes and entries visited after
+     * shared subtrees have been skipped.
      * @param other The tree to compute a diff against.
      * @param onlyThis Callback invoked for all keys only present in `this`.
      * @param onlyOther Callback invoked for all keys only present in `other`.
@@ -48,10 +50,10 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * Calls the supplied `callback` for each key/value pair shared by this tree and `other`, in sorted key order.
      * Neither tree is modified.
      *
-     * Complexity is O(N + M) when the trees overlap heavily, and additionally bounded by O(log(N + M) * D)
-     * where `D` is the number of disjoint key ranges between the trees, because disjoint subtrees are skipped.
-     * In practice, that means for keys of random distribution the performance is linear and for keys with significant
-     * numbers of non-overlapping key ranges it is much faster.
+     * Let `N` and `M` be the input sizes, `I` the number of keys present in both trees, `U = N + M - 2I`
+     * the number of keys present in exactly one tree, `H` the larger tree height, and `G` the number of maximal
+     * runs of keys belonging exclusively to one particular tree in merged key order. With a fixed max node size
+     * and normally occupied nodes, the complexity is `O(min(I + U, I + G * H))`.
      * @param other The other tree to compare with this one.
      * @param callback Called for keys that appear in both trees. It can cause iteration to early exit by returning `{ break: R }`.
      * @returns The first `break` payload returned by the callback, or `undefined` if the walk finishes.
@@ -64,10 +66,11 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * Calls the supplied `callback` for each key/value pair that exists in this tree but not in `other`
      * (set subtraction). The callback runs in sorted key order and neither tree is modified.
      *
-     * Complexity is O(N + M) when the key ranges overlap heavily, and additionally bounded by O(log(N + M) * D)
-     * where `D` is the number of disjoint ranges between the trees, because non-overlapping subtrees are skipped.
-     * In practice, that means for keys of random distribution the performance is linear and for keys with significant
-     * numbers of non-overlapping key ranges it is much faster.
+     * Let `N` and `M` be the sizes of this tree and `other`, respectively, `I` the number of keys present in both
+     * trees, `U = N + M - 2I` the number of keys present in exactly one tree, `H` the larger tree height, and `G`
+     * the number of maximal runs of keys belonging exclusively to one particular tree in merged key order.
+     * With a fixed max node size and normally occupied nodes, the complexity is
+     * `O(min(I + U, N + G * H))`.
      * @param other Keys present in this tree will be omitted from the callback.
      * @param callback Invoked for keys unique to `this`. It can cause iteration to early exit by returning `{ break: R }`.
      * @returns The first `break` payload returned by the callback, or `undefined` if all qualifying keys are visited.
@@ -80,10 +83,10 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * Returns a new tree containing only keys present in both trees.
      * Neither tree is modified.
      *
-     * Complexity is O(N + M) in the fully overlapping case and additionally bounded by O(log(N + M) * D),
-     * where `D` is the number of disjoint key ranges, because disjoint subtrees are skipped entirely.
-     * In practice, that means for keys of random distribution the performance is linear and for keys with significant
-     * numbers of non-overlapping key ranges it is much faster.
+     * Let `N` and `M` be the input sizes, `I` the number of keys present in both trees, `U = N + M - 2I`
+     * the number of keys present in exactly one tree, `H` the larger tree height, and `G` the number of maximal
+     * runs of keys belonging exclusively to one particular tree in merged key order. With a fixed max node size
+     * and normally occupied nodes, the complexity is `O(min(I + U, I + G * H))`.
      * @param other The other tree to intersect with this one.
      * @param combineFn Called for keys that appear in both trees. Return the desired value.
      * @returns A new `BTreeEx` populated with the intersection.
@@ -93,10 +96,10 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
     /**
      * Efficiently unions this tree with `other`, reusing subtrees wherever possible without modifying either input.
      *
-     * Complexity is O(N + M) in the fully overlapping case, and additionally bounded by O(log(N + M) * D)
-     * where `D` is the number of disjoint key ranges, because disjoint subtrees are skipped entirely.
-     * In practice, that means for keys of random distribution the performance is linear and for keys with significant
-     * numbers of non-overlapping key ranges it is much faster.
+     * Let `N` and `M` be the input sizes, `I` the number of keys present in both trees, `U = N + M - 2I`
+     * the number of keys present in exactly one tree, `H` the larger tree height, and `G` the number of maximal
+     * runs of keys belonging exclusively to one particular tree in merged key order. With a fixed max node size
+     * and normally occupied nodes, the complexity is `O(min(I + U, I + G * H^2))`.
      * @param other The other tree to union with this one.
      * @param combineFn Called for keys that appear in both trees. Return the desired value, or `undefined` to omit the key.
      * @returns A new `BTreeEx` that contains the unioned key/value pairs.
@@ -107,11 +110,11 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * Returns a new tree containing only the keys that are present in this tree but not `other` (set subtraction).
      * Neither input tree is modified.
      *
-     * Complexity is O(N + M) for time and O(N) for allocations in the worst case. Additionally, time is bounded by
-     * O(log(N + M) * D1) and space by O(log N * D2) where `D1` is the number of disjoint key ranges between the trees
-     * and `D2` is the number of disjoint ranges inside this tree.
-     * In practice, that means for keys of random distribution the performance is linear and for keys with significant
-     * numbers of non-overlapping key ranges it is much faster.
+     * Let `N` and `M` be the input sizes, `I` the number of keys present in both trees, `U = N + M - 2I`
+     * the number of keys present in exactly one tree, `H` the larger tree height, and `G` the number of maximal
+     * runs of keys belonging exclusively to one particular tree in merged key order. With a fixed max node size
+     * and normally occupied nodes, the time complexity is `O(min(I + U, I + G * H^2))`.
+     * Allocations are O(N) in the worst case, but disjoint subtrees from this tree are reused.
      * @param other The tree whose keys will be removed from the result.
      * @returns A new `BTreeEx` representing `this \ other`.
      * @throws Error if the trees were created with different comparators or max node sizes.
