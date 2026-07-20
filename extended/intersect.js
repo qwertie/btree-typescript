@@ -10,10 +10,10 @@ var bulkLoad_1 = require("./bulkLoad");
  * Returns a new tree containing only keys present in both input trees.
  * Neither tree is modified.
  *
- * Complexity is O(N + M) in the fully overlapping case and additionally bounded by O(log(N + M) * D),
- * where `D` is the number of disjoint key ranges, because disjoint subtrees are skipped entirely.
- * In practice, that means for keys of random distribution the performance is linear and for keys with significant
- * numbers of non-overlapping key ranges it is much faster.
+ * Let `N` and `M` be the input sizes, `I` the number of keys present in both trees, `U = N + M - 2I`
+ * the number of keys present in exactly one tree, `H` the larger tree height, and `G` the number of maximal
+ * runs of keys belonging exclusively to one particular tree in merged key order. With a fixed max node size
+ * and normally occupied nodes, the complexity is `O(min(I + U, I + G * H))`.
  * @param treeA First tree to intersect.
  * @param treeB Second tree to intersect.
  * @param combineFn Called for keys that appear in both trees. Return the desired value.

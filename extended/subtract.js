@@ -6,11 +6,11 @@ var decompose_1 = require("./decompose");
  * Returns a new tree containing only the keys that are present in `targetTree` but not `subtractTree` (set subtraction).
  * Neither tree is modified.
  *
- * Complexity is O(N + M) for time and O(N) for allocations in the worst case. Additionally, time is bounded by
- * O(log(N + M) * D1) and space by O(log N * D2), where `D1` is the number of disjoint key ranges between the trees
- * and `D2` is the number of disjoint ranges inside `targetTree`, because disjoint subtrees are skipped entirely.
- * In practice, that means for keys of random distribution the performance is linear and for keys with significant
- * numbers of non-overlapping key ranges it is much faster.
+ * Let `N` and `M` be the input sizes, `I` the number of keys present in both trees, `U = N + M - 2I`
+ * the number of keys present in exactly one tree, `H` the larger tree height, and `G` the number of maximal
+ * runs of keys belonging exclusively to one particular tree in merged key order. With a fixed max node size
+ * and normally occupied nodes, the time complexity is `O(min(I + U, I + G * H^2))`.
+ * Allocations are O(N) in the worst case, but disjoint subtrees from `targetTree` are reused.
  * @param targetTree The tree to subtract from.
  * @param subtractTree The tree whose keys will be removed from the result.
  * @returns A new tree that contains the subtraction result.

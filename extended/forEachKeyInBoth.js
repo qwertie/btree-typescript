@@ -6,11 +6,10 @@ var parallelWalk_1 = require("./parallelWalk");
  * Calls the supplied `callback` for each key/value pair shared by both trees, in sorted key order.
  * Neither tree is modified.
  *
- * Complexity is O(N + M) when the trees overlap heavily, and additionally bounded by O(log(N + M) * D)
- * where `D` is the number of disjoint key ranges between the trees, because whole non-intersecting subtrees
- * are skipped.
- * In practice, that means for keys of random distribution the performance is linear and for keys with significant
- * numbers of non-overlapping key ranges it is much faster.
+ * Let `N` and `M` be the input sizes, `I` the number of keys present in both trees, `U = N + M - 2I`
+ * the number of keys present in exactly one tree, `H` the larger tree height, and `G` the number of maximal
+ * runs of keys belonging exclusively to one particular tree in merged key order. With a fixed max node size
+ * and normally occupied nodes, the complexity is `O(min(I + U, I + G * H))`.
  * @param treeA First tree to compare.
  * @param treeB Second tree to compare.
  * @param callback Invoked for keys that appear in both trees. It can cause iteration to early exit by returning `{ break: R }`.

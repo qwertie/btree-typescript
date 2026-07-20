@@ -9,6 +9,8 @@ import { type BTreeWithInternals } from './shared';
  * (obtained by calling the `clone` or `with` APIs) and will avoid any iteration of shared state.
  * The handlers can cause computation to early exit by returning `{ break: R }`.
  * Neither collection should be mutated during the comparison (inside your callbacks), as this method assumes they remain stable.
+ * Time complexity is O(N + M) in the worst case, but is linear in the number of nodes and entries visited after
+ * shared subtrees have been skipped.
  * @param treeA The tree whose differences will be reported via the callbacks.
  * @param treeB The tree to compute a diff against.
  * @param onlyA Callback invoked for all keys only present in `treeA`.
