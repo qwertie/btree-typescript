@@ -27,7 +27,7 @@ export interface IMapSource<K=any, V=any> extends ISetSource<K>
   /** Calls callbackFn once for each key-value pair present in the map object.
    *  The ES6 Map class sends the value to the callback before the key, so
    *  this interface must do likewise. */
-  forEach(callbackFn: (v:V, k:K, map:IMapSource<K,V>) => void, thisArg: any): void;
+  forEach(callbackFn: (v:V, k:K, map:IMapSource<K,V>) => void, thisArg?: any): void;
   
   /** Returns an iterator that provides all key-value pairs from the collection (as arrays of length 2). */
   entries(): IterableIterator<[K,V]>;

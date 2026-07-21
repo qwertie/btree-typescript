@@ -36,7 +36,7 @@ Features
   with all keys in a given node.
 - Includes neat stuff such as `Range` methods for batch operations
 - Throws an exception if you try to use `NaN` as a key, but infinity is allowed.
-- No dependencies. 19.5K minified, 5.5K gzipped (plus an extra 22.8K minified / 9.2K gzipped if you use `BTreeEx`)
+- No dependencies. 19.6K minified, 5.5K gzipped, plus an extra 22.0K minified / 9.0K gzipped if you use `BTreeEx`
 - Includes a lattice of interfaces for TypeScript users (see below)
 - Supports diffing computation between two trees that is highly optimized for the case
   in which a majority of nodes are shared (such as when persistent methods are used).
@@ -77,7 +77,7 @@ The "scanning" methods (`forEach, forRange, editRange, deleteRange`) will normal
 #### Persistent methods
 
 - Get a new tree with one pair changed: `t.with(key, value)`
-- Get a new tree with multiple pairs changed: `t.withPairs([[k1,v1], [k2,v2]])`
+- Get a new tree with multiple pairs changed: `t.withPairs([[k1,v1], [k2,v2]], overwriteFlag)`
 - Ensure that specified keys exist in a new tree: `t.withKeys([k1,k2])`
 - Get a new tree with one pair removed: `t.without(key)`
 - Get a new tree with specific pairs removed: `t.withoutKeys(keys)`
@@ -715,6 +715,17 @@ Benchmarks (in milliseconds for integer keys/values)
 
 Version history
 ---------------
+
+### v2.1.2 ###
+
+- Fix `IMapSource.forEach` having incorrectly mandatory `thisArg`
+- [PR from Taylor Williams](https://github.com/qwertie/btree-typescript/pull/54):
+  - Fixed an issue in which certain extended algorithms misbehave when two non-empty key-identical trees are processed with compareFn => undefined, resulting in a malformed tree.
+  - Updated documentation of the extended algorithms with correct complexity bounds
+
+### v2.1.1 ###
+
+- Make `BTree` also available as non-default export (#35)
 
 ### v2.1.0 ###
 

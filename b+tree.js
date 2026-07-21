@@ -15,7 +15,7 @@ var __extends = (this && this.__extends) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EmptyBTree = exports.check = exports.areOverlapping = exports.sumChildSizes = exports.BNodeInternal = exports.BNode = exports.asSet = exports.fixMaxSize = exports.simpleComparator = exports.defaultComparator = void 0;
+exports.EmptyBTree = exports.check = exports.areOverlapping = exports.sumChildSizes = exports.BNodeInternal = exports.BNode = exports.asSet = exports.default = exports.BTree = exports.fixMaxSize = exports.simpleComparator = exports.defaultComparator = void 0;
 /**
  * Compares DefaultComparables to form a strict partial ordering.
  *
@@ -839,6 +839,7 @@ var BTree = /** @class */ (function () {
     };
     return BTree;
 }());
+exports.BTree = BTree;
 exports.default = BTree;
 /** A TypeScript helper function that simply returns its argument, typed as
  *  `ISortedSet<K>` if the BTree implements it, as it does if `V extends undefined`.

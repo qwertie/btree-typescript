@@ -103,7 +103,7 @@ export declare function simpleComparator(a: (number | string)[], b: (number | st
  *
  * @author David Piepgrass
  */
-export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISortedMap<K, V> {
+declare class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISortedMap<K, V> {
     private _root;
     _maxNodeSize: number;
     /**
@@ -419,6 +419,7 @@ export default class BTree<K = any, V = any> implements ISortedMapF<K, V>, ISort
      *  takes more time to check (O(size), which is technically the same big-O). */
     checkValid(checkOrdering?: boolean): void;
 }
+export { BTree, BTree as default };
 /** A TypeScript helper function that simply returns its argument, typed as
  *  `ISortedSet<K>` if the BTree implements it, as it does if `V extends undefined`.
  *  If `V` cannot be `undefined`, it returns `unknown` instead. Or at least, that
