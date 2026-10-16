@@ -5,10 +5,10 @@ var decompose_1 = require("./decompose");
 /**
  * Efficiently unions two trees, reusing subtrees wherever possible without mutating either input.
  *
- * Let `N` and `M` be the input sizes, `I` the number of keys present in both trees, `U = N + M - 2I`
- * the number of keys present in exactly one tree, `H` the larger tree height, and `G` the number of maximal
- * runs of keys belonging exclusively to one particular tree in merged key order. With a fixed max node size
- * and normally occupied nodes, the complexity is `O(min(I + U, I + G * H^2))`.
+ * Let `A` and `B` be the input sizes, `H` the larger tree height (counting a leaf as height 1),
+ * and `S` the number of maximal contiguous runs of keys from one tree in the totally ordered
+ * list of keys from both trees.
+ * The runtime of this method is `O(min(A + B, S * H))`.
  * @param treeA First tree to union.
  * @param treeB Second tree to union.
  * @param combineFn Called for keys that appear in both trees. Return the desired value, or

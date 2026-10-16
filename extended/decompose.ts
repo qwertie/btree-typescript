@@ -502,11 +502,12 @@ function processSide<K, V>(
   // These sizes are added to the depth above the insertion point because the insertion updates the direct parent of the insertion.
   // These sizes are flushed upward any time we need to insert at level higher than pending unflushed sizes.
   // E.g. in our example, if we later insert at depth 0, we will add 5 to the node at depth 1 and the root at depth 0 before inserting.
-  // This scheme enables us to avoid a log(n) propagation of sizes for each insertion.
+  // This scheme enables us to avoid a log(n) traversal cost per element in the decomposition list
   const unflushedSizes: number[] = new Array(spine.length).fill(0); // pre-fill to avoid "holey" array
 
+  // the spine is lazily expanded, so we must track height separately rather than rely on its length
+  let currentHeight = spine.length - 1;
   for (let i = start; i != end; i += step) {
-    const currentHeight = spine.length - 1; // height is number of internal levels; 0 means leaf
     const subtree = nodes[i];
     const subtreeHeight = heights[i];
     const isEntryInsertion = subtreeHeight === -1;
@@ -516,6 +517,7 @@ function processSide<K, V>(
     const insertionDepth = currentHeight - (subtreeHeight + 1);
 
     // Ensure path is unshared before mutation
+    // Only clones down to insertionDepth
     ensureNotShared(context, isSharedFrontierDepth, insertionDepth);
 
     let insertionCount: number; // non-recursive
@@ -537,6 +539,8 @@ function processSide<K, V>(
     );
 
     // Update sizes on spine above the shared ancestor before we expand
+    // We only update from isSharedFrontierDepth to expansionDepth, because any nodes deeper than isSharedFrontierDepth
+    // is guaranteed to be up to date
     updateSizeAndMax(context, unflushedSizes, isSharedFrontierDepth, expansionDepth);
 
     let newRoot: BNodeInternal<K, V> | undefined = undefined;
@@ -553,6 +557,7 @@ function processSide<K, V>(
     if (newRoot) {
       // Set the spine root to the highest up new node; the rest of the spine is updated below
       spine[0] = newRoot;
+      currentHeight++;
       unflushedSizes.push(0); // new root level, keep unflushed sizes in sync
       sizeChangeDepth++; // account for the spine lengthening
     }
@@ -560,12 +565,12 @@ function processSide<K, V>(
     isSharedFrontierDepth = sizeChangeDepth + 1;
     unflushedSizes[sizeChangeDepth] += insertionSize;
 
-    // Finally, update the frontier from the highest new node downward
-    // Note that this is often the point where the new subtree is attached,
-    // but in the case of cascaded splits it may be higher up.
-    updateFrontier(context, expansionDepth);
-    check(isSharedFrontierDepth === spine.length - 1 || spine[isSharedFrontierDepth].isShared === true, "Non-leaf subtrees must be shared.");
-    check(unflushedSizes.length === spine.length, "Unflushed sizes length mismatch after root split.");
+    // Here the frontier is also only refreshed along the path from the insertion depth to the top of the
+    // expansion cascade. This is guaranteed to be amortized O(1) because long lengths grows exponentially
+    // less likely.
+    updateFrontier(context, expansionDepth, isSharedFrontierDepth);
+    check(isSharedFrontierDepth === currentHeight || spine[isSharedFrontierDepth].isShared === true, "Non-leaf subtrees must be shared.");
+    check(unflushedSizes.length === currentHeight + 1, "Unflushed sizes length mismatch after root split.");
     // Useful for debugging:
     //updateSizeAndMax(context, unflushedSizes, spine.length - 1, 0);
     //spine[0].checkValid(0, { _compare: cmp } as unknown as BTree<K, V>, 0);
@@ -677,6 +682,7 @@ function splitUpwardsAndInsertEntries<K, V>(
 
 /**
  * Clone along the spine from [isSharedFrontierDepth to depthTo] inclusive so path is safe to mutate.
+ * Populates any omitted frontier descendants as it clones them.
  * Short-circuits if first shared node is deeper than depthTo (the insertion depth).
  */
 function ensureNotShared<K, V>(
@@ -732,25 +738,24 @@ function updateSizeAndMax<K, V>(
 };
 
 /**
- * Update a spine (frontier) from a specific depth down, inclusive.
- * Extends the frontier array if it is not already as long as the frontier.
+ * Refresh a frontier from depthLastValid through depthToInclusive (or the leaf).
+ * Discard deeper entries, which may refer to an obsolete path.
  */
-function updateFrontier<K, V>(context: SideContext<K, V>, depthLastValid: number): void {
+function updateFrontier<K, V>(
+  context: SideContext<K, V>,
+  depthLastValid: number,
+  depthToInclusive: number = Number.POSITIVE_INFINITY
+): void {
   const { spine: frontier, sideIndex } = context;
   check(frontier.length > depthLastValid, "updateFrontier: depthLastValid exceeds frontier height");
-  const startingAncestor = frontier[depthLastValid];
-  if (startingAncestor.isLeaf)
-    return;
-  const internal = startingAncestor as BNodeInternal<K, V>;
-  let cur: BNode<K, V> = internal.children[sideIndex(internal)];
-  let depth = depthLastValid + 1;
-  while (!cur.isLeaf) {
+  let cur = frontier[depthLastValid];
+  let depth = depthLastValid;
+  while (depth < depthToInclusive && !cur.isLeaf) {
     const ni = cur as BNodeInternal<K, V>;
-    frontier[depth] = ni;
     cur = ni.children[sideIndex(ni)];
-    depth++;
+    frontier[++depth] = cur;
   }
-  frontier[depth] = cur;
+  frontier.length = depth + 1;
 };
 
 /**

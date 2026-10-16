@@ -50,10 +50,10 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * Calls the supplied `callback` for each key/value pair shared by this tree and `other`, in sorted key order.
      * Neither tree is modified.
      *
-     * Let `N` and `M` be the input sizes, `I` the number of keys present in both trees, `U = N + M - 2I`
-     * the number of keys present in exactly one tree, `H` the larger tree height, and `G` the number of maximal
-     * runs of keys belonging exclusively to one particular tree in merged key order. With a fixed max node size
-     * and normally occupied nodes, the complexity is `O(min(I + U, I + G * H))`.
+     * Let `A` and `B` be the input sizes, `H` the larger tree height (counting a leaf as height 1),
+     * and `S` the number of maximal contiguous runs of keys from one tree in the totally ordered
+     * list of keys from both trees.
+     * The runtime of this method is `O(min(A + B, S * H))`.
      * @param other The other tree to compare with this one.
      * @param callback Called for keys that appear in both trees. It can cause iteration to early exit by returning `{ break: R }`.
      * @returns The first `break` payload returned by the callback, or `undefined` if the walk finishes.
@@ -66,11 +66,10 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * Calls the supplied `callback` for each key/value pair that exists in this tree but not in `other`
      * (set subtraction). The callback runs in sorted key order and neither tree is modified.
      *
-     * Let `N` and `M` be the sizes of this tree and `other`, respectively, `I` the number of keys present in both
-     * trees, `U = N + M - 2I` the number of keys present in exactly one tree, `H` the larger tree height, and `G`
-     * the number of maximal runs of keys belonging exclusively to one particular tree in merged key order.
-     * With a fixed max node size and normally occupied nodes, the complexity is
-     * `O(min(I + U, N + G * H))`.
+     * Let `A` and `B` be the sizes of this tree and `other`, respectively,
+     * `H` the larger tree height (counting a leaf as height 1), and `S` the number of maximal
+     * contiguous runs of keys from one tree in the totally ordered list of keys from both trees.
+     * The runtime of this method is `O(min(A + B, A + S * H))`.
      * @param other Keys present in this tree will be omitted from the callback.
      * @param callback Invoked for keys unique to `this`. It can cause iteration to early exit by returning `{ break: R }`.
      * @returns The first `break` payload returned by the callback, or `undefined` if all qualifying keys are visited.
@@ -83,10 +82,10 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * Returns a new tree containing only keys present in both trees.
      * Neither tree is modified.
      *
-     * Let `N` and `M` be the input sizes, `I` the number of keys present in both trees, `U = N + M - 2I`
-     * the number of keys present in exactly one tree, `H` the larger tree height, and `G` the number of maximal
-     * runs of keys belonging exclusively to one particular tree in merged key order. With a fixed max node size
-     * and normally occupied nodes, the complexity is `O(min(I + U, I + G * H))`.
+     * Let `A` and `B` be the input sizes, `H` the larger tree height (counting a leaf as height 1),
+     * and `S` the number of maximal contiguous runs of keys from one tree in the totally ordered
+     * list of keys from both trees.
+     * The runtime of this method is `O(min(A + B, S * H))`.
      * @param other The other tree to intersect with this one.
      * @param combineFn Called for keys that appear in both trees. Return the desired value.
      * @returns A new `BTreeEx` populated with the intersection.
@@ -96,10 +95,10 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
     /**
      * Efficiently unions this tree with `other`, reusing subtrees wherever possible without modifying either input.
      *
-     * Let `N` and `M` be the input sizes, `I` the number of keys present in both trees, `U = N + M - 2I`
-     * the number of keys present in exactly one tree, `H` the larger tree height, and `G` the number of maximal
-     * runs of keys belonging exclusively to one particular tree in merged key order. With a fixed max node size
-     * and normally occupied nodes, the complexity is `O(min(I + U, I + G * H^2))`.
+     * Let `A` and `B` be the input sizes, `H` the larger tree height (counting a leaf as height 1),
+     * and `S` the number of maximal contiguous runs of keys from one tree in the totally ordered
+     * list of keys from both trees.
+     * The runtime of this method is `O(min(A + B, S * H))`.
      * @param other The other tree to union with this one.
      * @param combineFn Called for keys that appear in both trees. Return the desired value, or `undefined` to omit the key.
      * @returns A new `BTreeEx` that contains the unioned key/value pairs.
@@ -110,11 +109,11 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * Returns a new tree containing only the keys that are present in this tree but not `other` (set subtraction).
      * Neither input tree is modified.
      *
-     * Let `N` and `M` be the input sizes, `I` the number of keys present in both trees, `U = N + M - 2I`
-     * the number of keys present in exactly one tree, `H` the larger tree height, and `G` the number of maximal
-     * runs of keys belonging exclusively to one particular tree in merged key order. With a fixed max node size
-     * and normally occupied nodes, the time complexity is `O(min(I + U, I + G * H^2))`.
-     * Allocations are O(N) in the worst case, but disjoint subtrees from this tree are reused.
+     * Let `A` and `B` be the input sizes, `H` the larger tree height (counting a leaf as height 1),
+     * and `S` the number of maximal contiguous runs of keys from one tree in the totally ordered
+     * list of keys from both trees.
+     * The runtime of this method is `O(min(A + B, S * H))`.
+     * Allocations are O(A) in the worst case, but disjoint subtrees from this tree are reused.
      * @param other The tree whose keys will be removed from the result.
      * @returns A new `BTreeEx` representing `this \ other`.
      * @throws Error if the trees were created with different comparators or max node sizes.
