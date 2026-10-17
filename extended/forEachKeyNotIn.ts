@@ -8,7 +8,9 @@ import { createCursor, moveForwardOne, moveTo, getKey, noop } from "./parallelWa
  *
  * Let `A` and `B` be the sizes of `includeTree` and `excludeTree`, respectively,
  * `H` the larger tree height (counting a leaf as height 1), and `S` the number of maximal
- * contiguous runs of keys from one tree in the totally ordered list of keys from both trees.
+ * contiguous runs of keys from one tree in the totally ordered list of keys from both trees,
+ * in which a key present in both trees is listed once per tree (so every shared key starts
+ * a new run, and `S` is at least the number of shared keys).
  * The runtime of this method is `O(min(A + B, A + S * H))`.
  * @param includeTree The tree to iterate keys from.
  * @param excludeTree Keys present in this tree are omitted from the callback.

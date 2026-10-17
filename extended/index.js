@@ -119,7 +119,8 @@ var BTreeEx = /** @class */ (function (_super) {
      *
      * Let `A` and `B` be the input sizes, `H` the larger tree height (counting a leaf as height 1),
      * and `S` the number of maximal contiguous runs of keys from one tree in the totally ordered
-     * list of keys from both trees.
+     * list of keys from both trees, in which a key present in both trees is listed once per tree
+     * (so every shared key starts a new run, and `S` is at least the number of shared keys).
      * The runtime of this method is `O(min(A + B, S * H))`.
      * @param other The other tree to compare with this one.
      * @param callback Called for keys that appear in both trees. It can cause iteration to early exit by returning `{ break: R }`.
@@ -135,7 +136,9 @@ var BTreeEx = /** @class */ (function (_super) {
      *
      * Let `A` and `B` be the sizes of this tree and `other`, respectively,
      * `H` the larger tree height (counting a leaf as height 1), and `S` the number of maximal
-     * contiguous runs of keys from one tree in the totally ordered list of keys from both trees.
+     * contiguous runs of keys from one tree in the totally ordered list of keys from both trees,
+     * in which a key present in both trees is listed once per tree (so every shared key starts
+     * a new run, and `S` is at least the number of shared keys).
      * The runtime of this method is `O(min(A + B, A + S * H))`.
      * @param other Keys present in this tree will be omitted from the callback.
      * @param callback Invoked for keys unique to `this`. It can cause iteration to early exit by returning `{ break: R }`.
@@ -151,7 +154,8 @@ var BTreeEx = /** @class */ (function (_super) {
      *
      * Let `A` and `B` be the input sizes, `H` the larger tree height (counting a leaf as height 1),
      * and `S` the number of maximal contiguous runs of keys from one tree in the totally ordered
-     * list of keys from both trees.
+     * list of keys from both trees, in which a key present in both trees is listed once per tree
+     * (so every shared key starts a new run, and `S` is at least the number of shared keys).
      * The runtime of this method is `O(min(A + B, S * H))`.
      * @param other The other tree to intersect with this one.
      * @param combineFn Called for keys that appear in both trees. Return the desired value.
@@ -166,7 +170,8 @@ var BTreeEx = /** @class */ (function (_super) {
      *
      * Let `A` and `B` be the input sizes, `H` the larger tree height (counting a leaf as height 1),
      * and `S` the number of maximal contiguous runs of keys from one tree in the totally ordered
-     * list of keys from both trees.
+     * list of keys from both trees, in which a key present in both trees is listed once per tree
+     * (so every shared key starts a new run, and `S` is at least the number of shared keys).
      * The runtime of this method is `O(min(A + B, S * H))`.
      * @param other The other tree to union with this one.
      * @param combineFn Called for keys that appear in both trees. Return the desired value, or `undefined` to omit the key.
@@ -182,7 +187,8 @@ var BTreeEx = /** @class */ (function (_super) {
      *
      * Let `A` and `B` be the input sizes, `H` the larger tree height (counting a leaf as height 1),
      * and `S` the number of maximal contiguous runs of keys from one tree in the totally ordered
-     * list of keys from both trees.
+     * list of keys from both trees, in which a key present in both trees is listed once per tree
+     * (so every shared key starts a new run, and `S` is at least the number of shared keys).
      * The runtime of this method is `O(min(A + B, S * H))`.
      * Allocations are O(A) in the worst case, but disjoint subtrees from this tree are reused.
      * @param other The tree whose keys will be removed from the result.

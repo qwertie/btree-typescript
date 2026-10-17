@@ -8,7 +8,8 @@ import { buildFromDecomposition, decompose } from './decompose';
  *
  * Let `A` and `B` be the input sizes, `H` the larger tree height (counting a leaf as height 1),
  * and `S` the number of maximal contiguous runs of keys from one tree in the totally ordered
- * list of keys from both trees.
+ * list of keys from both trees, in which a key present in both trees is listed once per tree
+ * (so every shared key starts a new run, and `S` is at least the number of shared keys).
  * The runtime of this method is `O(min(A + B, S * H))`.
  * Allocations are O(A) in the worst case, but disjoint subtrees from `targetTree` are reused.
  * @param targetTree The tree to subtract from.
