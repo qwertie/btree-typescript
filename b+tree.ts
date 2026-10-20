@@ -611,6 +611,33 @@ class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap<K,V>
   /** Gets the highest key in the tree. Complexity: O(1) */
   maxKey(): K | undefined { return this._root.maxKey(); }
 
+  /** Gets the key-value pair at the specified position in sorted order,
+   *  e.g. getPairAt(0) returns the pair with the lowest key and
+   *  getPairAt(size - 1) returns the pair with the highest key.
+   *  Complexity: O(log size)
+   * @param index Zero-based position of the pair to get.
+   * @param reusedArray Optional array used repeatedly to store key-value pairs, to 
+   *        avoid creating a new array each time you call this method.
+   * @returns the pair at the given index, or undefined if the index is not
+   *        an integer in the range 0 <= index < size.
+   */
+  getPairAt(index: number, reusedArray?: [K,V]): [K,V]|undefined {
+    if (!(index >= 0 && index < this._root.size()) || index !== Math.floor(index))
+      return undefined;
+    let node = this._root;
+    while (!node.isLeaf) {
+      const children = (node as BNodeInternal<K,V>).children;
+      let i = 0;
+      for (let childSize = children[0].size(); index >= childSize; childSize = children[++i].size())
+        index -= childSize;
+      node = children[i];
+    }
+    reusedArray = reusedArray || ([] as unknown as [K,V]);
+    reusedArray[0] = node.keys[index];
+    reusedArray[1] = node.values[index];
+    return reusedArray;
+  }
+
   /** Quickly clones the tree by marking the root node as shared. 
    *  Both copies remain editable. When you modify either copy, any
    *  nodes that are shared (or potentially shared) between the two

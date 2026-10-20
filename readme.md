@@ -56,6 +56,7 @@ Features
 - Scan a range of items: `t.forRange(lowKey, highKey, includeHiFlag, (k,v) => {...})`
 - Count the number of keys in a range: `c = t.forRange(loK, hiK, includeHi, undefined)`
 - Get smallest or largest key: `t.minKey()`, `t.maxKey()`
+- Get the pair at a given index in sorted order, in O(log size) time: `t.getPairAt(i)`
 - Get next larger key/pair than `k`: `t.nextHigherKey(k)`, `t.nextHigherPair(k)`
 - Get largest key/pair that is lower than `k`: `t.nextLowerKey(k)`, `t.nextLowerPair(k)`
 - Freeze to prevent modifications: `t.freeze()` (you can also `t.unfreeze()`)
