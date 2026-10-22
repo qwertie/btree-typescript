@@ -665,6 +665,19 @@ function testBTree(maxNodeSize: number)
       expect(i).toBe(-1);
     });
 
+    test(`getPairAt [size ${size}]`, () => {
+      const array = list.getArray(), reused = [] as unknown as [number,number];
+      for (let i = 0; i < array.length; i++) {
+        expect(tree.getPairAt(i)).toEqual(array[i]);
+        expect(tree.getPairAt(i, reused)).toBe(reused);
+        expect(reused).toEqual(array[i]);
+      }
+      expect(tree.getPairAt(-1)).toBeUndefined();
+      expect(tree.getPairAt(array.length)).toBeUndefined();
+      expect(tree.getPairAt(0.5)).toBeUndefined();
+      expect(tree.getPairAt(NaN)).toBeUndefined();
+    });
+
     test(`Insert with few values [size ${size}]`, () => {
       let list = new SortedArray<number,string|undefined>();
       for (var i = 0; i < size; i++) {
@@ -674,8 +687,33 @@ function testBTree(maxNodeSize: number)
       }
       let tree = new BTree<number,string|undefined>(list.getArray(), undefined, maxNodeSize);
       expectTreeEqualTo(tree, list);
+      const array = list.getArray();
+      for (let i = 0; i < array.length; i++)
+        expect(tree.getPairAt(i)).toEqual(array[i]);
     });
   }
+
+  test(`getPairAt on empty tree, after deletions, and on clones`, () => {
+    const tree = new BTree<number,number>(undefined, undefined, maxNodeSize);
+    expect(tree.getPairAt(0)).toBeUndefined();
+    for (let i = 0; i < 1000; i++)
+      tree.set(i, i * 10);
+    tree.deleteRange(100, 200, false);
+    for (let i = 0; i < 1000; i += 3)
+      tree.delete(i);
+    const clone = tree.clone();
+    clone.set(-1, -10);
+    clone.deleteRange(500, 600, false);
+    for (const t of [tree, clone]) {
+      const array = t.toArray();
+      expect(t.size).toBe(array.length);
+      for (let i = 0; i < array.length; i++)
+        expect(t.getPairAt(i)).toEqual(array[i]);
+      expect(t.getPairAt(array.length)).toBeUndefined();
+    }
+    tree.clear();
+    expect(tree.getPairAt(0)).toBeUndefined();
+  });
 
   describe(`Next higher/lower methods`, () => {
     test(`nextLower/nextHigher methods return undefined in an empty tree`, () => {
