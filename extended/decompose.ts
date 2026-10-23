@@ -12,35 +12,81 @@ export type DecomposeResult<K, V> = { heights: number[], nodes: BNode<K, V>[], t
 
 /**
  * Payload type used by decomposition cursors.
- */
-type DecomposePayload = { disqualified: boolean };
-
-/**
- * Target load factor for leaves created from loose entries during decomposition.
  * @internal
  */
-export const decomposeLoadFactor = 0.7;
+export type DecomposePayload = { disqualified: boolean };
+
+const decomposeLoadFactor = 0.7;
 
 /**
- * Decomposes two trees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
- * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
- * The algorithm is a parallel tree walk using two cursors. The trailing cursor (behind in key space) is walked forward
- * until it is at or after the leading cursor. As it does this, any whole nodes or subtrees it passes are guaranteed to 
- * be disjoint. This is true because the leading cursor was also previously walked in this way, and is thus pointing to 
- * the first key at or after the trailing cursor's previous position.
- * The cursor walk is efficient, meaning it skips over disjoint subtrees entirely rather than visiting every leaf.
- * Note: some of the returned leaves may be underfilled.
+ * Creates a payload for a node that has not (yet) been found to overlap anything excluded from the result.
  * @internal
  */
-export function decompose<K, V>(
-  left: BTreeWithInternals<K, V>,
-  right: BTreeWithInternals<K, V>,
-  combineFn: (key: K, leftValue: V, rightValue: V) => V | undefined,
-  ignoreRight: boolean = false
-): DecomposeResult<K, V> {
-  const maxNodeSize = left._maxNodeSize;
-  const cmp = left._compare;
-  check(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
+export function makeDecomposePayload(): DecomposePayload {
+  return { disqualified: false };
+}
+
+/**
+ * Marks all nodes at or above depthFrom in the cursor spine as disqualified (non-disjoint).
+ * @internal
+ */
+export function disqualifySpine<K, V>(cursor: Cursor<K, V, DecomposePayload>, depthFrom: number): void {
+  const spine = cursor.spine;
+  for (let i = depthFrom; i >= 0; --i) {
+    const payload = spine[i].payload;
+    // Safe to early out because we always disqualify all ancestors of a disqualified node
+    // That is correct because every ancestor of a non-disjoint node is also non-disjoint
+    // because it must enclose the non-disjoint range.
+    if (payload.disqualified)
+      break;
+    payload.disqualified = true;
+  }
+}
+
+/**
+ * Step-up callback for a cursor walking over keys that are excluded from the result (so nothing is collected).
+ * Stepping down into any child but the first means the walk passes over keys in this node, so it and its
+ * ancestors are disqualified.
+ * @internal
+ */
+export function disqualifyOnStepUp<K, V>(
+  _parent: BNodeInternal<K, V>,
+  _height: number,
+  _payload: DecomposePayload,
+  _fromIndex: number,
+  spineIndex: number,
+  stepDownIndex: number,
+  cursorThis: Cursor<K, V, DecomposePayload>
+): void {
+  if (stepDownIndex > 0)
+    disqualifySpine(cursorThis, spineIndex);
+}
+
+/**
+ * Step-down counterpart of {@link disqualifyOnStepUp}.
+ * @internal
+ */
+export function disqualifyOnStepDown<K, V>(
+  _node: BNodeInternal<K, V>,
+  _height: number,
+  spineIndex: number,
+  stepDownIndex: number,
+  cursorThis: Cursor<K, V, DecomposePayload>
+): void {
+  if (stepDownIndex > 0)
+    disqualifySpine(cursorThis, spineIndex);
+}
+
+/**
+ * Creates the state of a decomposition (the growing set of disjoint nodes plus pending loose entries) along with
+ * cursor callbacks that collect everything a cursor walks past. Subtrees the cursor skips over whole are reused
+ * unless disqualified; disqualified leaves contribute their walked-over entries instead.
+ * Callers supply their own `onEnterLeaf`, since deciding whether an entered leaf overlaps excluded keys depends on
+ * what is being excluded. Callers may also swap in other callbacks for stretches of keys that should be excluded.
+ * Call `finish` once walking is complete.
+ * @internal
+ */
+export function createDecomposer<K, V>(maxNodeSize: number) {
   // Holds the disjoint nodes that result from decomposition.
   // Stored as parallel arrays of (height, node) to avoid creating many tiny tuples
   const disjointHeights: number[] = [];
@@ -71,11 +117,14 @@ export function decompose<K, V>(
     disjointNodes.push(leaf);
   };
 
-  const addSharedNodeToDisjointSet = (node: BNode<K, V>, height: number) => {
-    // flush pending entries
+  const flushPending = () => {
     makeLeavesFrom(pendingKeys, pendingValues, maxNodeSize, decomposeLoadFactor, onLeafCreation);
     pendingKeys.length = 0;
     pendingValues.length = 0;
+  };
+
+  const addSharedNodeToDisjointSet = (node: BNode<K, V>, height: number) => {
+    flushPending();
 
     // Don't share underfilled leaves, instead mark them as needing merging
     if (node.isLeaf && node.keys.length < minSize) {
@@ -100,23 +149,6 @@ export function decompose<K, V>(
     }
   };
 
-  // Mark all nodes at or above depthFrom in the cursor spine as disqualified (non-disjoint)
-  const disqualifySpine = (cursor: Cursor<K, V, DecomposePayload>, depthFrom: number) => {
-    const spine = cursor.spine;
-    for (let i = depthFrom; i >= 0; --i) {
-      const payload = spine[i].payload;
-      // Safe to early out because we always disqualify all ancestors of a disqualified node
-      // That is correct because every ancestor of a non-disjoint node is also non-disjoint
-      // because it must enclose the non-disjoint range.
-      if (payload.disqualified)
-        break;
-      payload.disqualified = true;
-    }
-  };
-
-  // Cursor payload factory
-  const makePayload = (): DecomposePayload => ({ disqualified: false });
-
   const pushLeafRange = (leaf: BNode<K, V>, from: number, toExclusive: number) => {
     const keys = leaf.keys;
     const values = leaf.values;
@@ -128,12 +160,11 @@ export function decompose<K, V>(
 
   const onMoveInLeaf = (
     leaf: BNode<K, V>,
-    payload: DecomposePayload,
+    _payload: DecomposePayload,
     fromIndex: number,
     toIndex: number,
     startedEqual: boolean
   ) => {
-    check(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
     const start = startedEqual ? fromIndex + 1 : fromIndex;
     if (start < toIndex)
       pushLeafRange(leaf, start, toIndex);
@@ -233,6 +264,41 @@ export function decompose<K, V>(
     }
   };
 
+  const finish = (): DecomposeResult<K, V> => {
+    // Ensure any trailing non-disjoint entries are added
+    flushPending();
+    // In cases like full interleaving, no leaves may be created until now
+    if (tallestHeight < 0 && disjointHeights.length > 0) {
+      tallestIndex = 0;
+    }
+    return { heights: disjointHeights, nodes: disjointNodes, tallestIndex };
+  };
+
+  return { pendingKeys, pendingValues, pushLeafRange, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, finish };
+}
+
+/**
+ * Decomposes two trees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
+ * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
+ * The algorithm is a parallel tree walk using two cursors. The trailing cursor (behind in key space) is walked forward
+ * until it is at or after the leading cursor. As it does this, any whole nodes or subtrees it passes are guaranteed to 
+ * be disjoint. This is true because the leading cursor was also previously walked in this way, and is thus pointing to 
+ * the first key at or after the trailing cursor's previous position.
+ * The cursor walk is efficient, meaning it skips over disjoint subtrees entirely rather than visiting every leaf.
+ * Note: some of the returned leaves may be underfilled.
+ * @internal
+ */
+export function decompose<K, V>(
+  left: BTreeWithInternals<K, V>,
+  right: BTreeWithInternals<K, V>,
+  combineFn: (key: K, leftValue: V, rightValue: V) => V | undefined,
+  ignoreRight: boolean = false
+): DecomposeResult<K, V> {
+  const cmp = left._compare;
+  check(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
+  const decomposer = createDecomposer<K, V>(left._maxNodeSize);
+  const { pendingKeys, pendingValues, pushLeafRange } = decomposer;
+
   const onEnterLeaf = (
     leaf: BNode<K, V>,
     destIndex: number,
@@ -257,37 +323,12 @@ export function decompose<K, V>(
   const maxKey = cmp(maxKeyLeft, maxKeyRight) >= 0 ? maxKeyLeft : maxKeyRight;
 
   // Initialize cursors at minimum keys.
-  const curA = createCursor<K, V, DecomposePayload>(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+  const { onMoveInLeaf, onExitLeaf, onStepUp, onStepDown } = decomposer;
+  const curA = createCursor<K, V, DecomposePayload>(left, makeDecomposePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
 
   let curB: typeof curA;
   if (ignoreRight) {
     const dummyPayload: DecomposePayload = { disqualified: true };
-    const onStepUpIgnore = (
-      _1: BNodeInternal<K, V>,
-      _2: number,
-      _3: DecomposePayload,
-      _4: number,
-      spineIndex: number,
-      stepDownIndex: number,
-      cursorThis: Cursor<K, V, DecomposePayload>
-    ) => {
-      if (stepDownIndex > 0) {
-        disqualifySpine(cursorThis, spineIndex);
-      }
-    };
-
-    const onStepDownIgnore = (
-      _: BNodeInternal<K, V>,
-      __: number,
-      spineIndex: number,
-      stepDownIndex: number,
-      cursorThis: Cursor<K, V, DecomposePayload>
-    ) => {
-      if (stepDownIndex > 0) {
-        disqualifySpine(cursorThis, spineIndex);
-      }
-    };
-
     const onEnterLeafIgnore = (
       leaf: BNode<K, V>,
       destIndex: number,
@@ -300,9 +341,9 @@ export function decompose<K, V>(
         disqualifySpine(cursorOther, cursorOther.spine.length - 1);
       }
     };
-    curB = createCursor<K, V, DecomposePayload>(right, () => dummyPayload, onEnterLeafIgnore, noop, noop, onStepUpIgnore, onStepDownIgnore);
+    curB = createCursor<K, V, DecomposePayload>(right, () => dummyPayload, onEnterLeafIgnore, noop, noop, disqualifyOnStepUp, disqualifyOnStepDown);
   } else {
-    curB = createCursor<K, V, DecomposePayload>(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+    curB = createCursor<K, V, DecomposePayload>(right, makeDecomposePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
   }
 
   // The guarantee that no overlapping interior nodes are accidentally reused relies on the careful
@@ -385,13 +426,7 @@ export function decompose<K, V>(
     }
   }
 
-  // Ensure any trailing non-disjoint entries are added
-  makeLeavesFrom(pendingKeys, pendingValues, maxNodeSize, decomposeLoadFactor, onLeafCreation);
-  // In cases like full interleaving, no leaves may be created until now
-  if (tallestHeight < 0 && disjointHeights.length > 0) {
-    tallestIndex = 0;
-  }
-  return { heights: disjointHeights, nodes: disjointNodes, tallestIndex };
+  return decomposer.finish();
 }
 
 /**
