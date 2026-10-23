@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.decomposeOmittingRange = exports.omitUnboundedErrorMsg = void 0;
+exports.omitUnboundedErrorMsg = void 0;
 var b_tree_1 = require("../b+tree");
 var shared_1 = require("./shared");
 var decompose_1 = require("./decompose");
@@ -49,7 +49,6 @@ exports.default = omit;
  * During the keep phases, every subtree the cursor skips over is wholly kept and is reused as-is. Nodes that contain
  * any omitted key are "disqualified": they cannot be reused, so only their kept children/entries are collected.
  * The caller must guarantee the range contains at least one key of the (non-empty) tree.
- * @internal
  */
 function decomposeOmittingRange(tree, start, end, includeEnd) {
     var maxNodeSize = tree._maxNodeSize;
@@ -199,4 +198,3 @@ function decomposeOmittingRange(tree, start, end, includeEnd) {
     }
     return { heights: heights, nodes: nodes, tallestIndex: tallestIndex };
 }
-exports.decomposeOmittingRange = decomposeOmittingRange;

@@ -77,9 +77,8 @@ type OmitPayload = { disqualified: boolean };
  * During the keep phases, every subtree the cursor skips over is wholly kept and is reused as-is. Nodes that contain
  * any omitted key are "disqualified": they cannot be reused, so only their kept children/entries are collected.
  * The caller must guarantee the range contains at least one key of the (non-empty) tree.
- * @internal
  */
-export function decomposeOmittingRange<K, V>(
+function decomposeOmittingRange<K, V>(
   tree: BTreeWithInternals<K, V>,
   start: K | undefined,
   end: K | undefined,
