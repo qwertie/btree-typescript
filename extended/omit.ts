@@ -1,4 +1,4 @@
-import BTree, { check } from '../b+tree';
+import BTree, { BNode } from '../b+tree';
 import { BTreeConstructor, type BTreeWithInternals } from './shared';
 import {
   buildFromDecomposition,
@@ -10,7 +10,7 @@ import {
   type DecomposePayload,
   type DecomposeResult
 } from './decompose';
-import { createCursor, Cursor, moveTo, noop } from './parallelWalk';
+import { createCursor, Cursor, getKey, moveTo, noop } from './parallelWalk';
 
 /**
  * Error message used when `omit` is called without either bound.
@@ -51,95 +51,89 @@ export default function omit<TBTree extends BTree<K, V>, K, V>(
   const _tree = tree as unknown as BTreeWithInternals<K, V>;
   const root = _tree._root;
   const cmp = _tree._compare;
+  // O(1) checks for cases in which nothing can be omitted
   if (root.size() === 0)
     return tree.clone();
-
-  // Find the first key that would be omitted. If there is none, nothing changes.
-  let firstOmitted: K | undefined;
-  if (start === undefined) {
-    firstOmitted = root.minKey();
-  } else {
-    const pair = tree.getPairOrNextHigher(start);
-    if (pair === undefined)
+  if (start !== undefined) {
+    if (cmp(start, root.maxKey()) > 0)
       return tree.clone();
-    firstOmitted = pair[0];
-  }
-  if (end !== undefined) {
-    const order = cmp(firstOmitted as K, end);
-    if (order > 0 || (order === 0 && !includeEnd))
-      return tree.clone();
+    if (end !== undefined) {
+      const order = cmp(start, end);
+      if (order > 0 || (order === 0 && !includeEnd))
+        return tree.clone();
+    }
   }
 
   const decomposed = decomposeOmittingRange(_tree, start, end, includeEnd);
+  if (decomposed === undefined)
+    return tree.clone();
   const constructor = tree.constructor as BTreeConstructor<TBTree, K, V>;
   return buildFromDecomposition(constructor, _tree._maxNodeSize, decomposed, cmp, _tree._maxNodeSize);
 }
 
 /**
  * Decomposes a tree into the maximal disjoint subtrees (and loose leaf entries) that lie outside of a key range.
- * A single cursor walks the tree in three phases:
- *   1. keep: from the minimum key to the first key >= `start`
- *   2. omit: from there to the first key after the range
- *   3. keep: from there off the end of the tree
- * The keep phases use the standard decomposition callbacks, which reuse every subtree the cursor skips over.
- * The omit phase swaps in callbacks that collect nothing and only disqualify the nodes containing omitted keys,
- * so that those nodes are not reused whole.
- * The caller must guarantee the range contains at least one key of the (non-empty) tree.
+ * A cursor is first placed directly on the first key >= `start` with a single descent. Every node on its spine
+ * contains that (omitted) key, so none can be reused whole; everything to the left of the spine is kept and is
+ * collected straight from the spine. The cursor then walks:
+ *   1. omit: to the first key after the range, collecting nothing
+ *   2. keep: off the end of the tree, reusing every subtree it skips over
+ * Returns undefined if the range contains no keys.
+ * `start`, if supplied, must not be greater than the tree's max key.
  */
 function decomposeOmittingRange<K, V>(
   tree: BTreeWithInternals<K, V>,
   start: K | undefined,
   end: K | undefined,
   includeEnd: boolean
-): DecomposeResult<K, V> {
-  type Callbacks = Pick<Cursor<K, V, DecomposePayload>, 'onEnterLeaf' | 'onMoveInLeaf' | 'onExitLeaf' | 'onStepUp' | 'onStepDown'>;
-  const decomposer = createDecomposer<K, V>(tree._maxNodeSize);
-  const keep: Callbacks = {
-    // A leaf is only entered while walking to `start` (phase 3 walks off the end), so its keys before the destination are kept.
-    onEnterLeaf: (leaf, destIndex) => decomposer.pushLeafRange(leaf, 0, destIndex),
-    onMoveInLeaf: decomposer.onMoveInLeaf,
-    onExitLeaf: decomposer.onExitLeaf,
-    onStepUp: decomposer.onStepUp,
-    onStepDown: decomposer.onStepDown,
+): DecomposeResult<K, V> | undefined {
+  // The cursor starts out omitting: it collects nothing and only disqualifies nodes containing omitted keys.
+  const onEnterLeafOmitting = (_: BNode<K, V>, destIndex: number, cursor: Cursor<K, V, DecomposePayload>) => {
+    // Keys before the destination are omitted, so the leaf cannot be reused whole.
+    if (destIndex > 0) {
+      cursor.leafPayload.disqualified = true;
+      disqualifySpine(cursor, cursor.spine.length - 1);
+    }
   };
-  const omit: Callbacks = {
-    onEnterLeaf: (_, destIndex, cursor) => {
-      // Keys before the destination are omitted, so the leaf cannot be reused whole.
-      if (destIndex > 0) {
-        cursor.leafPayload.disqualified = true;
-        disqualifySpine(cursor, cursor.spine.length - 1);
-      }
-    },
-    onMoveInLeaf: noop,
-    onExitLeaf: noop,
-    onStepUp: disqualifyOnStepUp,
-    onStepDown: disqualifyOnStepDown,
-  };
-
   const cursor = createCursor<K, V, DecomposePayload>(
-    tree, makeDecomposePayload, keep.onEnterLeaf, keep.onMoveInLeaf, keep.onExitLeaf, keep.onStepUp, keep.onStepDown);
-
-  // Phase 1 (keep): walk to the first omitted key.
-  if (start !== undefined) {
-    const [out] = moveTo(cursor, cursor, start, true, false);
-    check(!out, "omit: range unexpectedly beyond end of tree");
-  }
+    tree, makeDecomposePayload, onEnterLeafOmitting, noop, noop, disqualifyOnStepUp, disqualifyOnStepDown, start);
 
   if (end !== undefined) {
-    // The cursor now sits on an omitted key, so its leaf and every ancestor cannot be reused whole.
-    cursor.leafPayload.disqualified = true;
-    disqualifySpine(cursor, cursor.spine.length - 1);
+    const order = tree._compare(getKey(cursor), end);
+    if (order > 0 || (order === 0 && !includeEnd))
+      return undefined;
+  }
 
-    // Phase 2 (omit): walk to the first key after the range.
-    Object.assign(cursor, omit);
+  // The cursor sits on an omitted key, so its leaf and every ancestor cannot be reused whole.
+  cursor.leafPayload.disqualified = true;
+  disqualifySpine(cursor, cursor.spine.length - 1);
+
+  const decomposer = createDecomposer<K, V>(tree._maxNodeSize);
+
+  // Keep everything left of the spine. Visiting the spine top-down yields these in key order.
+  const spine = cursor.spine;
+  for (let depth = 0; depth < spine.length; ++depth) {
+    const { node, childIndex } = spine[depth];
+    const childHeight = spine.length - depth - 1;
+    for (let i = 0; i < childIndex; ++i)
+      decomposer.addSharedNodeToDisjointSet(node.children[i], childHeight);
+  }
+  decomposer.pushLeafRange(cursor.leaf, 0, cursor.leafIndex);
+
+  // When `end` is undefined, everything from the cursor onward is omitted.
+  if (end !== undefined) {
+    // Phase 1 (omit): walk to the first key after the range.
     const [out] = moveTo(cursor, cursor, end, !includeEnd, false);
     if (!out) {
-      // Phase 3 (keep): walk off the end of the tree, collecting everything passed.
-      Object.assign(cursor, keep);
+      // Phase 2 (keep): walk off the end of the tree, collecting everything passed.
+      // This walk never enters a new leaf, so onEnterLeaf is not needed.
+      cursor.onMoveInLeaf = decomposer.onMoveInLeaf;
+      cursor.onExitLeaf = decomposer.onExitLeaf;
+      cursor.onStepUp = decomposer.onStepUp;
+      cursor.onStepDown = decomposer.onStepDown;
       moveTo(cursor, cursor, tree._root.maxKey(), false, false);
     }
   }
-  // When `end` is undefined, everything from the cursor onward is omitted, so the walk simply stops.
 
   return decomposer.finish();
 }

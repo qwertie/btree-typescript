@@ -22,22 +22,29 @@ function moveForwardOne(cur, other) {
 }
 exports.moveForwardOne = moveForwardOne;
 /**
- * Create a cursor pointing to the leftmost key of the supplied tree.
+ * Create a cursor pointing to the leftmost key of the supplied tree or, if `seekKey` is supplied,
+ * to the first key >= `seekKey`. No callbacks are invoked while positioning the cursor.
+ * The caller must ensure `seekKey` (if supplied) is not greater than the tree's max key.
  * @internal
  */
-function createCursor(tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown) {
+function createCursor(tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, seekKey) {
+    var cmp = tree._compare;
+    var seeking = seekKey !== undefined;
     var spine = [];
     var n = tree._root;
     while (!n.isLeaf) {
         var ni = n;
+        var childIndex = seeking ? ni.indexOf(seekKey, 0, cmp) : 0;
         var payload = makePayload();
-        spine.push({ node: ni, childIndex: 0, payload: payload });
-        n = ni.children[0];
+        spine.push({ node: ni, childIndex: childIndex, payload: payload });
+        n = ni.children[childIndex];
     }
+    var leafIndex = seeking ? n.indexOf(seekKey, 0, cmp) : 0;
     var leafPayload = makePayload();
     var cur = {
         tree: tree,
-        leaf: n, leafIndex: 0,
+        leaf: n,
+        leafIndex: leafIndex,
         spine: spine,
         leafPayload: leafPayload,
         makePayload: makePayload,

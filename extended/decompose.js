@@ -210,7 +210,7 @@ function createDecomposer(maxNodeSize) {
         }
         return { heights: disjointHeights, nodes: disjointNodes, tallestIndex: tallestIndex };
     };
-    return { pendingKeys: pendingKeys, pendingValues: pendingValues, pushLeafRange: pushLeafRange, onMoveInLeaf: onMoveInLeaf, onExitLeaf: onExitLeaf, onStepUp: onStepUp, onStepDown: onStepDown, finish: finish };
+    return { pendingKeys: pendingKeys, pendingValues: pendingValues, addSharedNodeToDisjointSet: addSharedNodeToDisjointSet, pushLeafRange: pushLeafRange, onMoveInLeaf: onMoveInLeaf, onExitLeaf: onExitLeaf, onStepUp: onStepUp, onStepDown: onStepDown, finish: finish };
 }
 exports.createDecomposer = createDecomposer;
 /**

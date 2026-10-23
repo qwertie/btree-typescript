@@ -274,7 +274,7 @@ export function createDecomposer<K, V>(maxNodeSize: number) {
     return { heights: disjointHeights, nodes: disjointNodes, tallestIndex };
   };
 
-  return { pendingKeys, pendingValues, pushLeafRange, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, finish };
+  return { pendingKeys, pendingValues, addSharedNodeToDisjointSet, pushLeafRange, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, finish };
 }
 
 /**
