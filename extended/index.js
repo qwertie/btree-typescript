@@ -43,6 +43,7 @@ var diffAgainst_1 = __importDefault(require("./diffAgainst"));
 var forEachKeyInBoth_1 = __importDefault(require("./forEachKeyInBoth"));
 var forEachKeyNotIn_1 = __importDefault(require("./forEachKeyNotIn"));
 var intersect_1 = __importDefault(require("./intersect"));
+var omit_1 = __importDefault(require("./omit"));
 var subtract_1 = __importDefault(require("./subtract"));
 var union_1 = __importDefault(require("./union"));
 var bulkLoad_1 = require("./bulkLoad");
@@ -197,6 +198,9 @@ var BTreeEx = /** @class */ (function (_super) {
      */
     BTreeEx.prototype.subtract = function (other) {
         return (0, subtract_1.default)(this, other);
+    };
+    BTreeEx.prototype.omit = function (start, end, includeEnd) {
+        return (0, omit_1.default)(this, start, end, includeEnd);
     };
     return BTreeEx;
 }(b_tree_1.default));

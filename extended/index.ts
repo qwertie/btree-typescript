@@ -4,6 +4,7 @@ import diffAgainst from './diffAgainst';
 import forEachKeyInBoth from './forEachKeyInBoth';
 import forEachKeyNotIn from './forEachKeyNotIn';
 import intersect from './intersect';
+import omit from './omit';
 import subtract from './subtract';
 import union from './union';
 import { bulkLoadRoot } from './bulkLoad';
@@ -179,6 +180,30 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
    */
   subtract(other: BTreeEx<K, V>): BTreeEx<K, V> {
     return subtract<BTreeEx<K, V>, K, V>(this, other);
+  }
+
+  /**
+   * Returns a new tree containing every entry of this tree except those whose keys fall in the given range.
+   * This tree is not modified.
+   *
+   * The range is `[start, end)` by default, or `[start, end]` if `includeEnd` is true. Exactly one bound may be
+   * `undefined` to make the range open-ended: `omit(undefined, end)` removes every key before `end`, and
+   * `omit(start, undefined)` removes every key from `start` onward.
+   *
+   * Subtrees that lie entirely outside the range are shared with this tree rather than copied, and keys
+   * inside the range are never visited. Let `H` be the tree height (counting a leaf as height 1) and `B` the
+   * max node size. The runtime is `O(B^2 * H)`, i.e. `O(log N)` for a fixed max node size,
+   * regardless of how many keys are omitted.
+   * @param start The first key to omit (inclusive), or `undefined` to omit from the beginning of the tree.
+   * @param end The key at which omission stops (exclusive unless `includeEnd`), or `undefined` to omit to the end of the tree.
+   * @param includeEnd If true, `end` itself is also omitted. Defaults to false.
+   * @returns A new `BTreeEx` without the keys in the range.
+   * @throws Error if both `start` and `end` are `undefined`.
+   */
+  omit(start: K, end: K | undefined, includeEnd?: boolean): BTreeEx<K, V>;
+  omit(start: K | undefined, end: K, includeEnd?: boolean): BTreeEx<K, V>;
+  omit(start: K | undefined, end: K | undefined, includeEnd?: boolean): BTreeEx<K, V> {
+    return omit<BTreeEx<K, V>, K, V>(this, start as K, end, includeEnd);
   }
 }
 

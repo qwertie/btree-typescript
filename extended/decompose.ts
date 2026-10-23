@@ -15,7 +15,11 @@ export type DecomposeResult<K, V> = { heights: number[], nodes: BNode<K, V>[], t
  */
 type DecomposePayload = { disqualified: boolean };
 
-const decomposeLoadFactor = 0.7;
+/**
+ * Target load factor for leaves created from loose entries during decomposition.
+ * @internal
+ */
+export const decomposeLoadFactor = 0.7;
 
 /**
  * Decomposes two trees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes

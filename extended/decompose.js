@@ -1,10 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildFromDecomposition = exports.decompose = void 0;
+exports.buildFromDecomposition = exports.decompose = exports.decomposeLoadFactor = void 0;
 var b_tree_1 = require("../b+tree");
 var shared_1 = require("./shared");
 var parallelWalk_1 = require("./parallelWalk");
-var decomposeLoadFactor = 0.7;
+/**
+ * Target load factor for leaves created from loose entries during decomposition.
+ * @internal
+ */
+exports.decomposeLoadFactor = 0.7;
 /**
  * Decomposes two trees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
  * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
@@ -47,7 +51,7 @@ function decompose(left, right, combineFn, ignoreRight) {
     };
     var addSharedNodeToDisjointSet = function (node, height) {
         // flush pending entries
-        (0, shared_1.makeLeavesFrom)(pendingKeys, pendingValues, maxNodeSize, decomposeLoadFactor, onLeafCreation);
+        (0, shared_1.makeLeavesFrom)(pendingKeys, pendingValues, maxNodeSize, exports.decomposeLoadFactor, onLeafCreation);
         pendingKeys.length = 0;
         pendingValues.length = 0;
         // Don't share underfilled leaves, instead mark them as needing merging
@@ -299,7 +303,7 @@ function decompose(left, right, combineFn, ignoreRight) {
         }
     }
     // Ensure any trailing non-disjoint entries are added
-    (0, shared_1.makeLeavesFrom)(pendingKeys, pendingValues, maxNodeSize, decomposeLoadFactor, onLeafCreation);
+    (0, shared_1.makeLeavesFrom)(pendingKeys, pendingValues, maxNodeSize, exports.decomposeLoadFactor, onLeafCreation);
     // In cases like full interleaving, no leaves may be created until now
     if (tallestHeight < 0 && disjointHeights.length > 0) {
         tallestIndex = 0;
