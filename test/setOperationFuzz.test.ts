@@ -21,8 +21,6 @@ describe('Set operation fuzz tests', () => {
   jest.setTimeout(FUZZ_TIMEOUT_MS);
 
   const rng = new MersenneTwister(0xC0FFEE);
-  // Separate generator for omit ranges, so the trees generated above are unaffected by it.
-  const rangeRng = new MersenneTwister(0xBADDAD);
 
   forEachFuzzCase(FUZZ_SETTINGS, ({ maxNodeSize, size, fractionA, fractionB, removalChance, removalLabel }) => {
     it(`branch ${maxNodeSize}, size ${size}, fractionA ${fractionA.toFixed(2)}, fractionB ${fractionB.toFixed(2)}, removal ${removalLabel}`, () => {
@@ -111,7 +109,7 @@ describe('Set operation fuzz tests', () => {
       expect(treeA.size).toBe(diffAB.size + intersection.size);
 
       // 13. Omitting a key range. Bounds are integers, so they may land on keys.
-      const [lo, mid, hi] = [rangeRng.random(), rangeRng.random(), rangeRng.random()]
+      const [lo, mid, hi] = [rng.random(), rng.random(), rng.random()]
         .map((r) => Math.floor(r * (size + 2)))
         .sort(compare);
       const range = { gt: lo, lte: hi };
