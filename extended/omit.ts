@@ -49,9 +49,7 @@ export const omitInvalidRangeErrorMsg =
  * @throws Error if the range has no bounds, or has both `gt` and `gte` or both `lt` and `lte`.
  */
 export default function omit<TBTree extends BTree<any, any>>(tree: TBTree, range: KeyRange<KeyOf<TBTree>>): TBTree {
-  type K = KeyOf<TBTree>;
-  type V = TBTree extends BTree<any, infer V> ? V : never;
-  const { gt, gte, lt, lte } = range as { gt?: K, gte?: K, lt?: K, lte?: K };
+  const { gt, gte, lt, lte } = range;
   if ((gt !== undefined && gte !== undefined) || (lt !== undefined && lte !== undefined))
     throw new Error(omitInvalidRangeErrorMsg);
   const start = gt !== undefined ? gt : gte;
@@ -61,7 +59,7 @@ export default function omit<TBTree extends BTree<any, any>>(tree: TBTree, range
   const includeStart = gt === undefined;
   const includeEnd = lt === undefined;
 
-  const _tree = tree as unknown as BTreeWithInternals<K, V>;
+  const _tree = tree as unknown as BTreeWithInternals<KeyOf<TBTree>, unknown>;
   const root = _tree._root;
   const cmp = _tree._compare;
   // O(1) checks for cases in which nothing can be omitted
@@ -81,7 +79,7 @@ export default function omit<TBTree extends BTree<any, any>>(tree: TBTree, range
   const decomposed = decomposeOmittingRange(_tree, start, includeStart, end, includeEnd);
   if (decomposed === undefined)
     return tree.clone();
-  const constructor = tree.constructor as BTreeConstructor<TBTree, K, V>;
+  const constructor = tree.constructor as BTreeConstructor<TBTree, KeyOf<TBTree>, unknown>;
   return buildFromDecomposition(constructor, _tree._maxNodeSize, decomposed, cmp, _tree._maxNodeSize);
 }
 

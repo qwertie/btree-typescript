@@ -20,7 +20,7 @@ exports.omitInvalidRangeErrorMsg = "omit requires a range with at least one boun
  * @throws Error if the range has no bounds, or has both `gt` and `gte` or both `lt` and `lte`.
  */
 function omit(tree, range) {
-    var _a = range, gt = _a.gt, gte = _a.gte, lt = _a.lt, lte = _a.lte;
+    var gt = range.gt, gte = range.gte, lt = range.lt, lte = range.lte;
     if ((gt !== undefined && gte !== undefined) || (lt !== undefined && lte !== undefined))
         throw new Error(exports.omitInvalidRangeErrorMsg);
     var start = gt !== undefined ? gt : gte;
