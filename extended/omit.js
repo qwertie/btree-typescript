@@ -12,10 +12,8 @@ exports.omitInvalidRangeErrorMsg = "omit requires a range with at least one boun
  * Returns a new tree containing every entry of `tree` except those whose keys fall in the given range.
  * The input tree is not modified.
  *
- * Subtrees that lie entirely outside the range are shared with the input tree rather than copied, and keys
- * inside the range are never visited. Let `H` be the tree height (counting a leaf as height 1) and `B` the
- * max node size. The tree is decomposed into `O(B * H)` disjoint pieces, so the runtime is
- * `O(B^2 * H)`, i.e. `O(log N)` for a fixed max node size, regardless of how many keys are omitted.
+ * The runtime is `O(log(n))`. Subtrees that lie entirely outside the range are shared with the input tree rather
+ * than copied.
  * @param tree The tree to omit keys from.
  * @param range The keys to omit, e.g. `{ gte: 5, lt: 10 }`. Omit a bound to leave that end of the range open.
  * @returns A new tree without the keys in the range.

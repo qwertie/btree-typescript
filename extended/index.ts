@@ -190,10 +190,8 @@ export class BTreeEx<K = any, V = any> extends BTree<K, V> {
    * leaves that end of the range open: `omit({ lt: k })` removes every key before `k`, and `omit({ gte: k })`
    * removes `k` and every key after it.
    *
-   * Subtrees that lie entirely outside the range are shared with this tree rather than copied, and keys
-   * inside the range are never visited. Let `H` be the tree height (counting a leaf as height 1) and `B` the
-   * max node size. The runtime is `O(B^2 * H)`, i.e. `O(log N)` for a fixed max node size,
-   * regardless of how many keys are omitted.
+   * The runtime is `O(log(n))`. Subtrees that lie entirely outside the range are shared with this tree rather
+   * than copied.
    * @param range The keys to omit, e.g. `{ gte: 5, lt: 10 }`.
    * @returns A new `BTreeEx` without the keys in the range.
    * @throws Error if the range has no bounds, or has both `gt` and `gte` or both `lt` and `lte`.
