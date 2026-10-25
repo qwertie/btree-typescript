@@ -475,6 +475,54 @@ console.log("### Subtraction of B+ trees");
 }
 
 console.log();
+console.log("### Omitting a key range from B+ trees");
+{
+  const sizes = [100, 1000, 10000, 100000, 1000000];
+  const trees = sizes.map((size) => fillBTreeOfSize(size, 0, 1, 1));
+
+  const measureOmitVsBaseline = (
+    baseTitle: string,
+    tree: BTreeEx<number, number>,
+    start: number | undefined,
+    end: number | undefined,
+  ) => {
+    const omitResult = measure(() => `omit:     ${baseTitle}`, () => {
+      return tree.omit(start as number, end);
+    });
+    logTreeNodeStats('omit:    ', omitResult);
+
+    // Baseline: the core library's approach (as in `withoutRange`)
+    const baselineResult = measure(() => `baseline: ${baseTitle}`, () => {
+      const result = tree.clone();
+      result.deleteRange(start ?? tree.minKey()!, end ?? tree.maxKey()!, end === undefined);
+      return result;
+    });
+    logTreeNodeStats('baseline:', baselineResult);
+  };
+
+  const testOmitRanges = (heading: string, title: (size: number) => string,
+    getRange: (size: number) => [number | undefined, number | undefined]) => {
+    console.log();
+    console.log('#### ' + heading);
+    trees.forEach((tree, i) => {
+      const [start, end] = getRange(sizes[i]);
+      measureOmitVsBaseline(title(sizes[i]), tree, start, end);
+    });
+  };
+
+  testOmitRanges("Middle half removed", size => `Omit middle ${size / 2} of ${size} keys`,
+    size => [size / 4, size * 3 / 4]);
+  testOmitRanges("Prefix removed (no start bound)", size => `Omit first ${size / 2} of ${size} keys`,
+    size => [undefined, size / 2]);
+  testOmitRanges("Suffix removed (no end bound)", size => `Omit last ${size / 2} of ${size} keys`,
+    size => [size / 2, undefined]);
+  testOmitRanges("Small range removed (10 keys)", size => `Omit 10 middle keys of ${size} keys`,
+    size => [size / 2, size / 2 + 10]);
+  testOmitRanges("Empty range (gap between keys, nothing removed)", size => `Omit empty range of ${size} keys`,
+    size => [size / 2 + 0.25, size / 2 + 0.75]);
+}
+
+console.log();
 console.log("### Intersection between B+ trees");
 {
   console.log();

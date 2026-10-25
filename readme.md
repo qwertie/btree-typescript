@@ -595,6 +595,54 @@ Benchmarks (in milliseconds for integer keys/values)
     49.97   baseline: Subtract 1000000+1000000 sparse-overlap trees
             baseline: 32228/32259 shared nodes, 0/32259 underfilled nodes, 99.99% average load factor
 
+### Omitting a key range from B+ trees (vs non-accelerated baseline algorithm) ###
+
+#### Middle half removed
+
+    0.01    omit:     Omit middle 50 of 100 keys
+            omit:     1/3 shared nodes, 0/3 underfilled nodes, 54.17% average load factor
+    0       baseline: Omit middle 50 of 100 keys
+            baseline: 0/3 shared nodes, 0/3 underfilled nodes, 54.17% average load factor
+    0       omit:     Omit middle 500 of 1000 keys
+            omit:     15/18 shared nodes, 0/18 underfilled nodes, 89.76% average load factor
+    0.02    baseline: Omit middle 500 of 1000 keys
+            baseline: 15/18 shared nodes, 0/18 underfilled nodes, 89.76% average load factor
+    0.01    omit:     Omit middle 5000 of 10000 keys
+            omit:     159/165 shared nodes, 0/165 underfilled nodes, 97.80% average load factor
+    0.21    baseline: Omit middle 5000 of 10000 keys
+            baseline: 160/165 shared nodes, 2/165 underfilled nodes, 97.80% average load factor
+    0.01    omit:     Omit middle 50000 of 100000 keys
+            omit:     1609/1618 shared nodes, 0/1618 underfilled nodes, 99.69% average load factor
+    2.17    baseline: Omit middle 50000 of 100000 keys
+            baseline: 1610/1617 shared nodes, 3/1617 underfilled nodes, 99.75% average load factor
+    0.01    omit:     Omit middle 500000 of 1000000 keys
+            omit:     16125/16133 shared nodes, 0/16133 underfilled nodes, 99.98% average load factor
+    21.78   baseline: Omit middle 500000 of 1000000 keys
+            baseline: 16127/16134 shared nodes, 2/16134 underfilled nodes, 99.97% average load factor
+
+#### Small range removed (10 keys)
+
+    0       omit:     Omit 10 middle keys of 100 keys
+            omit:     3/5 shared nodes, 0/5 underfilled nodes, 58.75% average load factor
+    0       baseline: Omit 10 middle keys of 100 keys
+            baseline: 3/5 shared nodes, 0/5 underfilled nodes, 58.75% average load factor
+    0.01    omit:     Omit 10 middle keys of 1000 keys
+            omit:     31/33 shared nodes, 0/33 underfilled nodes, 96.78% average load factor
+    0       baseline: Omit 10 middle keys of 1000 keys
+            baseline: 31/33 shared nodes, 0/33 underfilled nodes, 96.78% average load factor
+    0.01    omit:     Omit 10 middle keys of 10000 keys
+            omit:     320/325 shared nodes, 0/325 underfilled nodes, 99.17% average load factor
+    0       baseline: Omit 10 middle keys of 10000 keys
+            baseline: 321/324 shared nodes, 0/324 underfilled nodes, 99.47% average load factor
+    0.01    omit:     Omit 10 middle keys of 100000 keys
+            omit:     3222/3231 shared nodes, 0/3231 underfilled nodes, 99.83% average load factor
+    0       baseline: Omit 10 middle keys of 100000 keys
+            baseline: 3224/3228 shared nodes, 0/3228 underfilled nodes, 99.92% average load factor
+    0.02    omit:     Omit 10 middle keys of 1000000 keys
+            omit:     32253/32264 shared nodes, 0/32264 underfilled nodes, 99.98% average load factor
+    0       baseline: Omit 10 middle keys of 1000000 keys
+            baseline: 32255/32259 shared nodes, 0/32259 underfilled nodes, 100.00% average load factor
+
 ### Intersection between B+ trees (vs non-accelerated baseline algorithm) ###
 
 #### Non-overlapping ranges (no shared keys)

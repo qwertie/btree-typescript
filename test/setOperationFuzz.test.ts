@@ -21,6 +21,8 @@ describe('Set operation fuzz tests', () => {
   jest.setTimeout(FUZZ_TIMEOUT_MS);
 
   const rng = new MersenneTwister(0xC0FFEE);
+  // Separate generator for omit ranges, so the trees generated above are unaffected by it.
+  const rangeRng = new MersenneTwister(0xBADDAD);
 
   forEachFuzzCase(FUZZ_SETTINGS, ({ maxNodeSize, size, fractionA, fractionB, removalChance, removalLabel }) => {
     it(`branch ${maxNodeSize}, size ${size}, fractionA ${fractionA.toFixed(2)}, fractionB ${fractionB.toFixed(2)}, removal ${removalLabel}`, () => {
@@ -108,12 +110,37 @@ describe('Set operation fuzz tests', () => {
       expect(diffAB.size).toBe(treeA.size - intersection.size);
       expect(treeA.size).toBe(diffAB.size + intersection.size);
 
+      // 13. Omitting a key range.
+      const [lo, mid, hi] = [rangeRng.random(), rangeRng.random(), rangeRng.random()]
+        .map((r) => Math.floor(r * (size + 2)) - 1 + 0.5)
+        .sort(compare);
+      const omitA = treeA.omit(lo, hi);
+      const omitB = treeB.omit(lo, hi);
+      const inRange = (k: number) => k >= lo && k < hi;
+      // Omit is subtraction of the keys in range.
+      expect(omitA.toArray()).toEqual(treeA.subtract(treeA.filter(inRange)).toArray());
+      // Splitting the range.
+      expect(treeA.omit(lo, mid).omit(mid, hi).toArray()).toEqual(omitA.toArray());
+      // Open-ended omits partition the tree.
+      const omitBelow = treeA.omit(undefined, mid);
+      const omitAbove = treeA.omit(mid, undefined);
+      expect(omitBelow.intersect(omitAbove, keepEither).size).toBe(0);
+      expect(omitAbove.union(omitBelow, keepEither).toArray()).toEqual(treeAEntries);
+      expect(omitBelow.size + omitAbove.size).toBe(treeA.size);
+      // Omit distributes over union, intersection and subtraction.
+      expect(unionKeep.omit(lo, hi).toArray()).toEqual(omitA.union(omitB, keepEither).toArray());
+      expect(intersection.omit(lo, hi).toArray()).toEqual(omitA.intersect(treeB, keepEither).toArray());
+      expect(diffAB.omit(lo, hi).toArray()).toEqual(omitA.subtract(treeB).toArray());
+
       partition.checkValid(true);
       unionDrop.checkValid(true);
       unionKeep.checkValid(true);
       intersection.checkValid(true);
       diffAB.checkValid(true);
       diffBA.checkValid(true);
+      omitA.checkValid(true);
+      omitBelow.checkValid(true);
+      omitAbove.checkValid(true);
       treeA.checkValid(true);
       treeB.checkValid(true);
       treeC.checkValid(true);
