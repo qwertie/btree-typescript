@@ -33,9 +33,8 @@ function createCursor(tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, 
     var hasKey = key !== undefined;
     // Index of the first key >= key (or > key if not inclusive)
     var indexOfTarget = function (node) {
-        var keys = node.keys;
-        var i = node.indexOf(key, 0, cmp);
-        return !isInclusive && i < keys.length && cmp(keys[i], key) === 0 ? i + 1 : i;
+        var i = node.indexOf(key, -1, cmp);
+        return i < 0 ? ~i : isInclusive ? i : i + 1;
     };
     var spine = [];
     var n = tree._root;
@@ -159,10 +158,8 @@ function moveTo(cur, other, targetKey, isInclusive, startedEqual) {
     var node = spine[descentLevel].node.children[descentIndex];
     while (!node.isLeaf) {
         var ni = node;
-        var keys = ni.keys;
-        var stepDownIndex = ni.indexOf(targetKey, 0, cmp);
-        if (!isInclusive && stepDownIndex < keys.length && cmp(keys[stepDownIndex], targetKey) === 0)
-            stepDownIndex++;
+        var i_1 = ni.indexOf(targetKey, -1, cmp);
+        var stepDownIndex = i_1 < 0 ? ~i_1 : isInclusive ? i_1 : i_1 + 1;
         var payload = makePayload();
         var spineIndex = spine.length;
         spine.push({ node: ni, childIndex: stepDownIndex, payload: payload });

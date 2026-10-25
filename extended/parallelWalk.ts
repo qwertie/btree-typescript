@@ -64,9 +64,8 @@ export function createCursor<K, V, TP>(
   const hasKey = key !== undefined;
   // Index of the first key >= key (or > key if not inclusive)
   const indexOfTarget = (node: BNode<K, V>) => {
-    const keys = node.keys;
-    const i = node.indexOf(key as K, 0, cmp);
-    return !isInclusive && i < keys.length && cmp(keys[i], key as K) === 0 ? i + 1 : i;
+    const i = node.indexOf(key as K, -1, cmp);
+    return i < 0 ? ~i : isInclusive ? i : i + 1;
   };
   const spine: Array<{ node: BNodeInternal<K, V>, childIndex: number, payload: TP }> = [];
   let n: BNode<K, V> = tree._root;
@@ -194,10 +193,8 @@ export function moveTo<K, V, TP>(
 
   while (!node.isLeaf) {
     const ni = node as BNodeInternal<K, V>;
-    const keys = ni.keys;
-    let stepDownIndex = ni.indexOf(targetKey, 0, cmp);
-    if (!isInclusive && stepDownIndex < keys.length && cmp(keys[stepDownIndex], targetKey) === 0)
-      stepDownIndex++;
+    const i = ni.indexOf(targetKey, -1, cmp);
+    const stepDownIndex = i < 0 ? ~i : isInclusive ? i : i + 1;
     const payload = makePayload();
     const spineIndex = spine.length;
     spine.push({ node: ni, childIndex: stepDownIndex, payload });
