@@ -1,17 +1,36 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.omitUnboundedErrorMsg = void 0;
+exports.omitInvalidRangeErrorMsg = void 0;
 var decompose_1 = require("./decompose");
 var parallelWalk_1 = require("./parallelWalk");
 /**
- * Error message used when `omit` is called without either bound.
+ * Error message used when `omit` is called with an invalid key range.
  * @internal
  */
-exports.omitUnboundedErrorMsg = "omit requires at least one of `start` or `end` to be defined.";
-function omit(tree, start, end, includeEnd) {
-    if (includeEnd === void 0) { includeEnd = false; }
+exports.omitInvalidRangeErrorMsg = "omit requires a range with at least one bound, and at most one of `gt`/`gte` and one of `lt`/`lte`.";
+/**
+ * Returns a new tree containing every entry of `tree` except those whose keys fall in the given range.
+ * The input tree is not modified.
+ *
+ * Subtrees that lie entirely outside the range are shared with the input tree rather than copied, and keys
+ * inside the range are never visited. Let `H` be the tree height (counting a leaf as height 1) and `B` the
+ * max node size. The tree is decomposed into `O(B * H)` disjoint pieces, so the runtime is
+ * `O(B^2 * H)`, i.e. `O(log N)` for a fixed max node size, regardless of how many keys are omitted.
+ * @param tree The tree to omit keys from.
+ * @param range The keys to omit, e.g. `{ gte: 5, lt: 10 }`. Omit a bound to leave that end of the range open.
+ * @returns A new tree without the keys in the range.
+ * @throws Error if the range has no bounds, or has both `gt` and `gte` or both `lt` and `lte`.
+ */
+function omit(tree, range) {
+    var _a = range, gt = _a.gt, gte = _a.gte, lt = _a.lt, lte = _a.lte;
+    if ((gt !== undefined && gte !== undefined) || (lt !== undefined && lte !== undefined))
+        throw new Error(exports.omitInvalidRangeErrorMsg);
+    var start = gt !== undefined ? gt : gte;
+    var end = lt !== undefined ? lt : lte;
     if (start === undefined && end === undefined)
-        throw new Error(exports.omitUnboundedErrorMsg);
+        throw new Error(exports.omitInvalidRangeErrorMsg);
+    var includeStart = gt === undefined;
+    var includeEnd = lt === undefined;
     var _tree = tree;
     var root = _tree._root;
     var cmp = _tree._compare;
@@ -19,15 +38,16 @@ function omit(tree, start, end, includeEnd) {
     if (root.size() === 0)
         return tree.clone();
     if (start !== undefined) {
-        if (cmp(start, root.maxKey()) > 0)
+        var startVsMax = cmp(start, root.maxKey());
+        if (startVsMax > 0 || (startVsMax === 0 && !includeStart))
             return tree.clone();
         if (end !== undefined) {
             var order = cmp(start, end);
-            if (order > 0 || (order === 0 && !includeEnd))
+            if (order > 0 || (order === 0 && !(includeStart && includeEnd)))
                 return tree.clone();
         }
     }
-    var decomposed = decomposeOmittingRange(_tree, start, end, includeEnd);
+    var decomposed = decomposeOmittingRange(_tree, start, includeStart, end, includeEnd);
     if (decomposed === undefined)
         return tree.clone();
     var constructor = tree.constructor;
@@ -36,15 +56,15 @@ function omit(tree, start, end, includeEnd) {
 exports.default = omit;
 /**
  * Decomposes a tree into the maximal disjoint subtrees (and loose leaf entries) that lie outside of a key range.
- * A cursor is first placed directly on the first key >= `start` with a single descent. Every node on its spine
- * contains that (omitted) key, so none can be reused whole; everything to the left of the spine is kept and is
- * collected straight from the spine. The cursor then walks:
+ * A cursor is first placed directly on the first key past the lower bound with a single descent. If that key is in
+ * the range, every node on its spine contains it, so none can be reused whole; everything to the left of the spine is
+ * kept and is collected straight from the spine. The cursor then walks:
  *   1. omit: to the first key after the range, collecting nothing
  *   2. keep: off the end of the tree, reusing every subtree it skips over
  * Returns undefined if the range contains no keys.
- * `start`, if supplied, must not be greater than the tree's max key.
+ * If `start` is supplied, the tree must contain a key after it (or equal to it, if `includeStart`).
  */
-function decomposeOmittingRange(tree, start, end, includeEnd) {
+function decomposeOmittingRange(tree, start, includeStart, end, includeEnd) {
     // The cursor starts out omitting: it collects nothing and only disqualifies nodes containing omitted keys.
     var onEnterLeafOmitting = function (_, destIndex, cursor) {
         // Keys before the destination are omitted, so the leaf cannot be reused whole.
@@ -53,7 +73,7 @@ function decomposeOmittingRange(tree, start, end, includeEnd) {
             (0, decompose_1.disqualifySpine)(cursor, cursor.spine.length - 1);
         }
     };
-    var cursor = (0, parallelWalk_1.createCursor)(tree, decompose_1.makeDecomposePayload, onEnterLeafOmitting, parallelWalk_1.noop, parallelWalk_1.noop, decompose_1.disqualifyOnStepUp, decompose_1.disqualifyOnStepDown, start);
+    var cursor = (0, parallelWalk_1.createCursor)(tree, decompose_1.makeDecomposePayload, onEnterLeafOmitting, parallelWalk_1.noop, parallelWalk_1.noop, decompose_1.disqualifyOnStepUp, decompose_1.disqualifyOnStepDown, start, !includeStart);
     if (end !== undefined) {
         var order = tree._compare((0, parallelWalk_1.getKey)(cursor), end);
         if (order > 0 || (order === 0 && !includeEnd))

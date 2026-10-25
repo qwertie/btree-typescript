@@ -45,8 +45,8 @@ export function moveForwardOne<K, V, TP>(
 
 /**
  * Create a cursor pointing to the leftmost key of the supplied tree or, if `seekKey` is supplied,
- * to the first key >= `seekKey`. No callbacks are invoked while positioning the cursor.
- * The caller must ensure `seekKey` (if supplied) is not greater than the tree's max key.
+ * to the first key >= `seekKey` (or > `seekKey` if `seekExclusive`). No callbacks are invoked while
+ * positioning the cursor. The caller must ensure such a key exists.
  * @internal
  */
 export function createCursor<K, V, TP>(
@@ -58,19 +58,26 @@ export function createCursor<K, V, TP>(
   onStepUp: Cursor<K, V, TP>["onStepUp"],
   onStepDown: Cursor<K, V, TP>["onStepDown"],
   seekKey?: K,
+  seekExclusive: boolean = false,
 ): Cursor<K, V, TP> {
   const cmp = tree._compare;
   const seeking = seekKey !== undefined;
+  // Index of the first key >= seekKey (or > seekKey if exclusive)
+  const seekIndex = (node: BNode<K, V>) => {
+    const keys = node.keys;
+    const i = node.indexOf(seekKey as K, 0, cmp);
+    return seekExclusive && i < keys.length && cmp(keys[i], seekKey as K) === 0 ? i + 1 : i;
+  };
   const spine: Array<{ node: BNodeInternal<K, V>, childIndex: number, payload: TP }> = [];
   let n: BNode<K, V> = tree._root;
   while (!n.isLeaf) {
     const ni = n as BNodeInternal<K, V>;
-    const childIndex = seeking ? ni.indexOf(seekKey as K, 0, cmp) : 0;
+    const childIndex = seeking ? seekIndex(ni) : 0;
     const payload = makePayload();
     spine.push({ node: ni, childIndex, payload });
     n = ni.children[childIndex];
   }
-  const leafIndex = seeking ? n.indexOf(seekKey as K, 0, cmp) : 0;
+  const leafIndex = seeking ? seekIndex(n) : 0;
   const leafPayload = makePayload();
   const cur: Cursor<K, V, TP> = {
     tree, leaf: n, leafIndex, spine, leafPayload, makePayload: makePayload,

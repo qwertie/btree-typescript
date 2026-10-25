@@ -23,23 +23,30 @@ function moveForwardOne(cur, other) {
 exports.moveForwardOne = moveForwardOne;
 /**
  * Create a cursor pointing to the leftmost key of the supplied tree or, if `seekKey` is supplied,
- * to the first key >= `seekKey`. No callbacks are invoked while positioning the cursor.
- * The caller must ensure `seekKey` (if supplied) is not greater than the tree's max key.
+ * to the first key >= `seekKey` (or > `seekKey` if `seekExclusive`). No callbacks are invoked while
+ * positioning the cursor. The caller must ensure such a key exists.
  * @internal
  */
-function createCursor(tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, seekKey) {
+function createCursor(tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, seekKey, seekExclusive) {
+    if (seekExclusive === void 0) { seekExclusive = false; }
     var cmp = tree._compare;
     var seeking = seekKey !== undefined;
+    // Index of the first key >= seekKey (or > seekKey if exclusive)
+    var seekIndex = function (node) {
+        var keys = node.keys;
+        var i = node.indexOf(seekKey, 0, cmp);
+        return seekExclusive && i < keys.length && cmp(keys[i], seekKey) === 0 ? i + 1 : i;
+    };
     var spine = [];
     var n = tree._root;
     while (!n.isLeaf) {
         var ni = n;
-        var childIndex = seeking ? ni.indexOf(seekKey, 0, cmp) : 0;
+        var childIndex = seeking ? seekIndex(ni) : 0;
         var payload = makePayload();
         spine.push({ node: ni, childIndex: childIndex, payload: payload });
         n = ni.children[childIndex];
     }
-    var leafIndex = seeking ? n.indexOf(seekKey, 0, cmp) : 0;
+    var leafIndex = seeking ? seekIndex(n) : 0;
     var leafPayload = makePayload();
     var cur = {
         tree: tree,

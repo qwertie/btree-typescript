@@ -1,4 +1,5 @@
 import BTree from '../b+tree';
+import { type KeyRange } from './omit';
 /**
  * An extended version of the `BTree` class that includes additional functionality
  * such as bulk loading, set operations, and diffing.
@@ -129,22 +130,19 @@ export declare class BTreeEx<K = any, V = any> extends BTree<K, V> {
      * Returns a new tree containing every entry of this tree except those whose keys fall in the given range.
      * This tree is not modified.
      *
-     * The range is `[start, end)` by default, or `[start, end]` if `includeEnd` is true. Exactly one bound may be
-     * `undefined` to make the range open-ended: `omit(undefined, end)` removes every key before `end`, and
-     * `omit(start, undefined)` removes every key from `start` onward.
+     * The range has a lower bound (`gt` or `gte`), an upper bound (`lt` or `lte`), or both. A missing bound
+     * leaves that end of the range open: `omit({ lt: k })` removes every key before `k`, and `omit({ gte: k })`
+     * removes `k` and every key after it.
      *
      * Subtrees that lie entirely outside the range are shared with this tree rather than copied, and keys
      * inside the range are never visited. Let `H` be the tree height (counting a leaf as height 1) and `B` the
      * max node size. The runtime is `O(B^2 * H)`, i.e. `O(log N)` for a fixed max node size,
      * regardless of how many keys are omitted.
-     * @param start The first key to omit (inclusive), or `undefined` to omit from the beginning of the tree.
-     * @param end The key at which omission stops (exclusive unless `includeEnd`), or `undefined` to omit to the end of the tree.
-     * @param includeEnd If true, `end` itself is also omitted. Defaults to false.
+     * @param range The keys to omit, e.g. `{ gte: 5, lt: 10 }`.
      * @returns A new `BTreeEx` without the keys in the range.
-     * @throws Error if both `start` and `end` are `undefined`.
+     * @throws Error if the range has no bounds, or has both `gt` and `gte` or both `lt` and `lte`.
      */
-    omit(start: K, end: K | undefined, includeEnd?: boolean): BTreeEx<K, V>;
-    omit(start: K | undefined, end: K, includeEnd?: boolean): BTreeEx<K, V>;
+    omit(range: KeyRange<K>): BTreeEx<K, V>;
 }
 export interface BTreeEx<K = any, V = any> {
     /** See {@link BTree.with}. */
@@ -158,4 +156,5 @@ export interface BTreeEx<K = any, V = any> {
     /** See {@link BTree.mapValues}. */
     mapValues<R>(callback: (v: V, k: K, counter: number) => R): BTreeEx<K, R>;
 }
+export type { KeyRange } from './omit';
 export default BTreeEx;
