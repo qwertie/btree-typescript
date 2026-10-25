@@ -71,7 +71,7 @@ function decomposeOmittingRange(tree, start, includeStart, end, includeEnd) {
             (0, decompose_1.disqualifySpine)(cursor, cursor.spine.length - 1);
         }
     };
-    var cursor = (0, parallelWalk_1.createCursor)(tree, decompose_1.makeDecomposePayload, onEnterLeafOmitting, parallelWalk_1.noop, parallelWalk_1.noop, decompose_1.disqualifyOnStepUp, decompose_1.disqualifyOnStepDown, start, !includeStart);
+    var cursor = (0, parallelWalk_1.createCursor)(tree, decompose_1.makeDecomposePayload, onEnterLeafOmitting, parallelWalk_1.noop, parallelWalk_1.noop, decompose_1.disqualifyOnStepUp, decompose_1.disqualifyOnStepDown, start, includeStart);
     if (end !== undefined) {
         var order = tree._compare((0, parallelWalk_1.getKey)(cursor), end);
         if (order > 0 || (order === 0 && !includeEnd))

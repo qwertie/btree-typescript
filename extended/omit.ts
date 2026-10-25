@@ -109,7 +109,7 @@ function decomposeOmittingRange<K, V>(
     }
   };
   const cursor = createCursor<K, V, DecomposePayload>(
-    tree, makeDecomposePayload, onEnterLeafOmitting, noop, noop, disqualifyOnStepUp, disqualifyOnStepDown, start, !includeStart);
+    tree, makeDecomposePayload, onEnterLeafOmitting, noop, noop, disqualifyOnStepUp, disqualifyOnStepDown, start, includeStart);
 
   if (end !== undefined) {
     const order = tree._compare(getKey(cursor), end);

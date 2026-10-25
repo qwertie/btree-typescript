@@ -22,31 +22,31 @@ function moveForwardOne(cur, other) {
 }
 exports.moveForwardOne = moveForwardOne;
 /**
- * Create a cursor pointing to the leftmost key of the supplied tree or, if `seekKey` is supplied,
- * to the first key >= `seekKey` (or > `seekKey` if `seekExclusive`). No callbacks are invoked while
- * positioning the cursor. The caller must ensure such a key exists.
+ * Create a cursor pointing to the first key in the supplied tree that is >= `key` (or > `key` if `isInclusive`
+ * is false). If `key` is not provided, the cursor points to the first key in the tree.
+ * No callbacks are invoked while positioning the cursor. The caller must ensure such a key exists.
  * @internal
  */
-function createCursor(tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, seekKey, seekExclusive) {
-    if (seekExclusive === void 0) { seekExclusive = false; }
+function createCursor(tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, key, isInclusive) {
+    if (isInclusive === void 0) { isInclusive = true; }
     var cmp = tree._compare;
-    var seeking = seekKey !== undefined;
-    // Index of the first key >= seekKey (or > seekKey if exclusive)
-    var seekIndex = function (node) {
+    var hasKey = key !== undefined;
+    // Index of the first key >= key (or > key if not inclusive)
+    var indexOfTarget = function (node) {
         var keys = node.keys;
-        var i = node.indexOf(seekKey, 0, cmp);
-        return seekExclusive && i < keys.length && cmp(keys[i], seekKey) === 0 ? i + 1 : i;
+        var i = node.indexOf(key, 0, cmp);
+        return !isInclusive && i < keys.length && cmp(keys[i], key) === 0 ? i + 1 : i;
     };
     var spine = [];
     var n = tree._root;
     while (!n.isLeaf) {
         var ni = n;
-        var childIndex = seeking ? seekIndex(ni) : 0;
+        var childIndex = hasKey ? indexOfTarget(ni) : 0;
         var payload = makePayload();
         spine.push({ node: ni, childIndex: childIndex, payload: payload });
         n = ni.children[childIndex];
     }
-    var leafIndex = seeking ? seekIndex(n) : 0;
+    var leafIndex = hasKey ? indexOfTarget(n) : 0;
     var leafPayload = makePayload();
     var cur = {
         tree: tree,
