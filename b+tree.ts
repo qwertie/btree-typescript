@@ -377,9 +377,8 @@ class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap<K,V>
   /**
    * Returns a copy of the tree with the specified range of keys removed.
    * @description Computational complexity: O(log size + number of items removed).
-   *   To remove a large range in O(log size) time regardless of how many items it contains, see
-   *   `BTreeEx.omit` (from `sorted-btree/extended`) or the standalone `omit` function
-   *   (from `sorted-btree/extended/omit`).
+   *   To remove a large range in O(log size) time regardless of how many items it contains,
+   *   see `omit` and `BTreeEx.omit`.
    */
   withoutRange(low: K, high: K, includeHigh: boolean, returnThisIfUnchanged?: boolean): this {
     let nu = this.clone();
@@ -900,10 +899,9 @@ class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap<K,V>
    * @param includeHigh Specifies whether the `high` key, if present, is deleted.
    * @returns The number of key-value pairs that were deleted.
    * @description Computational complexity: O(log size + number of items deleted).
-   *   To remove a large range in O(log size) time regardless of how many items it contains, see
-   *   `BTreeEx.omit` (from `sorted-btree/extended`) or the standalone `omit` function
-   *   (from `sorted-btree/extended/omit`). Unlike this method, `omit` returns a new tree rather
-   *   than modifying this one.
+   *   To remove a large range in O(log size) time regardless of how many items it contains,
+   *   see `omit` and `BTreeEx.omit`. Unlike this method, they return a new tree rather than
+   *   modifying this one.
    */
   deleteRange(low: K, high: K, includeHigh: boolean): number {
     return this.editRange(low, high, includeHigh, DeleteRange);
