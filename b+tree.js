@@ -317,7 +317,13 @@ var BTree = /** @class */ (function () {
         var nu = this.clone();
         return nu.deleteKeys(keys) || !returnThisIfUnchanged ? nu : this;
     };
-    /** Returns a copy of the tree with the specified range of keys removed. */
+    /**
+     * Returns a copy of the tree with the specified range of keys removed.
+     * @description Computational complexity: O(log size + number of items removed).
+     *   To remove a large range in O(log size) time regardless of how many items it contains, see
+     *   `BTreeEx.omit` (from `sorted-btree/extended`) or the standalone `omit` function
+     *   (from `sorted-btree/extended/omit`).
+     */
     BTree.prototype.withoutRange = function (low, high, includeHigh, returnThisIfUnchanged) {
         var nu = this.clone();
         if (nu.deleteRange(low, high, includeHigh) === 0 && returnThisIfUnchanged)
@@ -794,7 +800,11 @@ var BTree = /** @class */ (function () {
      * @param high Scanning stops when a key larger than this is reached.
      * @param includeHigh Specifies whether the `high` key, if present, is deleted.
      * @returns The number of key-value pairs that were deleted.
-     * @description Computational complexity: O(log size + number of items deleted)
+     * @description Computational complexity: O(log size + number of items deleted).
+     *   To remove a large range in O(log size) time regardless of how many items it contains, see
+     *   `BTreeEx.omit` (from `sorted-btree/extended`) or the standalone `omit` function
+     *   (from `sorted-btree/extended/omit`). Unlike this method, `omit` returns a new tree rather
+     *   than modifying this one.
      */
     BTree.prototype.deleteRange = function (low, high, includeHigh) {
         return this.editRange(low, high, includeHigh, DeleteRange);
