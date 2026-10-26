@@ -46,7 +46,7 @@ function omit(tree, range) {
         }
     }
     var decomposed = decomposeOmittingRange(_tree, start, includeStart, end, includeEnd);
-    // If decomposd is undefined, then the key range is empty and there is nothig to omit
+    // If decomposed is undefined, then the key range is empty and there is nothing to omit
     if (decomposed === undefined)
         return tree.clone();
     var constructor = tree.constructor;

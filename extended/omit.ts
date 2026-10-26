@@ -77,7 +77,7 @@ export default function omit<TBTree extends BTree<any, any>>(tree: TBTree, range
   }
 
   const decomposed = decomposeOmittingRange(_tree, start, includeStart, end, includeEnd);
-  // If decomposd is undefined, then the key range is empty and there is nothig to omit
+  // If decomposed is undefined, then the key range is empty and there is nothing to omit
   if (decomposed === undefined)
     return tree.clone();
   const constructor = tree.constructor as BTreeConstructor<TBTree, KeyOf<TBTree>, unknown>;
