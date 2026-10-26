@@ -95,7 +95,7 @@ The "scanning" methods (`forEach, forRange, editRange, deleteRange`) will normal
 - Get the intersection (overlap) between two trees: `tree1.intersect(tree2, (k, val1, val2) => val1)`
 - Get the union (combination) of two trees: `tree1.union(tree2, (k, val1, val2) => val1)`
 - Get a copy without keys from another tree: `tree1.subtract(tree2)`
-- Get a copy without a range of keys, sharing all untouched subtrees: `tree.omit({ gte: lo, lt: hi })` (any of `gt`/`gte` and `lt`/`lte`; leave a side out for an open-ended range, e.g. `tree.omit({ gt: k })`)
+- Get a copy without a range of keys, sharing all untouched subtrees: `tree.omit({ gte: lo, lt: hi })`
 - Fast bulk load: `BTreeEx.bulkLoad(entries, 32)`
 - For more information, **see [full documentation](https://github.com/qwertie/btree-typescript/blob/master/extended/index.ts) in the source code.**
 
