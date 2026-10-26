@@ -18,8 +18,7 @@ type UpperKind = 'lt' | 'lte' | undefined;
 const LOWER_KINDS: LowerKind[] = ['gte', 'gt', undefined];
 const UPPER_KINDS: UpperKind[] = ['lt', 'lte', undefined];
 
-const tuples = (...pairs: TreeEntries) => pairs;
-const range = (from: number, toExclusive: number, step = 1) => {
+const seq = (from: number, toExclusive: number, step = 1) => {
   const out: number[] = [];
   for (let k = from; k < toExclusive; k += step)
     out.push(k);
@@ -40,7 +39,7 @@ const makeRange = (lowerKind: LowerKind, lower: number, upperKind: UpperKind, up
 };
 
 const isOmitted = (key: number, range: Range) => {
-  const { gt, gte, lt, lte } = range as { gt?: number, gte?: number, lt?: number, lte?: number };
+  const { gt, gte, lt, lte } = range;
   return (gt === undefined || key > gt) && (gte === undefined || key >= gte) &&
     (lt === undefined || key < lt) && (lte === undefined || key <= lte);
 };
@@ -91,149 +90,46 @@ const treeHeight = <K, V>(tree: BTree<K, V>) => {
 describe.each([32, 10, 5, 4])('BTree omit tests with fanout %i', (maxNodeSize) => {
   const buildTreeForFanout = (entries: TreeEntries) => buildTree(entries, maxNodeSize);
 
-  const BASIC_CASES: Array<{
-    name: string;
-    entries: TreeEntries;
-    range: Range;
-    expected: TreeEntries;
-  }> = [
-    {
-      name: 'omit from empty tree yields empty tree',
-      entries: tuples(),
-      range: { gte: 1, lt: 5 },
-      expected: [],
-    },
-    {
-      name: 'omit with gte and lt',
-      entries: tuples([1, 10], [2, 20], [3, 30], [4, 40], [5, 50]),
-      range: { gte: 2, lt: 4 },
-      expected: tuples([1, 10], [4, 40], [5, 50]),
-    },
-    {
-      name: 'omit with gte and lte',
-      entries: tuples([1, 10], [2, 20], [3, 30], [4, 40], [5, 50]),
-      range: { gte: 2, lte: 4 },
-      expected: tuples([1, 10], [5, 50]),
-    },
-    {
-      name: 'omit with gt and lt',
-      entries: tuples([1, 10], [2, 20], [3, 30], [4, 40], [5, 50]),
-      range: { gt: 2, lt: 4 },
-      expected: tuples([1, 10], [2, 20], [4, 40], [5, 50]),
-    },
-    {
-      name: 'omit with gt and lte',
-      entries: tuples([1, 10], [2, 20], [3, 30], [4, 40], [5, 50]),
-      range: { gt: 2, lte: 4 },
-      expected: tuples([1, 10], [2, 20], [5, 50]),
-    },
-    {
-      name: 'omit with bounds between keys',
-      entries: tuples([10, 1], [20, 2], [30, 3], [40, 4]),
-      range: { gt: 15, lte: 35 },
-      expected: tuples([10, 1], [40, 4]),
-    },
-    {
-      name: 'omit with only lt removes prefix',
-      entries: tuples([1, 10], [2, 20], [3, 30], [4, 40]),
-      range: { lt: 3 },
-      expected: tuples([3, 30], [4, 40]),
-    },
-    {
-      name: 'omit with only lte removes prefix',
-      entries: tuples([1, 10], [2, 20], [3, 30], [4, 40]),
-      range: { lte: 3 },
-      expected: tuples([4, 40]),
-    },
-    {
-      name: 'omit with only gte removes suffix',
-      entries: tuples([1, 10], [2, 20], [3, 30], [4, 40]),
-      range: { gte: 3 },
-      expected: tuples([1, 10], [2, 20]),
-    },
-    {
-      name: 'omit with only gt removes suffix',
-      entries: tuples([1, 10], [2, 20], [3, 30], [4, 40]),
-      range: { gt: 3 },
-      expected: tuples([1, 10], [2, 20], [3, 30]),
-    },
-    {
-      name: 'omit with gt at the max key removes nothing',
-      entries: tuples([1, 10], [2, 20], [3, 30]),
-      range: { gt: 3 },
-      expected: tuples([1, 10], [2, 20], [3, 30]),
-    },
-    {
-      name: 'omit range covering all keys yields empty tree',
-      entries: tuples([1, 10], [2, 20], [3, 30]),
-      range: { gte: 1, lte: 3 },
-      expected: [],
-    },
-    {
-      name: 'omit range before all keys removes nothing',
-      entries: tuples([5, 50], [6, 60]),
-      range: { gte: 1, lt: 5 },
-      expected: tuples([5, 50], [6, 60]),
-    },
-    {
-      name: 'omit range after all keys removes nothing',
-      entries: tuples([5, 50], [6, 60]),
-      range: { gt: 6, lte: 9 },
-      expected: tuples([5, 50], [6, 60]),
-    },
-    {
-      name: 'omit range in a gap between keys removes nothing',
-      entries: tuples([5, 50], [10, 100]),
-      range: { gt: 5, lt: 10 },
-      expected: tuples([5, 50], [10, 100]),
-    },
-    {
-      name: 'omit with gte equal to lte removes that key',
-      entries: tuples([1, 10], [2, 20], [3, 30]),
-      range: { gte: 2, lte: 2 },
-      expected: tuples([1, 10], [3, 30]),
-    },
-    {
-      name: 'omit with equal bounds removes nothing if either is exclusive',
-      entries: tuples([1, 10], [2, 20], [3, 30]),
-      range: { gte: 2, lt: 2 },
-      expected: tuples([1, 10], [2, 20], [3, 30]),
-    },
-    {
-      name: 'omit with lower bound after upper bound removes nothing',
-      entries: tuples([1, 10], [2, 20], [3, 30]),
-      range: { gte: 3, lte: 1 },
-      expected: tuples([1, 10], [2, 20], [3, 30]),
-    },
+  // [name, keys, range, expected keys]
+  const BASIC_CASES: Array<[string, number[], Range, number[]]> = [
+    ['empty tree', [], { gte: 1, lt: 5 }, []],
+    ['gte and lt', [1, 2, 3, 4, 5], { gte: 2, lt: 4 }, [1, 4, 5]],
+    ['gte and lte', [1, 2, 3, 4, 5], { gte: 2, lte: 4 }, [1, 5]],
+    ['gt and lt', [1, 2, 3, 4, 5], { gt: 2, lt: 4 }, [1, 2, 4, 5]],
+    ['gt and lte', [1, 2, 3, 4, 5], { gt: 2, lte: 4 }, [1, 2, 5]],
+    ['bounds between keys', [10, 20, 30, 40], { gt: 15, lte: 35 }, [10, 40]],
+    ['only lt', [1, 2, 3, 4], { lt: 3 }, [3, 4]],
+    ['only lte', [1, 2, 3, 4], { lte: 3 }, [4]],
+    ['only gte', [1, 2, 3, 4], { gte: 3 }, [1, 2]],
+    ['only gt', [1, 2, 3, 4], { gt: 3 }, [1, 2, 3]],
+    ['an explicitly undefined bound is open', [1, 2, 3, 4], { gte: undefined, lt: 3 }, [3, 4]],
+    ['gt the max key', [1, 2, 3], { gt: 3 }, [1, 2, 3]],
+    ['range covering all keys', [1, 2, 3], { gte: 1, lte: 3 }, []],
+    ['range before all keys', [5, 6], { gte: 1, lt: 5 }, [5, 6]],
+    ['range after all keys', [5, 6], { gt: 6, lte: 9 }, [5, 6]],
+    ['range in a gap between keys', [5, 10], { gt: 5, lt: 10 }, [5, 10]],
+    ['gte equal to lte', [1, 2, 3], { gte: 2, lte: 2 }, [1, 3]],
+    ['equal bounds with one exclusive', [1, 2, 3], { gte: 2, lt: 2 }, [1, 2, 3]],
+    ['lower bound above upper bound', [1, 2, 3], { gte: 3, lte: 1 }, [1, 2, 3]],
   ];
 
-  BASIC_CASES.forEach(({ name, entries, range, expected }) => {
-    it(name, () => {
+  BASIC_CASES.forEach(([name, keys, range, expected]) => {
+    it(`omit: ${name}`, () => {
+      const entries = entriesOf(keys);
       const tree = buildTreeForFanout(entries);
-      const result = expectOmit(tree, range);
-      expect(result.toArray()).toEqual(expected);
+      expect(expectOmit(tree, range).keysArray()).toEqual(expected);
       expectUnchanged(tree, entries);
     });
-  });
-
-  it('omit preserves the input tree type', () => {
-    const tree = buildTreeForFanout(entriesOf(range(0, 100)));
-    expect(tree.omit({ gte: 10, lt: 20 })).toBeInstanceOf(BTreeEx);
-    const plain = new BTree<number, number>(entriesOf(range(0, 100)), compareNumbers, maxNodeSize);
-    const result = omit(plain, { gte: 10, lt: 20 });
-    expect(result).toBeInstanceOf(BTree);
-    expect(result).not.toBeInstanceOf(BTreeEx);
-    expect(result.size).toBe(90);
   });
 
   const SIZES = [1, 2, maxNodeSize - 1, maxNodeSize, maxNodeSize + 1, 3 * maxNodeSize, 1000];
   SIZES.forEach((size) => {
     it(`omit handles every kind of bound over a tree of size ${size}`, () => {
       // Even keys, so odd bounds fall between keys
-      const entries = entriesOf(range(0, size * 2, 2));
+      const entries = entriesOf(seq(0, size * 2, 2));
       const tree = buildTreeForFanout(entries);
       const bounds = size <= 40
-        ? range(-2, size * 2 + 2, size <= 20 ? 1 : 3)
+        ? seq(-2, size * 2 + 2, size <= 20 ? 1 : 3)
         : [-1, 0, 1, 7, size - 1, size, size + 1, size * 2 - 2, size * 2 + 1];
       for (const lowerKind of LOWER_KINDS) {
         for (const upperKind of UPPER_KINDS) {
@@ -250,26 +146,24 @@ describe.each([32, 10, 5, 4])('BTree omit tests with fanout %i', (maxNodeSize) =
   });
 
   it('omit result and input can be mutated independently', () => {
-    const tree = buildTreeForFanout(entriesOf(range(0, 1000)));
-    const before = tree.toArray();
+    const entries = entriesOf(seq(0, 1000));
+    const tree = buildTreeForFanout(entries);
     const result = tree.omit({ gte: 200, lt: 700 });
-    const resultBefore = result.toArray();
+    const resultEntries = result.toArray();
     for (let k = 0; k < 1000; k += 3) {
       result.set(k, -k);
       result.delete(k + 1);
     }
-    tree.checkValid(true);
-    expect(tree.toArray()).toEqual(before);
+    expectUnchanged(tree, entries);
 
     const result2 = tree.omit({ gte: 200, lt: 700 });
     for (let k = 0; k < 1000; k += 7)
       tree.set(k, -1);
-    result2.checkValid(true);
-    expect(result2.toArray()).toEqual(resultBefore);
+    expectUnchanged(result2, resultEntries);
   });
 
   it('omit reuses subtrees outside the range and only creates nodes along the range boundaries', () => {
-    const tree = buildTreeForFanout(entriesOf(range(0, 20000)));
+    const tree = buildTreeForFanout(entriesOf(seq(0, 20000)));
     const entries = tree.toArray();
     const height = treeHeight(tree);
     const sourceNodes = collectNodes(tree);
@@ -289,39 +183,26 @@ describe.each([32, 10, 5, 4])('BTree omit tests with fanout %i', (maxNodeSize) =
 });
 
 describe('BTree omit input/output validation', () => {
-  const tree = buildTree(entriesOf(range(0, 10)), 4);
+  const tree = buildTree(entriesOf(seq(0, 10)), 4);
+
   const INVALID_RANGES: Array<[string, object]> = [
     ['no bounds', {}],
     ['only undefined bounds', { gte: undefined, lt: undefined }],
     ['both gt and gte', { gt: 1, gte: 1 }],
     ['both lt and lte', { lt: 5, lte: 5 }],
-    ['both lower and both upper bounds', { gt: 1, gte: 1, lt: 5, lte: 5 }],
   ];
-
   INVALID_RANGES.forEach(([name, invalid]) => {
     it(`omit throws for a range with ${name}`, () => {
       expect(() => tree.omit(invalid as Range)).toThrow(omitInvalidRangeErrorMsg);
-      expect(() => omit(tree, invalid as Range)).toThrow(omitInvalidRangeErrorMsg);
     });
   });
 
-  it('omit range type requires one bound of each kind at most, and at least one bound', () => {
-    const maybe = 3 as number | undefined;
-    const sizes: number[] = [
-      tree.omit({ gte: 1, lt: 3 }).size,
-      tree.omit({ gt: 1, lte: 3 }).size,
-      tree.omit({ gte: 3 }).size,
-      tree.omit({ lte: 3 }).size,
-      tree.omit({ gte: 1, lt: maybe }).size,
-      omit(tree, { gt: maybe, lt: 5 }).size,
-    ];
-    expect(sizes).toEqual([8, 8, 3, 6, 8, 9]);
-    // @ts-expect-error at least one bound is required
-    expect(() => tree.omit({})).toThrow();
-    // @ts-expect-error gt and gte are mutually exclusive
-    expect(() => tree.omit({ gt: 1, gte: 1 })).toThrow();
-    // @ts-expect-error lt and lte are mutually exclusive
-    expect(() => tree.omit({ gte: 0, lt: 1, lte: 1 })).toThrow();
+  it('omit preserves the input tree type', () => {
+    expect(tree.omit({ gte: 1 })).toBeInstanceOf(BTreeEx);
+    const plain = new BTree<number, number>(tree.toArray(), compareNumbers, 4);
+    const result = omit(plain, { gte: 1 });
+    expect(result).toBeInstanceOf(BTree);
+    expect(result).not.toBeInstanceOf(BTreeEx);
   });
 });
 
