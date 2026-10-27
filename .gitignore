@@ -1,4 +1,11 @@
-# Generated files
+# Generated files (compiled by `npm run build`)
+/*.js
+/*.d.ts
+!/interfaces.d.ts
+/extended/*.js
+/extended/*.d.ts
+/test/*.js
+/test/*.d.ts
 *.js.map
 *.bundle.js
 *.out.js
