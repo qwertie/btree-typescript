@@ -43,6 +43,7 @@ var diffAgainst_1 = __importDefault(require("./diffAgainst"));
 var forEachKeyInBoth_1 = __importDefault(require("./forEachKeyInBoth"));
 var forEachKeyNotIn_1 = __importDefault(require("./forEachKeyNotIn"));
 var intersect_1 = __importDefault(require("./intersect"));
+var omit_1 = __importDefault(require("./omit"));
 var subtract_1 = __importDefault(require("./subtract"));
 var union_1 = __importDefault(require("./union"));
 var bulkLoad_1 = require("./bulkLoad");
@@ -197,6 +198,23 @@ var BTreeEx = /** @class */ (function (_super) {
      */
     BTreeEx.prototype.subtract = function (other) {
         return (0, subtract_1.default)(this, other);
+    };
+    /**
+     * Returns a new tree containing every entry of this tree except those whose keys fall in the given range.
+     * This tree is not modified.
+     *
+     * The range has a lower bound (`gt` or `gte`), an upper bound (`lt` or `lte`), or both. A missing bound
+     * leaves that end of the range open: `omit({ lt: k })` removes every key before `k`, and `omit({ gte: k })`
+     * removes `k` and every key after it.
+     *
+     * The runtime is `O(log(n))`. Subtrees that lie entirely outside the range are shared with this tree rather
+     * than copied.
+     * @param range The keys to omit, e.g. `{ gte: 5, lt: 10 }`.
+     * @returns A new `BTreeEx` without the keys in the range.
+     * @throws Error if the range has no bounds, or has both `gt` and `gte` or both `lt` and `lte`.
+     */
+    BTreeEx.prototype.omit = function (range) {
+        return (0, omit_1.default)(this, range);
     };
     return BTreeEx;
 }(b_tree_1.default));

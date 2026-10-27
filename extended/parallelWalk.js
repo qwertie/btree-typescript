@@ -22,22 +22,35 @@ function moveForwardOne(cur, other) {
 }
 exports.moveForwardOne = moveForwardOne;
 /**
- * Create a cursor pointing to the leftmost key of the supplied tree.
+ * Create a cursor pointing to the first key in the supplied tree that is >= `key` (or > `key` if `isInclusive`
+ * is false). If `key` is not provided, the cursor points to the first key in the tree.
+ * No callbacks are invoked while positioning the cursor. The caller must ensure such a key exists.
  * @internal
  */
-function createCursor(tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown) {
+function createCursor(tree, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown, key, isInclusive) {
+    if (isInclusive === void 0) { isInclusive = true; }
+    var cmp = tree._compare;
+    var hasKey = key !== undefined;
+    // Index of the first key >= key (or > key if not inclusive)
+    var indexOfTarget = function (node) {
+        var i = node.indexOf(key, -1, cmp);
+        return i < 0 ? ~i : isInclusive ? i : i + 1;
+    };
     var spine = [];
     var n = tree._root;
     while (!n.isLeaf) {
         var ni = n;
+        var childIndex = hasKey ? indexOfTarget(ni) : 0;
         var payload = makePayload();
-        spine.push({ node: ni, childIndex: 0, payload: payload });
-        n = ni.children[0];
+        spine.push({ node: ni, childIndex: childIndex, payload: payload });
+        n = ni.children[childIndex];
     }
+    var leafIndex = hasKey ? indexOfTarget(n) : 0;
     var leafPayload = makePayload();
     var cur = {
         tree: tree,
-        leaf: n, leafIndex: 0,
+        leaf: n,
+        leafIndex: leafIndex,
         spine: spine,
         leafPayload: leafPayload,
         makePayload: makePayload,
@@ -145,10 +158,8 @@ function moveTo(cur, other, targetKey, isInclusive, startedEqual) {
     var node = spine[descentLevel].node.children[descentIndex];
     while (!node.isLeaf) {
         var ni = node;
-        var keys = ni.keys;
-        var stepDownIndex = ni.indexOf(targetKey, 0, cmp);
-        if (!isInclusive && stepDownIndex < keys.length && cmp(keys[stepDownIndex], targetKey) === 0)
-            stepDownIndex++;
+        var i_1 = ni.indexOf(targetKey, -1, cmp);
+        var stepDownIndex = i_1 < 0 ? ~i_1 : isInclusive ? i_1 : i_1 + 1;
         var payload = makePayload();
         var spineIndex = spine.length;
         spine.push({ node: ni, childIndex: stepDownIndex, payload: payload });

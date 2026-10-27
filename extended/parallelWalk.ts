@@ -44,7 +44,9 @@ export function moveForwardOne<K, V, TP>(
 }
 
 /**
- * Create a cursor pointing to the leftmost key of the supplied tree.
+ * Create a cursor pointing to the first key in the supplied tree that is >= `key` (or > `key` if `isInclusive`
+ * is false). If `key` is not provided, the cursor points to the first key in the tree.
+ * No callbacks are invoked while positioning the cursor. The caller must ensure such a key exists.
  * @internal
  */
 export function createCursor<K, V, TP>(
@@ -55,18 +57,29 @@ export function createCursor<K, V, TP>(
   onExitLeaf: Cursor<K, V, TP>["onExitLeaf"],
   onStepUp: Cursor<K, V, TP>["onStepUp"],
   onStepDown: Cursor<K, V, TP>["onStepDown"],
+  key?: K,
+  isInclusive: boolean = true,
 ): Cursor<K, V, TP> {
+  const cmp = tree._compare;
+  const hasKey = key !== undefined;
+  // Index of the first key >= key (or > key if not inclusive)
+  const indexOfTarget = (node: BNode<K, V>) => {
+    const i = node.indexOf(key as K, -1, cmp);
+    return i < 0 ? ~i : isInclusive ? i : i + 1;
+  };
   const spine: Array<{ node: BNodeInternal<K, V>, childIndex: number, payload: TP }> = [];
   let n: BNode<K, V> = tree._root;
   while (!n.isLeaf) {
     const ni = n as BNodeInternal<K, V>;
+    const childIndex = hasKey ? indexOfTarget(ni) : 0;
     const payload = makePayload();
-    spine.push({ node: ni, childIndex: 0, payload });
-    n = ni.children[0];
+    spine.push({ node: ni, childIndex, payload });
+    n = ni.children[childIndex];
   }
+  const leafIndex = hasKey ? indexOfTarget(n) : 0;
   const leafPayload = makePayload();
   const cur: Cursor<K, V, TP> = {
-    tree, leaf: n, leafIndex: 0, spine, leafPayload, makePayload: makePayload,
+    tree, leaf: n, leafIndex, spine, leafPayload, makePayload: makePayload,
     onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown
   };
   return cur;
@@ -180,10 +193,8 @@ export function moveTo<K, V, TP>(
 
   while (!node.isLeaf) {
     const ni = node as BNodeInternal<K, V>;
-    const keys = ni.keys;
-    let stepDownIndex = ni.indexOf(targetKey, 0, cmp);
-    if (!isInclusive && stepDownIndex < keys.length && cmp(keys[stepDownIndex], targetKey) === 0)
-      stepDownIndex++;
+    const i = ni.indexOf(targetKey, -1, cmp);
+    const stepDownIndex = i < 0 ? ~i : isInclusive ? i : i + 1;
     const payload = makePayload();
     const spineIndex = spine.length;
     spine.push({ node: ni, childIndex: stepDownIndex, payload });

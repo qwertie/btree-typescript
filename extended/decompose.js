@@ -1,26 +1,65 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildFromDecomposition = exports.decompose = void 0;
+exports.buildFromDecomposition = exports.decompose = exports.createDecomposer = exports.disqualifyOnStepDown = exports.disqualifyOnStepUp = exports.disqualifySpine = exports.makeDecomposePayload = void 0;
 var b_tree_1 = require("../b+tree");
 var shared_1 = require("./shared");
 var parallelWalk_1 = require("./parallelWalk");
 var decomposeLoadFactor = 0.7;
 /**
- * Decomposes two trees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
- * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
- * The algorithm is a parallel tree walk using two cursors. The trailing cursor (behind in key space) is walked forward
- * until it is at or after the leading cursor. As it does this, any whole nodes or subtrees it passes are guaranteed to
- * be disjoint. This is true because the leading cursor was also previously walked in this way, and is thus pointing to
- * the first key at or after the trailing cursor's previous position.
- * The cursor walk is efficient, meaning it skips over disjoint subtrees entirely rather than visiting every leaf.
- * Note: some of the returned leaves may be underfilled.
+ * Creates a payload for a node that has not (yet) been found to overlap anything excluded from the result.
  * @internal
  */
-function decompose(left, right, combineFn, ignoreRight) {
-    if (ignoreRight === void 0) { ignoreRight = false; }
-    var maxNodeSize = left._maxNodeSize;
-    var cmp = left._compare;
-    (0, b_tree_1.check)(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
+function makeDecomposePayload() {
+    return { disqualified: false };
+}
+exports.makeDecomposePayload = makeDecomposePayload;
+/**
+ * Marks all nodes at or above depthFrom in the cursor spine as disqualified (non-disjoint).
+ * @internal
+ */
+function disqualifySpine(cursor, depthFrom) {
+    var spine = cursor.spine;
+    for (var i = depthFrom; i >= 0; --i) {
+        var payload = spine[i].payload;
+        // Safe to early out because we always disqualify all ancestors of a disqualified node
+        // That is correct because every ancestor of a non-disjoint node is also non-disjoint
+        // because it must enclose the non-disjoint range.
+        if (payload.disqualified)
+            break;
+        payload.disqualified = true;
+    }
+}
+exports.disqualifySpine = disqualifySpine;
+/**
+ * Step-up callback for a cursor walking over keys that are excluded from the result (so nothing is collected).
+ * Stepping down into any child but the first means the walk passes over keys in this node, so it and its
+ * ancestors are disqualified.
+ * @internal
+ */
+function disqualifyOnStepUp(_parent, _height, _payload, _fromIndex, spineIndex, stepDownIndex, cursorThis) {
+    if (stepDownIndex > 0)
+        disqualifySpine(cursorThis, spineIndex);
+}
+exports.disqualifyOnStepUp = disqualifyOnStepUp;
+/**
+ * Step-down counterpart of {@link disqualifyOnStepUp}.
+ * @internal
+ */
+function disqualifyOnStepDown(_node, _height, spineIndex, stepDownIndex, cursorThis) {
+    if (stepDownIndex > 0)
+        disqualifySpine(cursorThis, spineIndex);
+}
+exports.disqualifyOnStepDown = disqualifyOnStepDown;
+/**
+ * Creates the state of a decomposition (the growing set of disjoint nodes plus pending loose entries) along with
+ * cursor callbacks that collect everything a cursor walks past. Subtrees the cursor skips over whole are reused
+ * unless disqualified; disqualified leaves contribute their walked-over entries instead.
+ * Callers supply their own `onEnterLeaf`, since deciding whether an entered leaf overlaps excluded keys depends on
+ * what is being excluded. Callers may also swap in other callbacks for stretches of keys that should be excluded.
+ * Call `finish` once walking is complete.
+ * @internal
+ */
+function createDecomposer(maxNodeSize) {
     // Holds the disjoint nodes that result from decomposition.
     // Stored as parallel arrays of (height, node) to avoid creating many tiny tuples
     var disjointHeights = [];
@@ -45,11 +84,13 @@ function decompose(left, right, combineFn, ignoreRight) {
         disjointHeights.push(height);
         disjointNodes.push(leaf);
     };
-    var addSharedNodeToDisjointSet = function (node, height) {
-        // flush pending entries
+    var flushPending = function () {
         (0, shared_1.makeLeavesFrom)(pendingKeys, pendingValues, maxNodeSize, decomposeLoadFactor, onLeafCreation);
         pendingKeys.length = 0;
         pendingValues.length = 0;
+    };
+    var addSharedNodeToDisjointSet = function (node, height) {
+        flushPending();
         // Don't share underfilled leaves, instead mark them as needing merging
         if (node.isLeaf && node.keys.length < minSize) {
             disjointHeights.push(-1);
@@ -71,21 +112,6 @@ function decompose(left, right, combineFn, ignoreRight) {
             highestDisjoint = undefined;
         }
     };
-    // Mark all nodes at or above depthFrom in the cursor spine as disqualified (non-disjoint)
-    var disqualifySpine = function (cursor, depthFrom) {
-        var spine = cursor.spine;
-        for (var i = depthFrom; i >= 0; --i) {
-            var payload = spine[i].payload;
-            // Safe to early out because we always disqualify all ancestors of a disqualified node
-            // That is correct because every ancestor of a non-disjoint node is also non-disjoint
-            // because it must enclose the non-disjoint range.
-            if (payload.disqualified)
-                break;
-            payload.disqualified = true;
-        }
-    };
-    // Cursor payload factory
-    var makePayload = function () { return ({ disqualified: false }); };
     var pushLeafRange = function (leaf, from, toExclusive) {
         var keys = leaf.keys;
         var values = leaf.values;
@@ -94,8 +120,7 @@ function decompose(left, right, combineFn, ignoreRight) {
             pendingValues.push(values[i]);
         }
     };
-    var onMoveInLeaf = function (leaf, payload, fromIndex, toIndex, startedEqual) {
-        (0, b_tree_1.check)(payload.disqualified === true, "onMoveInLeaf: leaf must be disqualified");
+    var onMoveInLeaf = function (leaf, _payload, fromIndex, toIndex, startedEqual) {
         var start = startedEqual ? fromIndex + 1 : fromIndex;
         if (start < toIndex)
             pushLeafRange(leaf, start, toIndex);
@@ -176,6 +201,35 @@ function decompose(left, right, combineFn, ignoreRight) {
                 addSharedNodeToDisjointSet(children[i], nextHeight);
         }
     };
+    var finish = function () {
+        // Ensure any trailing non-disjoint entries are added
+        flushPending();
+        // In cases like full interleaving, no leaves may be created until now
+        if (tallestHeight < 0 && disjointHeights.length > 0) {
+            tallestIndex = 0;
+        }
+        return { heights: disjointHeights, nodes: disjointNodes, tallestIndex: tallestIndex };
+    };
+    return { pendingKeys: pendingKeys, pendingValues: pendingValues, addSharedNodeToDisjointSet: addSharedNodeToDisjointSet, pushLeafRange: pushLeafRange, onMoveInLeaf: onMoveInLeaf, onExitLeaf: onExitLeaf, onStepUp: onStepUp, onStepDown: onStepDown, finish: finish };
+}
+exports.createDecomposer = createDecomposer;
+/**
+ * Decomposes two trees into disjoint nodes. Reuses interior nodes when they do not overlap/intersect with any leaf nodes
+ * in the other tree. Overlapping leaf nodes are broken down into new leaf nodes containing merged entries.
+ * The algorithm is a parallel tree walk using two cursors. The trailing cursor (behind in key space) is walked forward
+ * until it is at or after the leading cursor. As it does this, any whole nodes or subtrees it passes are guaranteed to
+ * be disjoint. This is true because the leading cursor was also previously walked in this way, and is thus pointing to
+ * the first key at or after the trailing cursor's previous position.
+ * The cursor walk is efficient, meaning it skips over disjoint subtrees entirely rather than visiting every leaf.
+ * Note: some of the returned leaves may be underfilled.
+ * @internal
+ */
+function decompose(left, right, combineFn, ignoreRight) {
+    if (ignoreRight === void 0) { ignoreRight = false; }
+    var cmp = left._compare;
+    (0, b_tree_1.check)(left._root.size() > 0 && right._root.size() > 0, "decompose requires non-empty inputs");
+    var decomposer = createDecomposer(left._maxNodeSize);
+    var pendingKeys = decomposer.pendingKeys, pendingValues = decomposer.pendingValues, pushLeafRange = decomposer.pushLeafRange;
     var onEnterLeaf = function (leaf, destIndex, cursorThis, cursorOther) {
         if (destIndex > 0
             || (0, b_tree_1.areOverlapping)(leaf.minKey(), leaf.maxKey(), (0, parallelWalk_1.getKey)(cursorOther), cursorOther.leaf.maxKey(), cmp)) {
@@ -193,20 +247,11 @@ function decompose(left, right, combineFn, ignoreRight) {
     var maxKeyRight = right._root.maxKey();
     var maxKey = cmp(maxKeyLeft, maxKeyRight) >= 0 ? maxKeyLeft : maxKeyRight;
     // Initialize cursors at minimum keys.
-    var curA = (0, parallelWalk_1.createCursor)(left, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+    var onMoveInLeaf = decomposer.onMoveInLeaf, onExitLeaf = decomposer.onExitLeaf, onStepUp = decomposer.onStepUp, onStepDown = decomposer.onStepDown;
+    var curA = (0, parallelWalk_1.createCursor)(left, makeDecomposePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
     var curB;
     if (ignoreRight) {
         var dummyPayload_1 = { disqualified: true };
-        var onStepUpIgnore = function (_1, _2, _3, _4, spineIndex, stepDownIndex, cursorThis) {
-            if (stepDownIndex > 0) {
-                disqualifySpine(cursorThis, spineIndex);
-            }
-        };
-        var onStepDownIgnore = function (_, __, spineIndex, stepDownIndex, cursorThis) {
-            if (stepDownIndex > 0) {
-                disqualifySpine(cursorThis, spineIndex);
-            }
-        };
         var onEnterLeafIgnore = function (leaf, destIndex, _, cursorOther) {
             if (destIndex > 0
                 || (0, b_tree_1.areOverlapping)(leaf.minKey(), leaf.maxKey(), (0, parallelWalk_1.getKey)(cursorOther), cursorOther.leaf.maxKey(), cmp)) {
@@ -214,10 +259,10 @@ function decompose(left, right, combineFn, ignoreRight) {
                 disqualifySpine(cursorOther, cursorOther.spine.length - 1);
             }
         };
-        curB = (0, parallelWalk_1.createCursor)(right, function () { return dummyPayload_1; }, onEnterLeafIgnore, parallelWalk_1.noop, parallelWalk_1.noop, onStepUpIgnore, onStepDownIgnore);
+        curB = (0, parallelWalk_1.createCursor)(right, function () { return dummyPayload_1; }, onEnterLeafIgnore, parallelWalk_1.noop, parallelWalk_1.noop, disqualifyOnStepUp, disqualifyOnStepDown);
     }
     else {
-        curB = (0, parallelWalk_1.createCursor)(right, makePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
+        curB = (0, parallelWalk_1.createCursor)(right, makeDecomposePayload, onEnterLeaf, onMoveInLeaf, onExitLeaf, onStepUp, onStepDown);
     }
     // The guarantee that no overlapping interior nodes are accidentally reused relies on the careful
     // alternating hopping walk of the cursors: WLOG, cursorA always--with one exception--walks from a key just behind (in key space)
@@ -298,13 +343,7 @@ function decompose(left, right, combineFn, ignoreRight) {
             }
         }
     }
-    // Ensure any trailing non-disjoint entries are added
-    (0, shared_1.makeLeavesFrom)(pendingKeys, pendingValues, maxNodeSize, decomposeLoadFactor, onLeafCreation);
-    // In cases like full interleaving, no leaves may be created until now
-    if (tallestHeight < 0 && disjointHeights.length > 0) {
-        tallestIndex = 0;
-    }
-    return { heights: disjointHeights, nodes: disjointNodes, tallestIndex: tallestIndex };
+    return decomposer.finish();
 }
 exports.decompose = decompose;
 /**

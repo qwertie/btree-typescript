@@ -108,12 +108,35 @@ describe('Set operation fuzz tests', () => {
       expect(diffAB.size).toBe(treeA.size - intersection.size);
       expect(treeA.size).toBe(diffAB.size + intersection.size);
 
+      // 13. Omitting a key range. Bounds are integers, so they may land on keys.
+      const [lo, mid, hi] = [rng.random(), rng.random(), rng.random()]
+        .map((r) => Math.floor(r * (size + 2)))
+        .sort(compare);
+      const range = { gt: lo, lte: hi };
+      const omitA = treeA.omit(range);
+      const omitB = treeB.omit(range);
+      // Splitting the range, at either side of the split point.
+      expect(treeA.omit({ gt: lo, lte: mid }).omit({ gt: mid, lte: hi }).toArray()).toEqual(omitA.toArray());
+      expect(treeA.omit({ gt: lo, lt: mid }).omit({ gte: mid, lte: hi }).toArray()).toEqual(omitA.toArray());
+      // Open-ended omits partition the tree.
+      const omitBelow = treeA.omit({ lt: mid });
+      const omitAbove = treeA.omit({ gte: mid });
+      expect(omitBelow.intersect(omitAbove, keepEither).size).toBe(0);
+      expect(omitAbove.union(omitBelow, keepEither).toArray()).toEqual(treeAEntries);
+      // Omit distributes over union, intersection and subtraction.
+      expect(unionKeep.omit(range).toArray()).toEqual(omitA.union(omitB, keepEither).toArray());
+      expect(intersection.omit(range).toArray()).toEqual(omitA.intersect(treeB, keepEither).toArray());
+      expect(diffAB.omit(range).toArray()).toEqual(omitA.subtract(treeB).toArray());
+
       partition.checkValid(true);
       unionDrop.checkValid(true);
       unionKeep.checkValid(true);
       intersection.checkValid(true);
       diffAB.checkValid(true);
       diffBA.checkValid(true);
+      omitA.checkValid(true);
+      omitBelow.checkValid(true);
+      omitAbove.checkValid(true);
       treeA.checkValid(true);
       treeB.checkValid(true);
       treeC.checkValid(true);
