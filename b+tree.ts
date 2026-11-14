@@ -789,9 +789,11 @@ class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap<K,V>
    */
   getRange(low: K, high: K, includeHigh?: boolean, maxLength: number = 0x3FFFFFF): [K,V][] {
     var results: [K,V][] = [];
+    if (maxLength <= 0)
+      return results;
     this._root.forRange(low, high, includeHigh, false, this, 0, (k,v) => {
       results.push([k,v])
-      return results.length > maxLength ? Break : undefined;
+      return results.length >= maxLength ? Break : undefined;
     });
     return results;
   }

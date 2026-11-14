@@ -403,6 +403,15 @@ describe('Simple tests on leaf nodes', () =>
       expect(tree.getRange("#", "B", true)).toEqual([["A",1],["B",2]]);
       expect(tree.getRange("G", "S", true)).toEqual([["G",7],["H",8]]);
     });
+    test('getRange() and toArray() respect maxLength', () => {
+      expect(tree.getRange("A", "H", true, 2)).toEqual([["A",1],["B",2]]);
+      expect(tree.getRange("A", "H", true, 1)).toEqual([["A",1]]);
+      expect(tree.getRange("A", "H", true, 0)).toEqual([]);
+      expect(tree.getRange("A", "H", true, -1)).toEqual([]);
+      expect(tree.toArray(3)).toEqual([["A",1],["B",2],["C",3]]);
+      expect(tree.toArray(0)).toEqual([]);
+      expect(tree.toArray(100)).toEqual(items);
+    });
     test('iterators work on leaf nodes', () => {
       expect(Array.from(tree.entries())).toEqual(items);
       expect(Array.from(tree.keys())).toEqual(items.map(p => p[0]));
@@ -713,6 +722,21 @@ function testBTree(maxNodeSize: number)
     }
     tree.clear();
     expect(tree.getPairAt(0)).toBeUndefined();
+  });
+
+  test(`getRange and toArray stop at maxLength across nodes`, () => {
+    const tree = new BTree<number,number>(undefined, undefined, maxNodeSize);
+    for (let i = 0; i < 100; i++)
+      tree.set(i, i * 10);
+    for (const n of [0, 1, maxNodeSize - 1, maxNodeSize, maxNodeSize + 1, 99, 100]) {
+      const expected = [] as [number,number][];
+      for (let i = 0; i < n; i++)
+        expected.push([i, i * 10]);
+      expect(tree.toArray(n)).toEqual(expected);
+      expect(tree.getRange(0, 99, true, n)).toEqual(expected);
+    }
+    expect(tree.toArray(1000).length).toBe(100);
+    expect(tree.getRange(10, 50, false, 5)).toEqual([[10,100],[11,110],[12,120],[13,130],[14,140]]);
   });
 
   describe(`Next higher/lower methods`, () => {
