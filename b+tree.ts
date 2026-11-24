@@ -329,7 +329,7 @@ class BTree<K=any, V=any> implements ISortedMapF<K,V>, ISortedMap<K,V>
   with<V2>(key: K, value: V2, overwrite?: boolean): BTree<K,V|V2>;
   with<V2>(key: K, value?: V2, overwrite?: boolean): BTree<K,V|V2|undefined> {
     let nu = this.clone() as BTree<K,V|V2|undefined>;
-    return nu.set(key, value, overwrite) || overwrite ? nu : this;
+    return nu.set(key, value, overwrite) || overwrite !== false ? nu : this;
   }
 
   /** Returns a copy of the tree with the specified key-value pairs set. */

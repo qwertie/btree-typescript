@@ -627,6 +627,41 @@ describe("cloning and sharing tests", () => {
   });
 });
 
+for (const Tree of [BTree, BTreeEx]) {
+  describe(`${Tree.name}.with`, () => {
+    test('overwrites existing keys by default', () => {
+      const tree = new Tree<number, string>([[1, 'old']]);
+      for (const updated of [tree.with(1, 'new'), tree.with(1, 'new', true)]) {
+        expect(updated.toArray()).toEqual([[1, 'new']]);
+        expect(updated).not.toBe(tree);
+        expect(updated).toBeInstanceOf(Tree);
+      }
+      expect(tree.toArray()).toEqual([[1, 'old']]);
+    });
+
+    test('only skips existing keys when overwrite is false', () => {
+      const tree = new Tree<number, string>([[1, 'old']]);
+      expect(tree.with(1, 'new', false)).toBe(tree);
+      for (const overwrite of [undefined, true, false]) {
+        const added = tree.with(2, 'new', overwrite);
+        expect(added.toArray()).toEqual([[1, 'old'], [2, 'new']]);
+        expect(added).not.toBe(tree);
+        expect(added).toBeInstanceOf(Tree);
+      }
+      expect(tree.toArray()).toEqual([[1, 'old']]);
+    });
+
+    test('can replace existing values with undefined', () => {
+      const tree = new Tree<number, string>([[1, 'old']]);
+      for (const updated of [tree.with(1), tree.with(1, undefined)]) {
+        expect(updated.toArray()).toEqual([[1, undefined]]);
+        expect(updated).not.toBe(tree);
+      }
+      expect(tree.toArray()).toEqual([[1, 'old']]);
+    });
+  });
+}
+
 describe('B+ tree with fanout 32', testBTree.bind(null, 32));
 describe('B+ tree with fanout 10', testBTree.bind(null, 10));
 describe('B+ tree with fanout 4',  testBTree.bind(null, 4));
